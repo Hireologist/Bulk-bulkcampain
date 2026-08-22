@@ -1,5 +1,7 @@
-// GitHub Pages Client-Side State
-let sheetId = localStorage.getItem('sheet_bot_sheet_id') || '';
+// Multi-Campaign Client State
+let campaigns = JSON.parse(localStorage.getItem('sheet_bot_campaigns') || '[]');
+let activeCampaignId = localStorage.getItem('sheet_bot_active_campaign') || '';
+
 let githubToken = localStorage.getItem('sheet_bot_github_token') || '';
 let repoOwner = 'Rohanpatel16';
 let repoName = 'Sheet-bot';
@@ -8,12 +10,35 @@ let sentimentChartInstance = null;
 let statusChartInstance = null;
 let allLeads = [];
 
+// Seed Default Campaign if empty
+if (!campaigns.length) {
+  const legacySheetId = localStorage.getItem('sheet_bot_sheet_id') || '';
+  campaigns = [{
+    id: 'c_default',
+    name: 'Campaign 1 (Default)',
+    sheetId: legacySheetId
+  }];
+  activeCampaignId = 'c_default';
+  saveCampaignsState();
+} else if (!activeCampaignId || !campaigns.find(c => c.id === activeCampaignId)) {
+  activeCampaignId = campaigns[0].id;
+  localStorage.setItem('sheet_bot_active_campaign', activeCampaignId);
+}
+
+function saveCampaignsState() {
+  localStorage.setItem('sheet_bot_campaigns', JSON.stringify(campaigns));
+  localStorage.setItem('sheet_bot_active_campaign', activeCampaignId);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   setupNavigation();
   setupEventListeners();
+  renderCampaignSelector();
+  renderCampaignsList();
   loadSavedSettings();
 
-  if (sheetId) {
+  const currentCamp = getCurrentCampaign();
+  if (currentCamp && currentCamp.sheetId) {
     syncSheetData();
   } else {
     showSettingsTab();
@@ -22,6 +47,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // Auto-sync every 60 seconds
   setInterval(syncSheetData, 60000);
 });
+
+function getCurrentCampaign() {
+  return campaigns.find(c => c.id === activeCampaignId) || campaigns[0];
+}
 
 function setupNavigation() {
   const navItems = document.querySelectorAll('.nav-item');
@@ -44,7 +73,7 @@ function setupNavigation() {
       else if (targetTab === 'leads') pageTitle.innerText = 'Lead Directory';
       else if (targetTab === 'inboxes') pageTitle.innerText = 'Inbox & Sender Health';
       else if (targetTab === 'triggers') pageTitle.innerText = 'Cloud Control Center';
-      else if (targetTab === 'settings') pageTitle.innerText = 'Cloud Connection Settings';
+      else if (targetTab === 'settings') pageTitle.innerText = 'Campaigns & Connect Settings';
     });
   });
 }
@@ -52,44 +81,119 @@ function setupNavigation() {
 function setupEventListeners() {
   document.getElementById('btn-refresh').addEventListener('click', syncSheetData);
   document.getElementById('btn-open-settings').addEventListener('click', showSettingsTab);
-  document.getElementById('btn-save-settings').addEventListener('click', saveSettings);
+  
+  // Campaign Add & Switcher
+  document.getElementById('btn-add-campaign').addEventListener('click', addCampaign);
+  document.getElementById('campaign-selector').addEventListener('change', (e) => {
+    activeCampaignId = e.target.value;
+    saveCampaignsState();
+    syncSheetData();
+  });
+
+  document.getElementById('btn-save-token').addEventListener('click', saveToken);
 
   document.getElementById('lead-search').addEventListener('input', renderLeadsTable);
   document.getElementById('lead-status-filter').addEventListener('change', renderLeadsTable);
 }
 
+function renderCampaignSelector() {
+  const select = document.getElementById('campaign-selector');
+  select.innerHTML = campaigns.map(c => 
+    `<option value="${c.id}" ${c.id === activeCampaignId ? 'selected' : ''}>${escapeHtml(c.name)}</option>`
+  ).join('');
+}
+
+function renderCampaignsList() {
+  const container = document.getElementById('campaigns-list');
+  if (!container) return;
+
+  if (!campaigns.length) {
+    container.innerHTML = `<p style="font-size:13px; color:var(--text-muted);">No saved campaigns yet.</p>`;
+    return;
+  }
+
+  container.innerHTML = campaigns.map(c => `
+    <div class="campaign-item">
+      <div>
+        <strong style="color:#FFF;">${escapeHtml(c.name)}</strong><br>
+        <span style="font-size:12px; color:var(--text-muted);">Sheet ID: ${escapeHtml(c.sheetId || 'Not set')}</span>
+      </div>
+      <button class="btn-danger-sm" onclick="deleteCampaign('${c.id}')">
+        <i class="fa-solid fa-trash"></i> Delete
+      </button>
+    </div>
+  `).join('');
+}
+
+function addCampaign() {
+  const nameInput = document.getElementById('cfg-new-campaign-name');
+  const sheetInput = document.getElementById('cfg-new-sheet-id');
+
+  const name = nameInput.value.trim();
+  const sheetId = sheetInput.value.trim();
+
+  if (!name || !sheetId) {
+    alert('Please enter both a Campaign Name and a Google Sheet ID.');
+    return;
+  }
+
+  const newId = 'c_' + Date.now();
+  campaigns.push({ id: newId, name, sheetId });
+  activeCampaignId = newId;
+  saveCampaignsState();
+
+  nameInput.value = '';
+  sheetInput.value = '';
+
+  renderCampaignSelector();
+  renderCampaignsList();
+
+  alert(`✅ Campaign "${name}" added and activated!`);
+  document.querySelector('[data-tab="overview"]').click();
+  syncSheetData();
+}
+
+function deleteCampaign(id) {
+  if (campaigns.length <= 1) {
+    alert('You must have at least one active campaign.');
+    return;
+  }
+
+  if (confirm('Are you sure you want to remove this campaign sheet?')) {
+    campaigns = campaigns.filter(c => c.id !== id);
+    if (activeCampaignId === id) {
+      activeCampaignId = campaigns[0].id;
+    }
+    saveCampaignsState();
+    renderCampaignSelector();
+    renderCampaignsList();
+    syncSheetData();
+  }
+}
+
 function loadSavedSettings() {
-  if (sheetId) document.getElementById('cfg-sheet-id').value = sheetId;
   if (githubToken) document.getElementById('cfg-github-token').value = githubToken;
 }
 
 function showSettingsTab() {
   const settingsItem = document.querySelector('[data-tab="settings"]');
   if (settingsItem) settingsItem.click();
-  showAlert('Please enter your Google Sheet ID to connect the online dashboard.', 'blue');
 }
 
-function saveSettings() {
-  const sId = document.getElementById('cfg-sheet-id').value.trim();
+function saveToken() {
   const token = document.getElementById('cfg-github-token').value.trim();
-
-  if (!sId) {
-    alert('Please provide a valid Google Sheet ID.');
-    return;
-  }
-
-  sheetId = sId;
   githubToken = token;
-  localStorage.setItem('sheet_bot_sheet_id', sheetId);
-  if (githubToken) localStorage.setItem('sheet_bot_github_token', githubToken);
-
-  alert('✅ Settings saved! Connecting to Google Sheet...');
-  document.querySelector('[data-tab="overview"]').click();
-  syncSheetData();
+  if (githubToken) {
+    localStorage.setItem('sheet_bot_github_token', githubToken);
+    alert('✅ GitHub Access Token saved successfully!');
+  } else {
+    localStorage.removeItem('sheet_bot_github_token');
+    alert('Token cleared.');
+  }
 }
 
-// 1. Fetch Google Sheet via Client-Side Visualization API
-async function fetchSheetTab(tabName) {
+// 1. Fetch Google Sheet Tab
+async function fetchSheetTab(sheetId, tabName) {
   if (!sheetId) return [];
   const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tabName)}`;
 
@@ -97,7 +201,6 @@ async function fetchSheetTab(tabName) {
     const res = await fetch(url);
     const text = await res.text();
     
-    // Parse Google GViz JSON envelope
     const jsonString = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
     const data = JSON.parse(jsonString);
     
@@ -123,15 +226,19 @@ async function fetchSheetTab(tabName) {
 
 // 2. Main Sync Engine
 async function syncSheetData() {
-  if (!sheetId) return;
+  const currentCamp = getCurrentCampaign();
+  if (!currentCamp || !currentCamp.sheetId) {
+    showAlert('No Google Sheet ID configured for active campaign.', 'blue');
+    return;
+  }
 
-  showAlert('Syncing live data from Google Sheet cloud...', 'blue');
+  showAlert(`Syncing [${currentCamp.name}] from Google Sheet...`, 'blue');
   
   try {
     const [detailsRows, inboxesRows, aliasesRows] = await Promise.all([
-      fetchSheetTab('Details'),
-      fetchSheetTab('Inboxes'),
-      fetchSheetTab('Aliases')
+      fetchSheetTab(currentCamp.sheetId, 'Details'),
+      fetchSheetTab(currentCamp.sheetId, 'Inboxes'),
+      fetchSheetTab(currentCamp.sheetId, 'Aliases')
     ]);
 
     allLeads = detailsRows;
@@ -187,7 +294,7 @@ async function syncSheetData() {
 
     document.getElementById('connection-status-text').innerText = 'Connected';
     document.getElementById('status-dot').className = 'status-indicator online';
-    showAlert(`Connected to Google Sheet (${detailsRows.length} total leads loaded).`, 'green');
+    showAlert(`Connected to [${currentCamp.name}] (${detailsRows.length} total leads loaded).`, 'green');
   } catch (err) {
     document.getElementById('connection-status-text').innerText = 'Error';
     document.getElementById('status-dot').className = 'status-indicator offline';
@@ -352,7 +459,7 @@ function renderInboxes(inboxes) {
 // 6. GitHub Actions Cloud Workflow Trigger
 async function triggerGitHubAction(taskName) {
   if (!githubToken) {
-    const token = prompt('Enter your GitHub Personal Access Token (PAT) to trigger workflows directly online:');
+    const token = prompt('Enter your GitHub Personal Access Token (PAT) with "Actions: Read & Write" permission:');
     if (token) {
       githubToken = token.trim();
       localStorage.setItem('sheet_bot_github_token', githubToken);
@@ -380,10 +487,14 @@ async function triggerGitHubAction(taskName) {
     });
 
     if (res.ok || res.status === 204) {
-      showAlert(`🚀 Successfully triggered [${taskName}] on GitHub Actions cloud! Engine is now executing.`, 'green');
+      showAlert(`🚀 Successfully triggered [${taskName}] on GitHub Actions cloud! Engine is executing.`, 'green');
     } else {
       const errData = await res.json().catch(() => ({}));
-      alert(`GitHub Dispatch Error: ${errData.message || res.statusText}`);
+      if (res.status === 403 || res.status === 404 || errData.message?.includes('Resource not accessible')) {
+        alert(`⚠️ GitHub Token Error: "${errData.message || res.statusText}".\n\nFix: Make sure your GitHub Token has "Actions: Read and Write" permissions (or "repo" scope) under GitHub > Settings > Developer Settings > Personal Access Tokens!`);
+      } else {
+        alert(`GitHub API Error: ${errData.message || res.statusText}`);
+      }
     }
   } catch (err) {
     alert(`Failed to connect to GitHub API: ${err.message}`);

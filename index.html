@@ -51,7 +51,7 @@
         </a>
         <a href="#settings" class="nav-item" data-tab="settings">
           <i class="fa-solid fa-gear"></i>
-          <span>Cloud Connect</span>
+          <span>Campaigns & Connect</span>
         </a>
       </nav>
 
@@ -74,11 +74,19 @@
           <p class="subtitle">Live browser view hosted on GitHub Pages</p>
         </div>
         <div class="header-actions">
+          <!-- Campaign Switcher Dropdown -->
+          <div class="campaign-dropdown-wrapper">
+            <i class="fa-solid fa-folder-tree"></i>
+            <select id="campaign-selector" class="campaign-select">
+              <option value="default">Campaign 1 (Default)</option>
+            </select>
+          </div>
+
           <button class="btn btn-secondary" id="btn-refresh">
             <i class="fa-solid fa-rotate-right"></i> Sync Sheet
           </button>
           <button class="btn btn-primary" id="btn-open-settings">
-            <i class="fa-solid fa-link"></i> Configure Sheet ID
+            <i class="fa-solid fa-plus"></i> Add Campaign
           </button>
         </div>
       </header>
@@ -263,27 +271,61 @@
         </div>
       </section>
 
-      <!-- TAB 5: SETTINGS / CLOUD CONNECT -->
+      <!-- TAB 5: SETTINGS & MULTI-CAMPAIGN MANAGER -->
       <section id="tab-settings" class="tab-content">
-        <div class="glass-card max-width-card">
-          <div class="card-header">
-            <h3><i class="fa-solid fa-cloud-arrow-up"></i> Google Sheet & GitHub Cloud Setup</h3>
-          </div>
-          <div class="form-group">
-            <label for="cfg-sheet-id">Google Sheet ID:</label>
-            <input type="text" id="cfg-sheet-id" class="form-input" placeholder="e.g. 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms">
-            <small>Found in your Google Sheet URL: <code>https://docs.google.com/spreadsheets/d/<b>YOUR_SHEET_ID</b>/edit</code></small>
+        <div class="settings-layout">
+          
+          <!-- Campaign Manager Card -->
+          <div class="glass-card">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-layer-group"></i> Multi-Campaign Manager (Add New Sheets)</h3>
+            </div>
+
+            <div class="form-group">
+              <label for="cfg-new-campaign-name">Campaign Name:</label>
+              <input type="text" id="cfg-new-campaign-name" class="form-input" placeholder="e.g. Campaign B - SaaS Founders">
+            </div>
+
+            <div class="form-group">
+              <label for="cfg-new-sheet-id">Google Sheet ID:</label>
+              <input type="text" id="cfg-new-sheet-id" class="form-input" placeholder="e.g. 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms">
+              <small>Found in URL: <code>https://docs.google.com/spreadsheets/d/<b>SHEET_ID</b>/edit</code></small>
+            </div>
+
+            <button class="btn btn-primary" id="btn-add-campaign">
+              <i class="fa-solid fa-plus"></i> Add Campaign Sheet
+            </button>
+
+            <div class="campaign-list-wrapper" style="margin-top:24px;">
+              <h4 style="font-size:14px; color:var(--text-muted); margin-bottom:12px;">Saved Campaigns:</h4>
+              <div id="campaigns-list"></div>
+            </div>
           </div>
 
-          <div class="form-group">
-            <label for="cfg-github-token">GitHub Personal Access Token (Optional for 1-Click Triggers):</label>
-            <input type="password" id="cfg-github-token" class="form-input" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
-            <small>Used to trigger GitHub Actions workflows directly from this website. Saved safely in your browser storage.</small>
+          <!-- GitHub Credentials Card -->
+          <div class="glass-card">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-key"></i> GitHub Action Token (For 1-Click Triggers)</h3>
+            </div>
+
+            <div class="form-group">
+              <label for="cfg-github-token">GitHub Personal Access Token (PAT):</label>
+              <input type="password" id="cfg-github-token" class="form-input" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
+              <div class="token-help-box">
+                <strong><i class="fa-solid fa-circle-info"></i> How to fix "Resource not accessible" error:</strong>
+                <ol style="margin-top:6px; padding-left:18px; font-size:12px; color:var(--text-muted); line-height:1.6;">
+                  <li>Go to GitHub: <b>Settings > Developer Settings > Personal Access Tokens</b>.</li>
+                  <li>Generate a <b>Classic Token</b> with <code style="color:var(--accent-green)">repo</code> and <code style="color:var(--accent-green)">workflow</code> checked.</li>
+                  <li>Or generate a <b>Fine-grained Token</b> with <b>Repository permissions > Actions: Read & Write</b> enabled!</li>
+                </ol>
+              </div>
+            </div>
+
+            <button class="btn btn-secondary" id="btn-save-token">
+              <i class="fa-solid fa-floppy-disk"></i> Save Token
+            </button>
           </div>
 
-          <button class="btn btn-primary" id="btn-save-settings">
-            <i class="fa-solid fa-floppy-disk"></i> Save & Connect Dashboard
-          </button>
         </div>
       </section>
 
