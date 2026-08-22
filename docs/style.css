@@ -200,7 +200,35 @@ body {
 
 .header-actions {
   display: flex;
+  align-items: center;
   gap: 12px;
+}
+
+/* Campaign Dropdown Switcher */
+.campaign-dropdown-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  color: var(--accent-primary);
+}
+
+.campaign-select {
+  background: transparent;
+  border: none;
+  color: #FFF;
+  outline: none;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.campaign-select option {
+  background: #1E293B;
+  color: #FFF;
 }
 
 /* Buttons */
@@ -238,6 +266,16 @@ body {
   background: rgba(255, 255, 255, 0.12);
 }
 
+.btn-danger-sm {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--accent-red);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
 .btn-block {
   width: 100%;
   justify-content: center;
@@ -271,8 +309,10 @@ body {
   box-shadow: var(--shadow-sm);
 }
 
-.max-width-card {
-  max-width: 680px;
+.settings-layout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 24px;
 }
 
 /* Tab Switching */
@@ -533,6 +573,26 @@ body {
   background: rgba(255, 255, 255, 0.06);
   padding: 2px 6px;
   border-radius: 4px;
+}
+
+.token-help-box {
+  margin-top: 12px;
+  padding: 14px;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+
+.campaign-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
 }
 
 .inboxes-grid {
