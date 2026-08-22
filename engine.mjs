@@ -201,7 +201,7 @@ export async function runColdOutreach() {
 }
 
 // ============================================================================
-// 🔁 2. FOLLOW-UP ENGINE
+// 🔁 2. FOLLOW-UP ENGINE (Guaranteed to match initial sender & alias)
 // ============================================================================
 export async function runFollowups() {
   const sheets = await getSheets();
@@ -225,6 +225,7 @@ export async function runFollowups() {
     const followUpStatus = (row[col['Follow up']] || '').trim().toLowerCase();
     const currentCount = parseInt(row[col['Follow Up Count']] || '0', 10);
     const nextDueDateStr = row[col['Next Follow Up Date']];
+    const originalSenderEmail = (row[col['Sent From']] || '').trim();
 
     if (
       !email ||
@@ -259,39 +260,56 @@ export async function runFollowups() {
     const template = config.followupTemplates.find(t => parseInt(t['Follow_Up_Number'], 10) === nextCount) ||
                      config.followupTemplates[0];
 
-    const inbox = config.inboxes[0];
-    const sentFrom = row[col['Sent From']] || inbox.email;
+    // 🎯 1. MATCH EXACT ALIAS & DISPLAY NAME
+    const matchedAlias = config.aliases.find(a => a.alias_email.toLowerCase() === originalSenderEmail.toLowerCase());
+    const senderName = matchedAlias ? matchedAlias.display_name : (originalSenderEmail.split('@')[0] || 'Team');
+    const senderEmail = originalSenderEmail || config.inboxes[0].email;
+
+    // 🎯 2. MATCH INBOX CREDENTIALS FOR THIS SENDER DOMAIN
+    let inboxToUse = config.inboxes.find(i => i.email.toLowerCase() === originalSenderEmail.toLowerCase());
+    if (!inboxToUse && originalSenderEmail.includes('@')) {
+      const senderDomain = originalSenderEmail.split('@')[1].toLowerCase();
+      inboxToUse = config.inboxes.find(i => i.email.toLowerCase().endsWith(`@${senderDomain}`));
+    }
+    if (!inboxToUse) inboxToUse = config.inboxes[0];
 
     const fullName = (row[col['full_name']] || 'there').trim();
     const companyName = (row[col['company_name']] || 'your company').trim();
     const location = (row[col['location']] || 'your city').trim();
+
+    const randomLocs = config.locations.filter(l => l.toLowerCase() !== location.toLowerCase())
+      .sort(() => 0.5 - Math.random()).slice(0, 4).join(', ');
+    const clientStr = config.clients.sort(() => 0.5 - Math.random()).slice(0, 5)
+      .map(c => c.client_name || c.name).join(', ');
 
     const replaceTags = (txt = '') => txt
       .replace(/{{full_name}}/g, fullName)
       .replace(/{{company_name}}/g, companyName)
       .replace(/{{Date}}/g, new Date().toLocaleDateString('en-GB'))
       .replace(/{{location}}/g, location)
+      .replace(/{{other_locations}}/g, randomLocs)
+      .replace(/{{clients}}/g, clientStr)
       .replace(/{{follow_up_number}}/g, String(nextCount));
 
     const finalSubj = `${replaceTags(template.Subject || 'Re:')} ${subjectLine}`.trim();
     const finalBody = replaceTags(template.Body || template.body);
 
     const transporter = nodemailer.createTransport({
-      host: inbox.smtp_host,
-      port: parseInt(inbox.smtp_port, 10),
-      secure: parseInt(inbox.smtp_port, 10) === 465,
-      auth: { user: inbox.smtp_user, pass: inbox.smtp_pass },
+      host: inboxToUse.smtp_host,
+      port: parseInt(inboxToUse.smtp_port, 10),
+      secure: parseInt(inboxToUse.smtp_port, 10) === 465,
+      auth: { user: inboxToUse.smtp_user, pass: inboxToUse.smtp_pass },
     });
 
     try {
       await transporter.sendMail({
-        from: sentFrom,
+        from: `"${senderName}" <${senderEmail}>`,
         to: email,
         subject: finalSubj,
         html: finalBody,
       });
 
-      console.log(`[Follow-up #${nextCount}] sent to: ${email}`);
+      console.log(`[Follow-up #${nextCount}] Sent from "${senderName}" <${senderEmail}> to: ${email}`);
 
       const daysUntilNext = parseInt(template.Days_Until_Next || '3', 10);
       let nextDateStr = '';
@@ -344,7 +362,7 @@ export async function runInboxChecker() {
       port: parseInt(inbox.imap_port || '993', 10),
       secure: true,
       auth: { user: inbox.smtp_user, pass: inbox.smtp_pass },
-      logger: false, // 👈 Cleans up the terminal log
+      logger: false,
     });
 
     try {
