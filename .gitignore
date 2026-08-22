@@ -11,9 +11,10 @@
 # Dependencies
 node_modules/
 
-# Local AI Agent Customizations (ECC)
+# Local AI Agent Customizations & Tests
 .agents/
 AGENTS.md
+test/
 
 # Logs & Temporary files
 *.log
