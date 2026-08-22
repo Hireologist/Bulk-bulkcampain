@@ -4,6 +4,7 @@ import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import Groq from 'groq-sdk';
 import axios from 'axios';
+import dns from 'node:dns/promises';
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
 
@@ -50,6 +51,20 @@ async function loadConfig(sheets) {
   const clients = await loadTab(sheets, 'Clients');
 
   return { settings, inboxes, aliases, coldTemplates, followupTemplates, locations, clients };
+}
+
+// 🛡️ 100% Free Pre-Send MX & Domain Validation
+async function isValidEmailDomain(email) {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) return false;
+
+  const domain = email.split('@')[1].toLowerCase().trim();
+  try {
+    const mxRecords = await dns.resolveMx(domain);
+    return mxRecords && mxRecords.length > 0;
+  } catch (err) {
+    return false;
+  }
 }
 
 // Check IST cutoff
@@ -99,6 +114,27 @@ export async function runColdOutreach() {
 
     // Skip if already sent, replied, bounced, or empty email
     if (!email || status === 'sent' || status === 'replied' || status === 'bounced') {
+      continue;
+    }
+
+    // 🛡️ PRE-SEND DOMAIN & MX CHECK (Catches dead emails for free)
+    const isDomainValid = await isValidEmailDomain(email);
+    if (!isDomainValid) {
+      console.log(`⚠️ Invalid domain/email detected: ${email}. Skipping to protect sender reputation.`);
+      
+      const rowNum = i + 2;
+      row[col['Sent Status']] = 'bounced';
+      row[col['Follow up']] = 'Done';
+      row[col['Next Follow Up Date']] = 'INVALID DOMAIN';
+      row[col['Time']] = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: true });
+
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `'Details'!A${rowNum}:Z${rowNum}`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: [row] },
+      });
+
       continue;
     }
 
@@ -364,6 +400,11 @@ export async function runInboxChecker() {
   const [headers, ...rows] = detailsRes.data.values || [];
   const col = Object.fromEntries(headers.map((h, i) => [h.trim(), i]));
 
+  const internalEmails = [
+    ...config.inboxes.map(i => i.email.toLowerCase()),
+    ...config.aliases.map(a => a.alias_email.toLowerCase())
+  ];
+
   for (const inbox of config.inboxes) {
     if (!inbox.imap_host) continue;
 
@@ -385,7 +426,7 @@ export async function runInboxChecker() {
           const parsed = await simpleParser(msg.source);
           const fromAddr = parsed.from?.value[0]?.address?.toLowerCase() || '';
 
-          if (fromAddr.includes('companydomain.com')) continue;
+          if (internalEmails.includes(fromAddr)) continue;
 
           // A. Bounce Detection
           const isBounce = parsed.from?.text?.includes('mailer-daemon') ||
@@ -423,7 +464,7 @@ export async function runInboxChecker() {
             if (groq) {
               try {
                 const aiRes = await groq.chat.completions.create({
-                  model: 'openai/gpt-oss-120b',
+                  model: 'llama-3.3-70b-versatile',
                   messages: [
                     { role: 'system', content: 'Classify sentiment in ONE word: POSITIVE, NEUTRAL, NEGATIVE, or OOO.' },
                     { role: 'user', content: parsed.text || '' },
@@ -540,7 +581,9 @@ export async function generateDailyDigest() {
   await notifyDiscord(config.settings.discord_updates_webhook, message);
 }
 
-// CLI Router
+// ==========================================
+// 🏁 ROUTER
+// ==========================================
 const task = process.argv[2];
 if (task === 'outreach') runColdOutreach().catch(console.error);
 else if (task === 'followup') runFollowups().catch(console.error);
