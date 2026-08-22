@@ -15,17 +15,21 @@ on:
     # 3. Inbox Checker: 24/7 every 30 minutes
     - cron: '*/30 * * * *'
 
+    # 4. Daily Digest Summary: Mon-Sat at 6:30 PM IST (13:00 UTC)
+    - cron: '0 13 * * 1-6'
+
   workflow_dispatch:
     inputs:
       action:
         description: 'Choose task to run manually'
         required: true
-        default: 'outreach'
+        default: 'digest'
         type: choice
         options:
           - outreach
           - followup
           - inbox
+          - digest
 
 jobs:
   run-engine:
@@ -46,6 +50,8 @@ jobs:
             node engine.mjs outreach
           elif [ "${{ github.event.schedule }}" = "0 5 * * 1-6" ]; then
             node engine.mjs followup
+          elif [ "${{ github.event.schedule }}" = "0 13 * * 1-6" ]; then
+            node engine.mjs digest
           else
             node engine.mjs inbox
           fi

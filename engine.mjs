@@ -320,6 +320,8 @@ export async function runFollowups() {
 
       console.log(`[Follow-up #${nextCount}] Sent from "${senderName}" <${senderEmail}> to: ${email}`);
 
+      row[col['Date Sent']] = new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' });
+
       const daysUntilNext = parseInt(template.Days_Until_Next || '3', 10);
       let nextDateStr = '';
       if (daysUntilNext > 0) {
@@ -465,8 +467,82 @@ export async function runInboxChecker() {
   }
 }
 
+// ============================================================================
+// 📊 4. DAILY DISCORD ANALYTICS DIGEST
+// ============================================================================
+export async function generateDailyDigest() {
+  const sheets = await getSheets();
+  const config = await loadConfig(sheets);
+
+  const detailsRes = await sheets.spreadsheets.values.get({ 
+    spreadsheetId: SPREADSHEET_ID, 
+    range: "'Details'!A:Z" 
+  });
+  const [headers, ...rows] = detailsRes.data.values || [];
+  const col = Object.fromEntries(headers.map((h, i) => [h.trim(), i]));
+
+  const todayIST = new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' });
+  const formattedDateStr = new Date().toLocaleDateString('en-GB', {
+    timeZone: 'Asia/Kolkata',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  });
+
+  let coldSentToday = 0;
+  let followupsSentToday = 0;
+  let bouncesTotal = 0;
+  let repliesTotal = 0;
+  let positiveCount = 0;
+  let neutralCount = 0;
+  let negativeCount = 0;
+
+  for (const row of rows) {
+    const sentDate = (row[col['Date Sent']] || '').trim();
+    const sentStatus = (row[col['Sent Status']] || '').trim().toLowerCase();
+    const followUpCount = parseInt(row[col['Follow Up Count']] || '0', 10);
+    const sentiment = (row[col['Next Follow Up Date']] || '').trim().toUpperCase();
+
+    // Cold outreach sent today
+    if (sentDate === todayIST && followUpCount === 0 && (sentStatus === 'sent' || sentStatus === 'replied')) {
+      coldSentToday++;
+    }
+
+    // Follow-ups sent today
+    if (sentDate === todayIST && followUpCount > 0) {
+      followupsSentToday++;
+    }
+
+    // Bounces
+    if (sentStatus === 'bounced') {
+      bouncesTotal++;
+    }
+
+    // Replies & Sentiment breakdown
+    if (sentStatus === 'replied') {
+      repliesTotal++;
+      if (sentiment.includes('POSITIVE')) positiveCount++;
+      else if (sentiment.includes('NEGATIVE')) negativeCount++;
+      else neutralCount++;
+    }
+  }
+
+  const message = 
+`📊 **Daily Outreach Summary (${formattedDateStr})**
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📤 **Cold Emails Sent:**   ${coldSentToday.toLocaleString()}
+🔁 **Follow-ups Sent:**    ${followupsSentToday.toLocaleString()}
+🎯 **Inbound Replies:**    ${repliesTotal.toLocaleString()} (${positiveCount} Positive 🔥, ${neutralCount} Neutral 💬, ${negativeCount} Negative ❌)
+🔒 **Bounces Caught:**     ${bouncesTotal.toLocaleString()}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+
+  console.log(message);
+  await notifyDiscord(config.settings.discord_updates_webhook, message);
+}
+
 // CLI Router
 const task = process.argv[2];
 if (task === 'outreach') runColdOutreach().catch(console.error);
 else if (task === 'followup') runFollowups().catch(console.error);
 else if (task === 'inbox') runInboxChecker().catch(console.error);
+else if (task === 'digest') generateDailyDigest().catch(console.error);
