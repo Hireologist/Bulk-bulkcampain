@@ -42,6 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
     syncSheetData();
   } else {
     showSettingsTab();
+    showAlert('⚠️ Please enter your Google Sheet ID string below to load your data.', 'orange');
   }
 
   // Auto-sync every 60 seconds
@@ -82,7 +83,6 @@ function setupEventListeners() {
   document.getElementById('btn-refresh').addEventListener('click', syncSheetData);
   document.getElementById('btn-open-settings').addEventListener('click', showSettingsTab);
   
-  // Campaign Add & Switcher
   document.getElementById('btn-add-campaign').addEventListener('click', addCampaign);
   document.getElementById('campaign-selector').addEventListener('change', (e) => {
     activeCampaignId = e.target.value;
@@ -130,10 +130,15 @@ function addCampaign() {
   const sheetInput = document.getElementById('cfg-new-sheet-id');
 
   const name = nameInput.value.trim();
-  const sheetId = sheetInput.value.trim();
+  let sheetId = sheetInput.value.trim();
+
+  // Extract ID if full URL pasted
+  if (sheetId.includes('/spreadsheets/d/')) {
+    sheetId = sheetId.split('/spreadsheets/d/')[1].split('/')[0];
+  }
 
   if (!name || !sheetId) {
-    alert('Please enter both a Campaign Name and a Google Sheet ID.');
+    alert('Please enter both a Campaign Name and a valid Google Sheet ID.');
     return;
   }
 
@@ -192,43 +197,125 @@ function saveToken() {
   }
 }
 
-// 1. Fetch Google Sheet Tab
+// -------------------------------------------------------------
+// 🔮 DUAL-FETCH PARSER (GViz JSON + CSV Fallback)
+// -------------------------------------------------------------
 async function fetchSheetTab(sheetId, tabName) {
   if (!sheetId) return [];
-  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tabName)}`;
 
+  // A. Try GViz JSON Endpoint
   try {
+    const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tabName)}`;
     const res = await fetch(url);
     const text = await res.text();
     
-    const jsonString = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
-    const data = JSON.parse(jsonString);
-    
-    if (!data.table || !data.table.cols || !data.table.rows) return [];
+    if (text.includes('google.visualization.Query.setResponse')) {
+      const jsonString = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
+      const data = JSON.parse(jsonString);
+      
+      if (data.table && data.table.cols && data.table.rows && data.table.rows.length > 0) {
+        const headers = data.table.cols.map(c => c.label ? c.label.trim() : '');
+        const rows = data.table.rows.map(r => {
+          const rowObj = {};
+          headers.forEach((h, i) => {
+            if (h && r.c && r.c[i]) {
+              rowObj[h] = r.c[i].v !== null ? String(r.c[i].v).trim() : '';
+            }
+          });
+          return rowObj;
+        });
 
-    const headers = data.table.cols.map(c => c.label ? c.label.trim() : '');
-    const rows = data.table.rows.map(r => {
-      const rowObj = {};
-      headers.forEach((h, i) => {
-        if (h && r.c && r.c[i]) {
-          rowObj[h] = r.c[i].v !== null ? String(r.c[i].v).trim() : '';
-        }
-      });
-      return rowObj;
-    });
-
-    return rows;
-  } catch (err) {
-    console.error(`Error fetching tab [${tabName}]:`, err);
-    return [];
+        if (rows.length > 0) return rows;
+      }
+    }
+  } catch (e) {
+    console.warn(`GViz fetch failed for [${tabName}], falling back to CSV export...`, e);
   }
+
+  // B. Fallback to CSV Export Endpoint
+  try {
+    const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}`;
+    const csvRes = await fetch(csvUrl);
+    if (csvRes.ok) {
+      const csvText = await csvRes.text();
+      const rows = parseCSV(csvText);
+      if (rows.length > 0) return rows;
+    }
+  } catch (e) {
+    console.warn(`CSV fallback failed for [${tabName}]`, e);
+  }
+
+  // C. Fallback to /export?format=csv
+  try {
+    const exportUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&sheet=${encodeURIComponent(tabName)}`;
+    const expRes = await fetch(exportUrl);
+    if (expRes.ok) {
+      const csvText = await expRes.text();
+      return parseCSV(csvText);
+    }
+  } catch (e) {
+    console.error(`All fetch methods failed for [${tabName}]`, e);
+  }
+
+  return [];
 }
 
-// 2. Main Sync Engine
+// Custom CSV Parser
+function parseCSV(csvText) {
+  const lines = csvText.split(/\r?\n/).filter(l => l.trim() !== '');
+  if (!lines.length) return [];
+  
+  const parseLine = (line) => {
+    const result = [];
+    let start = 0;
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      if (line[i] === '"') {
+        inQuotes = !inQuotes;
+      } else if (line[i] === ',' && !inQuotes) {
+        let val = line.substring(start, i).trim();
+        if (val.startsWith('"') && val.endsWith('"')) val = val.slice(1, -1);
+        result.push(val);
+        start = i + 1;
+      }
+    }
+    let val = line.substring(start).trim();
+    if (val.startsWith('"') && val.endsWith('"')) val = val.slice(1, -1);
+    result.push(val);
+    return result;
+  };
+
+  const headers = parseLine(lines[0]).map(h => h.trim());
+  const rows = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const values = parseLine(lines[i]);
+    const obj = {};
+    headers.forEach((h, idx) => {
+      if (h) obj[h] = (values[idx] || '').trim();
+    });
+    rows.push(obj);
+  }
+
+  return rows;
+}
+
+// -------------------------------------------------------------
+// 🔄 MAIN SYNC ENGINE
+// -------------------------------------------------------------
 async function syncSheetData() {
   const currentCamp = getCurrentCampaign();
   if (!currentCamp || !currentCamp.sheetId) {
-    showAlert('No Google Sheet ID configured for active campaign.', 'blue');
+    showAlert('⚠️ No Google Sheet ID set. Click "Campaigns & Connect" to enter your Sheet ID.', 'orange');
+    document.getElementById('leads-table-body').innerHTML = `
+      <tr>
+        <td colspan="7" class="loading-td">
+          ⚠️ <strong>Google Sheet ID string is empty.</strong><br>
+          <button class="btn btn-primary" onclick="showSettingsTab()" style="margin-top:12px;">
+            <i class="fa-solid fa-plus"></i> Configure Google Sheet ID
+          </button>
+        </td>
+      </tr>`;
     return;
   }
 
@@ -252,10 +339,17 @@ async function syncSheetData() {
     let bouncesTotal = 0;
     let uncontacted = 0;
 
+    // Helper for case-insensitive lookup
+    const getVal = (row, keyName) => {
+      const target = keyName.toLowerCase();
+      const foundKey = Object.keys(row).find(k => k.toLowerCase() === target);
+      return foundKey ? row[foundKey] : '';
+    };
+
     detailsRows.forEach(r => {
-      const status = (r['Sent Status'] || '').toLowerCase();
-      const followUpCount = parseInt(r['Follow Up Count'] || '0', 10);
-      const sentiment = (r['Next Follow Up Date'] || '').toUpperCase();
+      const status = getVal(r, 'Sent Status').toLowerCase();
+      const followUpCount = parseInt(getVal(r, 'Follow Up Count') || '0', 10);
+      const sentiment = getVal(r, 'Next Follow Up Date').toUpperCase();
 
       if (!status || status === '') uncontacted++;
       if (status === 'sent' && followUpCount === 0) coldSent++;
@@ -292,9 +386,15 @@ async function syncSheetData() {
     renderLeadsTable();
     renderInboxes(inboxesRows);
 
-    document.getElementById('connection-status-text').innerText = 'Connected';
-    document.getElementById('status-dot').className = 'status-indicator online';
-    showAlert(`Connected to [${currentCamp.name}] (${detailsRows.length} total leads loaded).`, 'green');
+    if (detailsRows.length > 0) {
+      document.getElementById('connection-status-text').innerText = 'Connected';
+      document.getElementById('status-dot').className = 'status-indicator online';
+      showAlert(`Connected to [${currentCamp.name}] (${detailsRows.length} total leads loaded).`, 'green');
+    } else {
+      document.getElementById('connection-status-text').innerText = '0 Leads';
+      document.getElementById('status-dot').className = 'status-indicator offline';
+      showAlert(`⚠️ Connected to Sheet ID [${currentCamp.sheetId}], but 0 rows were found in "Details" tab. Make sure your Google Sheet is shared as "Anyone with the link can view".`, 'orange');
+    }
   } catch (err) {
     document.getElementById('connection-status-text').innerText = 'Error';
     document.getElementById('status-dot').className = 'status-indicator offline';
@@ -302,7 +402,7 @@ async function syncSheetData() {
   }
 }
 
-// 3. Render Charts
+// 4. Render Charts
 function renderCharts(stats) {
   const sentimentCtx = document.getElementById('sentimentChart')?.getContext('2d');
   if (sentimentCtx) {
@@ -365,17 +465,25 @@ function renderCharts(stats) {
   }
 }
 
-// 4. Render Lead Table
+// Helper for Case-Insensitive Object Key Lookup
+function getVal(row, keyName) {
+  if (!row) return '';
+  const target = keyName.toLowerCase();
+  const foundKey = Object.keys(row).find(k => k.toLowerCase() === target);
+  return foundKey ? row[foundKey] : '';
+}
+
+// 5. Render Lead Table
 function renderLeadsTable() {
   const search = document.getElementById('lead-search').value.toLowerCase();
   const statusFilter = document.getElementById('lead-status-filter').value.toLowerCase();
   const tbody = document.getElementById('leads-table-body');
 
   const filtered = allLeads.filter(r => {
-    const email = (r['email'] || '').toLowerCase();
-    const name = (r['full_name'] || '').toLowerCase();
-    const company = (r['company_name'] || '').toLowerCase();
-    const status = (r['Sent Status'] || '').toLowerCase();
+    const email = getVal(r, 'email').toLowerCase();
+    const name = getVal(r, 'full_name').toLowerCase();
+    const company = getVal(r, 'company_name').toLowerCase();
+    const status = getVal(r, 'Sent Status').toLowerCase();
 
     const matchesSearch = !search || email.includes(search) || name.includes(search) || company.includes(search);
     const matchesStatus = !statusFilter || 
@@ -386,19 +494,29 @@ function renderLeadsTable() {
   });
 
   if (!filtered.length) {
-    tbody.innerHTML = `<tr><td colspan="7" class="loading-td">No matching prospects found.</td></tr>`;
+    if (!allLeads.length) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="7" class="loading-td">
+            ⚠️ <strong>No prospects found in this Google Sheet.</strong><br>
+            Please make sure your Google Sheet is shared as <strong>"Anyone with the link can view"</strong>!
+          </td>
+        </tr>`;
+    } else {
+      tbody.innerHTML = `<tr><td colspan="7" class="loading-td">No matching prospects found for your search filter.</td></tr>`;
+    }
     return;
   }
 
   tbody.innerHTML = filtered.map(row => {
-    const name = row['full_name'] || 'N/A';
-    const email = row['email'] || '';
-    const company = row['company_name'] || '—';
-    const location = row['location'] || '—';
-    const status = (row['Sent Status'] || 'Queue').toUpperCase();
-    const sentFrom = row['Sent From'] || '—';
-    const followUpCount = row['Follow Up Count'] || '0';
-    const dateSent = row['Date Sent'] || row['Time'] || '—';
+    const name = getVal(row, 'full_name') || 'N/A';
+    const email = getVal(row, 'email') || '';
+    const company = getVal(row, 'company_name') || '—';
+    const location = getVal(row, 'location') || '—';
+    const status = (getVal(row, 'Sent Status') || 'Queue').toUpperCase();
+    const sentFrom = getVal(row, 'Sent From') || '—';
+    const followUpCount = getVal(row, 'Follow Up Count') || '0';
+    const dateSent = getVal(row, 'Date Sent') || getVal(row, 'Time') || '—';
 
     let badgeClass = 'badge-queue';
     if (status === 'SENT') badgeClass = 'badge-sent';
@@ -422,7 +540,7 @@ function renderLeadsTable() {
   }).join('');
 }
 
-// 5. Render Inboxes
+// 6. Render Inboxes
 function renderInboxes(inboxes) {
   const container = document.getElementById('inboxes-container');
 
@@ -435,10 +553,10 @@ function renderInboxes(inboxes) {
   }
 
   container.innerHTML = inboxes.map(ib => {
-    const email = ib.email || ib.smtp_user || 'Inbox';
-    const name = ib.display_name || email.split('@')[0];
-    const limit = ib.daily_limit || '50';
-    const active = String(ib.is_active || '').toUpperCase() === 'TRUE';
+    const email = getVal(ib, 'email') || getVal(ib, 'smtp_user') || 'Inbox';
+    const name = getVal(ib, 'display_name') || email.split('@')[0];
+    const limit = getVal(ib, 'daily_limit') || '50';
+    const active = String(getVal(ib, 'is_active')).toUpperCase() === 'TRUE';
 
     return `
       <div class="glass-card inbox-card">
@@ -456,7 +574,7 @@ function renderInboxes(inboxes) {
   }).join('');
 }
 
-// 6. GitHub Actions Cloud Workflow Trigger
+// 7. GitHub Actions Cloud Workflow Trigger
 async function triggerGitHubAction(taskName) {
   if (!githubToken) {
     const token = prompt('Enter your GitHub Personal Access Token (PAT) with "Actions: Read & Write" permission:');
