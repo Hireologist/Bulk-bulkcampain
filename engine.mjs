@@ -89,6 +89,8 @@ export async function runColdOutreach() {
 
   const inboxUsage = Object.fromEntries(config.inboxes.map(i => [i.email, 0]));
   let inboxIdx = 0;
+  let emailsSentThisRun = 0;
+  const MAX_PER_RUN = parseInt(config.settings.max_emails_per_run || '1000', 10);
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
@@ -98,6 +100,12 @@ export async function runColdOutreach() {
     // Skip if already sent, replied, bounced, or empty email
     if (!email || status === 'sent' || status === 'replied' || status === 'bounced') {
       continue;
+    }
+
+    // Stop once this trigger completes its batch limit
+    if (emailsSentThisRun >= MAX_PER_RUN) {
+      console.log(`✅ Completed batch of ${MAX_PER_RUN} emails for this run. Stopping.`);
+      break;
     }
 
     // Cutoff time check (6:30 PM IST)
@@ -168,6 +176,7 @@ export async function runColdOutreach() {
       });
 
       inboxUsage[inbox.email]++;
+      emailsSentThisRun++;
       console.log(`[Sent] "${senderName}" <${senderEmail}> -> ${email}`);
 
       // Update row in sheet
