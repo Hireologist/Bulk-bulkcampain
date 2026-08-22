@@ -374,7 +374,7 @@ export async function runInboxChecker() {
           const parsed = await simpleParser(msg.source);
           const fromAddr = parsed.from?.value[0]?.address?.toLowerCase() || '';
 
-          if (fromAddr.includes('hireologist.com') || fromAddr.includes('hireologist.in')) continue;
+          if (fromAddr.includes('companydomain.com')) continue;
 
           // A. Bounce Detection
           const isBounce = parsed.from?.text?.includes('mailer-daemon') ||
