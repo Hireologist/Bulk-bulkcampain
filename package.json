@@ -2,8 +2,13 @@
   "name": "universal-cold-outreach",
   "version": "1.0.0",
   "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test"
+  },
   "dependencies": {
     "axios": "^1.7.0",
+    "express": "^4.19.2",
     "googleapis": "^144.0.0",
     "groq-sdk": "^0.7.0",
     "imapflow": "^1.0.160",

@@ -23,6 +23,7 @@ An automated, serverless cold email outreach engine built with **Node.js**, **Go
 
 ## ⚡ Key Features
 - **1-Click Sheet Generator**: Apps Script automatically builds all 11 color-coded tabs with headers, sample data, and formulas.
+- **🖥️ Web View Dashboard**: Real-time browser interface (`http://localhost:3000`) for visual analytics, lead directory search, inbox health, and manual triggers.
 - **Smart Rotation**: Rotates through active email inboxes and aliases.
 - **Automated Follow-ups**: Sends scheduled follow-ups and automatically halts when a prospect replies or bounces.
 - **AI Reply Sentiment Analysis**: Uses Groq LLM to categorize replies as `POSITIVE`, `NEUTRAL`, or `NEGATIVE`.
