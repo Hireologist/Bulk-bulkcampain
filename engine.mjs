@@ -344,6 +344,7 @@ export async function runInboxChecker() {
       port: parseInt(inbox.imap_port || '993', 10),
       secure: true,
       auth: { user: inbox.smtp_user, pass: inbox.smtp_pass },
+      logger: false, // 👈 Cleans up the terminal log
     });
 
     try {
