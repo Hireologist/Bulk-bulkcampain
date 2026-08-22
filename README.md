@@ -1,38 +1,65 @@
 # 🚀 Universal Cold Outreach Engine & Sheet Bot
 
-An automated, serverless cold email outreach engine built with **Node.js**, **Google Sheets API**, **IMAP/SMTP**, **GitHub Actions**, and **Discord Webhooks**.
+An automated, serverless cold email outreach engine built with **Node.js**, **Google Sheets API**, **IMAP/SMTP**, **GitHub Actions**, **Discord Webhooks**, and a **100% Online GitHub Pages Web Dashboard**.
 
 ---
 
 ## 📋 Table of Contents
 1. [Key Features](#-key-features)
-2. [Prerequisites & Requirements](#-prerequisites--requirements)
-3. [Step-by-Step Initial Setup](#-step-by-step-initial-setup)
+2. [Online Web Dashboard (GitHub Pages)](#-online-web-dashboard-github-pages)
+3. [Prerequisites & Requirements](#-prerequisites--requirements)
+4. [Step-by-Step Initial Setup](#-step-by-step-initial-setup)
    - [Step 1: Google Sheet Setup (1-Click Apps Script)](#step-1-google-sheet-setup-1-click-apps-script)
    - [Step 2: Google Cloud Service Account Setup](#step-2-google-cloud-service-account-setup)
    - [Step 3: Email Inboxes & App Passwords](#step-3-email-inboxes--app-passwords)
    - [Step 4: Groq AI & Discord Webhooks](#step-4-groq-ai--discord-webhooks)
    - [Step 5: GitHub Repository Secrets Configuration](#step-5-github-repository-secrets-configuration)
-4. [Running & Testing the Engine](#-running--testing-the-engine)
-5. [How to Create a New Campaign (Adding a Second Sheet)](#-how-to-create-a-new-campaign-adding-a-second-sheet)
-   - [Option A: Running a New Campaign in the Same Workflow](#option-a-running-a-new-campaign-in-the-same-workflow)
-   - [Option B: Running Separate Workflows per Campaign](#option-b-running-separate-workflows-per-campaign)
-6. [Google Sheets Architecture & Tabs](#-google-sheets-architecture--tabs)
+5. [GitHub Personal Access Token (PAT) Setup (For 1-Click Triggers)](#-github-personal-access-token-pat-setup-for-1-click-triggers)
+6. [Running & Testing the Engine](#-running--testing-the-engine)
+   - [Option A: 100% Online Web Dashboard (GitHub Pages)](#option-a-100-online-web-dashboard-github-pages)
+   - [Option B: Local Express Dashboard (`npm start`)](#option-b-local-express-dashboard-npm-start)
+   - [Option C: Automatic GitHub Actions Schedule](#option-c-automatic-github-actions-schedule)
+   - [Option D: Native Unit Test Suite (`npm test`)](#option-d-native-unit-test-suite-npm-test)
+7. [How to Create & Manage Multiple Campaigns (Adding Second Sheets)](#-how-to-create--manage-multiple-campaigns-adding-second-sheets)
+   - [Method 1: Multi-Campaign Manager in Web Dashboard](#method-1-multi-campaign-manager-in-web-dashboard)
+   - [Method 2: Multi-Campaign GitHub Workflows](#method-2-multi-campaign-github-workflows)
+8. [Google Sheets Architecture & 11 Color-Coded Tabs](#-google-sheets-architecture--11-color-coded-tabs)
 
 ---
 
 ## ⚡ Key Features
-- **1-Click Sheet Generator**: Apps Script automatically builds all 11 color-coded tabs with headers, sample data, and formulas.
-- **🌐 100% Online GitHub Pages Dashboard**: Live web view hosted on GitHub Pages (`https://rohanpatel16.github.io/Sheet-bot/`) for 24/7 visual analytics, lead directory search, inbox health, and 1-click cloud triggers without running anything offline.
-- **Smart Rotation**: Rotates through active email inboxes and aliases.
-- **Automated Follow-ups**: Sends scheduled follow-ups and automatically halts when a prospect replies or bounces.
-- **AI Reply Sentiment Analysis**: Uses Groq LLM to categorize replies as `POSITIVE`, `NEUTRAL`, or `NEGATIVE`.
-- **Discord Integration**: Real-time webhook notifications for positive leads, batch starts/ends, and a 6:30 PM IST Daily Performance Digest card.
-- **Concurrency & Safety Lock**: Concurrency lock prevents overlapping runs and ensures zero double-sending.
+
+- **🌐 100% Online GitHub Pages Web Dashboard**: Live browser view (`https://rohanpatel16.github.io/Sheet-bot/`) for 24/7 visual analytics, lead search, inbox health, and 1-click cloud triggers without running anything offline.
+- **🎯 Multi-Campaign & Multi-Sheet Switcher**: Manage unlimited separate campaigns and Google Sheets in 1 click right from the top header.
+- **🛡️ 100% Free Pre-Send MX & Domain Validation**: Uses Node's built-in `node:dns/promises` to perform real-time `dns.resolveMx(domain)` lookups. Automatically flags invalid/dead email domains as `bounced` before sending, protecting your sender IP reputation without any paid APIs.
+- **1-Click Google Sheet Generator**: Apps Script (`Code.gs`) automatically builds all 11 color-coded tabs with headers, sample data, and dynamic `=LET(...)` formulas.
+- **Smart Rotation & Alias Matcher**: Rotates through active email inboxes and matches original sender aliases on follow-ups.
+- **Automated Follow-Up Sequence**: Sends scheduled follow-ups and automatically halts when a prospect replies, unsubscribes, or bounces.
+- **AI Reply Sentiment Analysis**: Uses Groq LLM (`llama-3.3-70b-versatile`) to categorize replies as `POSITIVE`, `NEUTRAL`, `NEGATIVE`, or `OOO`.
+- **Discord Integration & 6:30 PM IST Daily Digest**: Real-time alerts for positive leads, batch status, and a 6:30 PM IST Daily Performance Digest card.
+- **🔒 Concurrency & Double-Sending Safety Lock**: Workflow concurrency lock (`group: outreach-engine`) prevents parallel execution and guarantees zero double-sending.
+
+---
+
+## 🌐 Online Web Dashboard (GitHub Pages)
+
+Your dashboard is hosted 100% online directly on GitHub Pages:
+
+👉 **[https://rohanpatel16.github.io/Sheet-bot/](https://rohanpatel16.github.io/Sheet-bot/)**
+
+### 1-Minute GitHub Pages Enablement (One-Time Setup):
+1. Go to your repository on GitHub: `https://github.com/Rohanpatel16/Sheet-bot`
+2. Click **Settings** ⚙️ > **Pages** (on the left menu).
+3. Under **Build and deployment**:
+   - **Source**: Select `Deploy from a branch`
+   - **Branch**: Select **`main`**
+   - **Folder**: Select **`/docs`** (or **`/ (root)`**)
+4. Click **Save** 💾.
 
 ---
 
 ## 🛠️ Prerequisites & Requirements
+
 Before setting up, make sure you have:
 1. A **Google Account** (to host Google Sheets).
 2. A **Google Cloud Console** account (to create a Service Account JSON key).
@@ -51,7 +78,10 @@ Before setting up, make sure you have:
 3. Copy the complete code from [`Code.gs`](./Code.gs) into the Apps Script editor and click **Save** (💾).
 4. Refresh your Google Sheet. A new menu item will appear at the top: **⚡ Outreach Bot**.
 5. Click **⚡ Outreach Bot** > **🛠️ Rebuild / Reset All Sheets**.
-6. Grant the necessary permissions when prompted. The script will automatically generate all 11 required tabs (`Details`, `Inboxes`, `Aliases`, `Settings`, `Templates`, `Followup_Templates`, `Locations`, `Clients`, `📊 Email_Analytics`, `📈 ChartData`, and `📖 Setup_Guide`).
+6. Grant permissions when prompted. The script will automatically generate all 11 required tabs (`Details`, `Inboxes`, `Aliases`, `Settings`, `Templates`, `Followup_Templates`, `Locations`, `Clients`, `📊 Email_Analytics`, `📈 ChartData`, and `📖 Setup_Guide`).
+7. **Share your Google Sheet**:
+   - Click **Share** 🔒 at the top right of your Google Sheet.
+   - Set access to **"Anyone with the link can view"** (required for client-side web dashboard sync).
 
 ---
 
@@ -61,9 +91,9 @@ Before setting up, make sure you have:
 3. Enable the **Google Sheets API** under **APIs & Services** > **Library**.
 4. Go to **APIs & Services** > **Credentials** > **Create Credentials** > **Service Account**.
 5. Give it a name and click **Create and Continue**.
-6. Under the created Service Account, click the **Keys** tab > **Add Key** > **Create new key** > **JSON**.
+6. Under the created Service Account, click **Keys** > **Add Key** > **Create new key** > **JSON**.
 7. Download the JSON key file.
-8. **Share your Google Sheet**:
+8. **Grant Editor Access to Service Account**:
    - Open your downloaded JSON key file and copy the `client_email` address (e.g. `sheet-bot@project.iam.gserviceaccount.com`).
    - Open your Google Sheet, click **Share**, and grant **Editor** access to this client email address.
 
@@ -110,37 +140,55 @@ Open the **Settings** tab in your Google Sheet:
 
 ---
 
+## 🔑 GitHub Personal Access Token (PAT) Setup (For 1-Click Triggers)
+
+If you see `GitHub Dispatch Error: Resource not accessible by personal access token` when triggering workflows from the web dashboard, follow these 30-second steps:
+
+1. Go to GitHub: **[GitHub Token Settings](https://github.com/settings/tokens)**
+2. Click **Generate new token** > **Generate new token (classic)**.
+3. Check the following permission scopes:
+   - ✅ **`repo`** *(Full control of private/public repositories)*
+   - ✅ **`workflow`** *(Update GitHub Action workflows)*
+4. Click **Generate token** at the bottom and copy your token (`ghp_...`).
+5. Open your online dashboard at **`https://rohanpatel16.github.io/Sheet-bot/`**, go to **Campaigns & Connect Settings**, paste your token, and click **Save Token**.
+
+---
+
 ## 🧪 Running & Testing the Engine
 
-### Automatic Schedule (GitHub Actions)
+### Option A: 100% Online Web Dashboard (GitHub Pages)
+- Open **`https://rohanpatel16.github.io/Sheet-bot/`** in any browser (Phone, Laptop, Tablet).
+- View live charts, search lead directory, monitor inbox daily limits, and trigger runs in 1 click!
+
+### Option B: Local Express Dashboard (`npm start`)
+- Run `npm start` in your terminal.
+- Open `http://localhost:3000` in your browser.
+
+### Option C: Automatic GitHub Actions Schedule
 The workflow in `.github/workflows/outreach.yml` runs automatically on a scheduled cron:
 - 📤 **Cold Outreach**: Mon-Sat at 10:00 AM IST (`04:30 UTC`)
 - 🔁 **Follow-Ups**: Mon-Sat at 10:30 AM IST (`05:00 UTC`)
 - 📥 **Inbox Checker**: Every 30 minutes 24/7
 - 📊 **Daily Digest**: Mon-Sat at 6:30 PM IST (`13:00 UTC`)
 
-### Manual Trigger / Testing
-1. Go to your GitHub Repository > **Actions** tab.
-2. Select **Universal Outreach Engine** from the left sidebar.
-3. Click **Run workflow**.
-4. Choose the task (`outreach`, `followup`, `inbox`, or `digest`) and click the green **Run workflow** button.
+### Option D: Native Unit Test Suite (`npm test`)
+- Run `npm test` to execute the native `node:test` suite verifying MX domain lookups, IST cutoff calculations, template tag replacements, and sentiment logic.
 
 ---
 
-## 🎯 How to Create a New Campaign (Adding a Second Sheet)
+## 🎯 How to Create & Manage Multiple Campaigns (Adding Second Sheets)
 
-If you want to run a second campaign with a separate prospect list or different templates, choose one of the following methods:
-
-### Option A: Reusing the Engine for a New Spreadsheet
-1. Create a **new Google Spreadsheet** for Campaign 2.
-2. Run `Code.gs` in Apps Script on the new spreadsheet to generate its tabs.
-3. Share the new Google Sheet with your Google Service Account email (`Editor` access).
-4. Update the `SPREADSHEET_ID` secret in GitHub Secrets with the new spreadsheet ID.
+### Method 1: Multi-Campaign Manager in Web Dashboard
+1. Open **[https://rohanpatel16.github.io/Sheet-bot/](https://rohanpatel16.github.io/Sheet-bot/)**.
+2. Click **+ Add Campaign** (or **Campaigns & Connect** on the left menu).
+3. Enter a Campaign Name (e.g. `Campaign B - SaaS Founders`) and paste the Google Sheet ID.
+4. Click **Add Campaign Sheet**.
+5. Switch between campaigns in 1 click using the top-header dropdown menu!
 
 ---
 
-### Option B: Running Separate Workflows per Campaign (Multi-Campaign Setup)
-If you want to run **multiple campaigns simultaneously** (e.g. Campaign A and Campaign B):
+### Method 2: Multi-Campaign GitHub Workflows
+If you want to run multiple campaigns simultaneously via separate GitHub Actions workflows:
 
 1. **Set up GitHub Secrets**:
    - `SPREADSHEET_ID_CAMPAIGN_A`: ID for Sheet A
@@ -156,17 +204,10 @@ concurrency:
 
 on:
   schedule:
-    # 1. Cold Outreach: Mon-Sat at 10:00 AM IST (04:30 UTC)
-    - cron: '30 4 * * 1-6'
-    
-    # 2. Follow-Up Engine: Mon-Sat at 10:30 AM IST (05:00 UTC)
-    - cron: '0 5 * * 1-6'
-    
-    # 3. Inbox Checker: 24/7 every 30 minutes
-    - cron: '*/30 * * * *'
-
-    # 4. Daily Digest Summary: Mon-Sat at 6:30 PM IST (13:00 UTC)
-    - cron: '0 13 * * 1-6'
+    - cron: '30 4 * * 1-6'   # Cold Outreach: 10:00 AM IST
+    - cron: '0 5 * * 1-6'    # Follow-ups: 10:30 AM IST
+    - cron: '*/30 * * * *'   # Inbox Checker: 24/7
+    - cron: '0 13 * * 1-6'   # Daily Digest: 6:30 PM IST
 
   workflow_dispatch:
     inputs:
@@ -212,7 +253,7 @@ jobs:
 
 ---
 
-## 📊 Google Sheets Architecture & Tabs
+## 📊 Google Sheets Architecture & 11 Color-Coded Tabs
 
 | Tab Name | Function / Description |
 | :--- | :--- |
@@ -225,5 +266,5 @@ jobs:
 | **`Followup_Templates`** | Sequential follow-up templates and delay intervals (`Days_Until_Next`). |
 | **`Locations`** | City lists for randomized location tags (`{{other_locations}}`). |
 | **`Clients`** | Social proof portfolio client names (`{{clients}}`). |
-| **`📊 Email_Analytics`** | Automated `LET` formula calculating per-sender performance (Sent, Replied, Bounced, Positive, Reply Rates). |
+| **`📊 Email_Analytics`** | Automated `=LET(...)` formula calculating per-sender performance (Sent, Replied, Bounced, Positive, Reply Rates). |
 | **`📈 ChartData`** | Categorized sentiment breakdown and total status count tables for visualization charts. |
