@@ -1,32 +1,50 @@
-name: Cold Outreach Runner
+name: Universal Outreach Engine
 
 on:
   schedule:
-    # Runs Monday to Saturday at 10:00 AM IST (04:30 AM UTC)
+    # 1. Cold Outreach: Mon-Sat at 10:00 AM IST (04:30 UTC)
     - cron: '30 4 * * 1-6'
-  workflow_dispatch: # Allows manual trigger anytime from GitHub UI
+    
+    # 2. Follow-Up Engine: Mon-Sat at 10:30 AM IST (05:00 UTC)
+    - cron: '0 5 * * 1-6'
+    
+    # 3. Inbox Checker: 24/7 every 30 minutes
+    - cron: '*/30 * * * *'
+
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Choose task to run manually'
+        required: true
+        default: 'outreach'
+        type: choice
+        options:
+          - outreach
+          - followup
+          - inbox
 
 jobs:
-  run-mailer:
+  run-engine:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
+      
+      - run: npm install
 
-      - name: Install Dependencies
-        run: npm install
-
-      - name: Run Mailer Script
-        run: node mailer.js
+      - name: Run Selected Task
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            node engine.mjs ${{ github.event.inputs.action }}
+          elif [ "${{ github.event.schedule }}" = "30 4 * * 1-6" ]; then
+            node engine.mjs outreach
+          elif [ "${{ github.event.schedule }}" = "0 5 * * 1-6" ]; then
+            node engine.mjs followup
+          else
+            node engine.mjs inbox
+          fi
         env:
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          SMTP_HOST: ${{ secrets.SMTP_HOST }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
-          SMTP_USER: ${{ secrets.SMTP_USER }}
-          SMTP_PASS: ${{ secrets.SMTP_PASS }}
