@@ -22,7 +22,7 @@ An automated, serverless cold email outreach engine built with **Node.js**, **Go
 ---
 
 ## ⚡ Key Features
-- **1-Click Sheet Generator**: Apps Script automatically builds all 10 color-coded tabs with headers, sample data, and formulas.
+- **1-Click Sheet Generator**: Apps Script automatically builds all 11 color-coded tabs with headers, sample data, and formulas.
 - **Smart Rotation**: Rotates through active email inboxes and aliases.
 - **Automated Follow-ups**: Sends scheduled follow-ups and automatically halts when a prospect replies or bounces.
 - **AI Reply Sentiment Analysis**: Uses Groq LLM to categorize replies as `POSITIVE`, `NEUTRAL`, or `NEGATIVE`.
@@ -47,10 +47,10 @@ Before setting up, make sure you have:
 ### Step 1: Google Sheet Setup (1-Click Apps Script)
 1. Create a new Google Spreadsheet at [sheets.new](https://sheets.new).
 2. Click **Extensions** > **Apps Script**.
-3. Copy the complete code from [`Code.gs`](file:///d:/Codinf%20projets/Sheet-bot/Code.gs) into the Apps Script editor and click **Save** (💾).
+3. Copy the complete code from [`Code.gs`](./Code.gs) into the Apps Script editor and click **Save** (💾).
 4. Refresh your Google Sheet. A new menu item will appear at the top: **⚡ Outreach Bot**.
 5. Click **⚡ Outreach Bot** > **🛠️ Rebuild / Reset All Sheets**.
-6. Grant the necessary permissions when prompted. The script will automatically generate all 10 required tabs (`Details`, `Inboxes`, `Aliases`, `Settings`, `Templates`, `Followup_Templates`, `Locations`, `Clients`, `📊 Email_Analytics`, `📈 ChartData`, and `📖 Setup_Guide`).
+6. Grant the necessary permissions when prompted. The script will automatically generate all 11 required tabs (`Details`, `Inboxes`, `Aliases`, `Settings`, `Templates`, `Followup_Templates`, `Locations`, `Clients`, `📊 Email_Analytics`, `📈 ChartData`, and `📖 Setup_Guide`).
 
 ---
 
@@ -155,8 +155,30 @@ concurrency:
 
 on:
   schedule:
-    - cron: '30 4 * * 1-6' # 10:00 AM IST
+    # 1. Cold Outreach: Mon-Sat at 10:00 AM IST (04:30 UTC)
+    - cron: '30 4 * * 1-6'
+    
+    # 2. Follow-Up Engine: Mon-Sat at 10:30 AM IST (05:00 UTC)
+    - cron: '0 5 * * 1-6'
+    
+    # 3. Inbox Checker: 24/7 every 30 minutes
+    - cron: '*/30 * * * *'
+
+    # 4. Daily Digest Summary: Mon-Sat at 6:30 PM IST (13:00 UTC)
+    - cron: '0 13 * * 1-6'
+
   workflow_dispatch:
+    inputs:
+      action:
+        description: 'Choose task to run manually'
+        required: true
+        default: 'digest'
+        type: choice
+        options:
+          - outreach
+          - followup
+          - inbox
+          - digest
 
 jobs:
   run-engine:
@@ -166,9 +188,22 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      
       - run: npm install
-      - name: Run Campaign B
-        run: node engine.mjs outreach
+
+      - name: Run Selected Task
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            node engine.mjs ${{ github.event.inputs.action }}
+          elif [ "${{ github.event.schedule }}" = "30 4 * * 1-6" ]; then
+            node engine.mjs outreach
+          elif [ "${{ github.event.schedule }}" = "0 5 * * 1-6" ]; then
+            node engine.mjs followup
+          elif [ "${{ github.event.schedule }}" = "0 13 * * 1-6" ]; then
+            node engine.mjs digest
+          else
+            node engine.mjs inbox
+          fi
         env:
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID_CAMPAIGN_B }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
@@ -180,6 +215,7 @@ jobs:
 
 | Tab Name | Function / Description |
 | :--- | :--- |
+| **`📖 Setup_Guide`** | Step-by-step instructions, rules, and status legends for team members. |
 | **`Details`** | Prospect leads (Name, Email, Company, Location, Sent Status, Sent From, Reply Status, Sentiment). |
 | **`Inboxes`** | Primary SMTP/IMAP credentials, daily sending limits, active toggles. |
 | **`Aliases`** | Virtual alias emails and display names used for random `From:` header rotation. |
