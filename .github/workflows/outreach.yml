@@ -1,5 +1,9 @@
 name: Universal Outreach Engine
 
+concurrency:
+  group: outreach-engine
+  cancel-in-progress: false
+
 on:
   schedule:
     # 1. Cold Outreach: Mon-Sat at 10:00 AM IST (04:30 UTC)
