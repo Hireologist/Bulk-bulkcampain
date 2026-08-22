@@ -412,7 +412,7 @@ export async function runInboxChecker() {
             if (groq) {
               try {
                 const aiRes = await groq.chat.completions.create({
-                  model: 'llama-3.3-70b-versatile',
+                  model: 'openai/gpt-oss-120b',
                   messages: [
                     { role: 'system', content: 'Classify sentiment in ONE word: POSITIVE, NEUTRAL, NEGATIVE, or OOO.' },
                     { role: 'user', content: parsed.text || '' },
