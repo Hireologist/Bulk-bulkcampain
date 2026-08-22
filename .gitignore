@@ -11,6 +11,10 @@
 # Dependencies
 node_modules/
 
+# Local AI Agent Customizations (ECC)
+.agents/
+AGENTS.md
+
 # Logs & Temporary files
 *.log
 npm-debug.log*
