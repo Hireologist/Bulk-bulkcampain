@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sheet-Bot — Online Cloud Outreach Dashboard</title>
+  
+  <!-- Google Fonts & FontAwesome -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="dashboard-container">
+    
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-icon">
+          <i class="fa-solid fa-cloud"></i>
+        </div>
+        <div class="brand-text">
+          <h2>Sheet-Bot</h2>
+          <span class="version-tag">GitHub Pages • Online</span>
+        </div>
+      </div>
+
+      <nav class="nav-menu">
+        <a href="#overview" class="nav-item active" data-tab="overview">
+          <i class="fa-solid fa-chart-pie"></i>
+          <span>Overview</span>
+        </a>
+        <a href="#leads" class="nav-item" data-tab="leads">
+          <i class="fa-solid fa-users"></i>
+          <span>Lead Directory</span>
+        </a>
+        <a href="#inboxes" class="nav-item" data-tab="inboxes">
+          <i class="fa-solid fa-inbox"></i>
+          <span>Inbox Health</span>
+        </a>
+        <a href="#triggers" class="nav-item" data-tab="triggers">
+          <i class="fa-solid fa-bolt"></i>
+          <span>Control Center</span>
+        </a>
+        <a href="#settings" class="nav-item" data-tab="settings">
+          <i class="fa-solid fa-gear"></i>
+          <span>Cloud Connect</span>
+        </a>
+      </nav>
+
+      <div class="system-status-card">
+        <div class="status-indicator online" id="status-dot"></div>
+        <div class="status-info">
+          <span class="status-label">Cloud Connection</span>
+          <span class="status-value" id="connection-status-text">Connected</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      
+      <!-- Top Header -->
+      <header class="top-header">
+        <div class="header-title">
+          <h1 id="page-title">Online Performance Dashboard</h1>
+          <p class="subtitle">Live browser view hosted on GitHub Pages</p>
+        </div>
+        <div class="header-actions">
+          <button class="btn btn-secondary" id="btn-refresh">
+            <i class="fa-solid fa-rotate-right"></i> Sync Sheet
+          </button>
+          <button class="btn btn-primary" id="btn-open-settings">
+            <i class="fa-solid fa-link"></i> Configure Sheet ID
+          </button>
+        </div>
+      </header>
+
+      <!-- Alert Banner -->
+      <div id="alert-banner" class="alert-banner hidden">
+        <i class="fa-solid fa-circle-info"></i>
+        <span id="alert-message">Notice message</span>
+      </div>
+
+      <!-- TAB 1: OVERVIEW -->
+      <section id="tab-overview" class="tab-content active">
+        
+        <!-- Hero Metric Cards -->
+        <div class="kpi-grid">
+          <div class="kpi-card glass-card">
+            <div class="kpi-icon blue"><i class="fa-solid fa-paper-plane"></i></div>
+            <div class="kpi-data">
+              <span class="kpi-label">Cold Emails Sent</span>
+              <h3 class="kpi-value" id="stat-cold-sent">0</h3>
+              <span class="kpi-sub">Initial pitches</span>
+            </div>
+          </div>
+
+          <div class="kpi-card glass-card">
+            <div class="kpi-icon purple"><i class="fa-solid fa-rotate"></i></div>
+            <div class="kpi-data">
+              <span class="kpi-label">Follow-ups Sent</span>
+              <h3 class="kpi-value" id="stat-followups-sent">0</h3>
+              <span class="kpi-sub">Nudges sent</span>
+            </div>
+          </div>
+
+          <div class="kpi-card glass-card">
+            <div class="kpi-icon green"><i class="fa-solid fa-comments"></i></div>
+            <div class="kpi-data">
+              <span class="kpi-label">Inbound Replies</span>
+              <h3 class="kpi-value" id="stat-replies-total">0</h3>
+              <span class="kpi-sub" id="stat-reply-rate">0% response rate</span>
+            </div>
+          </div>
+
+          <div class="kpi-card glass-card">
+            <div class="kpi-icon red"><i class="fa-solid fa-shield-halved"></i></div>
+            <div class="kpi-data">
+              <span class="kpi-label">Bounces Prevented</span>
+              <h3 class="kpi-value" id="stat-bounces-total">0</h3>
+              <span class="kpi-sub">Pre-send MX checked</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Visual Analytics Grid -->
+        <div class="charts-grid">
+          <div class="chart-card glass-card">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-face-smile"></i> Reply Sentiment Breakdown</h3>
+            </div>
+            <div class="chart-container">
+              <canvas id="sentimentChart"></canvas>
+            </div>
+          </div>
+
+          <div class="chart-card glass-card">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-chart-column"></i> Lead Status Distribution</h3>
+            </div>
+            <div class="chart-container">
+              <canvas id="statusChart"></canvas>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- TAB 2: LEAD DIRECTORY -->
+      <section id="tab-leads" class="tab-content">
+        <div class="table-controls glass-card">
+          <div class="search-box">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="lead-search" placeholder="Search prospects by name, email, or company...">
+          </div>
+
+          <div class="filter-group">
+            <select id="lead-status-filter">
+              <option value="">All Statuses</option>
+              <option value="uncontacted">Uncontacted / Queue</option>
+              <option value="sent">Sent</option>
+              <option value="replied">Replied</option>
+              <option value="bounced">Bounced</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="table-card glass-card">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Prospect</th>
+                <th>Company</th>
+                <th>Location</th>
+                <th>Status</th>
+                <th>Sent From</th>
+                <th>Follow Up</th>
+                <th>Date Sent</th>
+              </tr>
+            </thead>
+            <tbody id="leads-table-body">
+              <tr>
+                <td colspan="7" class="loading-td"><i class="fa-solid fa-spinner fa-spin"></i> Connecting to Google Sheet...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- TAB 3: INBOX HEALTH -->
+      <section id="tab-inboxes" class="tab-content">
+        <div class="inboxes-grid" id="inboxes-container">
+          <div class="glass-card full-width">
+            <p><i class="fa-solid fa-spinner fa-spin"></i> Loading sender inboxes and aliases from cloud...</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 4: CONTROL CENTER -->
+      <section id="tab-triggers" class="tab-content">
+        <div class="trigger-grid">
+          
+          <div class="trigger-card glass-card">
+            <div class="trigger-header">
+              <div class="trigger-icon blue"><i class="fa-solid fa-rocket"></i></div>
+              <div class="trigger-title">
+                <h3>Cold Outreach Engine</h3>
+                <p>Runs bulk cold outreach via GitHub Actions cloud workflow.</p>
+              </div>
+            </div>
+            <button class="btn btn-primary btn-block" onclick="triggerGitHubAction('outreach')">
+              <i class="fa-solid fa-paper-plane"></i> Launch Outreach Batch
+            </button>
+          </div>
+
+          <div class="trigger-card glass-card">
+            <div class="trigger-header">
+              <div class="trigger-icon purple"><i class="fa-solid fa-arrows-rotate"></i></div>
+              <div class="trigger-title">
+                <h3>Follow-Up Sequence</h3>
+                <p>Triggers follow-up emails for due prospects online.</p>
+              </div>
+            </div>
+            <button class="btn btn-secondary btn-block" onclick="triggerGitHubAction('followup')">
+              <i class="fa-solid fa-rotate"></i> Run Follow-Ups
+            </button>
+          </div>
+
+          <div class="trigger-card glass-card">
+            <div class="trigger-header">
+              <div class="trigger-icon green"><i class="fa-solid fa-inbox"></i></div>
+              <div class="trigger-title">
+                <h3>24/7 Inbox & Sentiment Checker</h3>
+                <p>Triggers IMAP bounce scan and Groq AI reply classification.</p>
+              </div>
+            </div>
+            <button class="btn btn-secondary btn-block" onclick="triggerGitHubAction('inbox')">
+              <i class="fa-solid fa-envelope-open-text"></i> Scan Inboxes & Bounces
+            </button>
+          </div>
+
+          <div class="trigger-card glass-card">
+            <div class="trigger-header">
+              <div class="trigger-icon orange"><i class="fa-solid fa-chart-line"></i></div>
+              <div class="trigger-title">
+                <h3>Daily Discord Analytics Digest</h3>
+                <p>Posts the daily performance card directly to Discord channel.</p>
+              </div>
+            </div>
+            <button class="btn btn-secondary btn-block" onclick="triggerGitHubAction('digest')">
+              <i class="fa-solid fa-share-nodes"></i> Post Daily Digest
+            </button>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- TAB 5: SETTINGS / CLOUD CONNECT -->
+      <section id="tab-settings" class="tab-content">
+        <div class="glass-card max-width-card">
+          <div class="card-header">
+            <h3><i class="fa-solid fa-cloud-arrow-up"></i> Google Sheet & GitHub Cloud Setup</h3>
+          </div>
+          <div class="form-group">
+            <label for="cfg-sheet-id">Google Sheet ID:</label>
+            <input type="text" id="cfg-sheet-id" class="form-input" placeholder="e.g. 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms">
+            <small>Found in your Google Sheet URL: <code>https://docs.google.com/spreadsheets/d/<b>YOUR_SHEET_ID</b>/edit</code></small>
+          </div>
+
+          <div class="form-group">
+            <label for="cfg-github-token">GitHub Personal Access Token (Optional for 1-Click Triggers):</label>
+            <input type="password" id="cfg-github-token" class="form-input" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
+            <small>Used to trigger GitHub Actions workflows directly from this website. Saved safely in your browser storage.</small>
+          </div>
+
+          <button class="btn btn-primary" id="btn-save-settings">
+            <i class="fa-solid fa-floppy-disk"></i> Save & Connect Dashboard
+          </button>
+        </div>
+      </section>
+
+    </main>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
