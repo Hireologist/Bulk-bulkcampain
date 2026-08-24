@@ -1,8 +1,10 @@
 name: Universal Outreach Engine
 
 concurrency:
-  group: outreach-engine
-  cancel-in-progress: false
+  # This dynamic group allows Inbox and Outreach to run at the same time.
+  # If a second Inbox check starts while one is still running, it cancels the old one.
+  group: outreach-${{ github.event.schedule || github.event.inputs.action || 'manual' }}
+  cancel-in-progress: true
 
 on:
   schedule:
@@ -23,7 +25,7 @@ on:
       action:
         description: 'Choose task to run manually'
         required: true
-        default: 'digest'
+        default: 'inbox'
         type: choice
         options:
           - outreach
@@ -34,31 +36,39 @@ on:
 jobs:
   run-engine:
     runs-on: ubuntu-latest
+    # Safety: stops the job if it hangs for more than 15 minutes
+    timeout-minutes: 15 
+    
     steps:
-      - uses: actions/checkout@v4
-      
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22 # Use 22 (LTS) for better stability
-      
-      - run: npm install
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-      - name: Run Selected Task
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Run Engine Task
         env:
-          SCHEDULED_CRON: ${{ github.event.schedule }}
-          SELECTED_ACTION: ${{ github.event.inputs.action }}
+          # Your essential secrets
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          # Environment variables for logic
+          SCHEDULED_CRON: ${{ github.event.schedule }}
+          SELECTED_ACTION: ${{ github.event.inputs.action }}
         run: |
-          echo "Event Name: ${{ github.event_name }}"
-          echo "Triggered Schedule: $SCHEDULED_CRON"
+          echo "Trigger Source: ${{ github.event_name }}"
+          echo "Cron string detected: $SCHEDULED_CRON"
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "Running manual action: $SELECTED_ACTION"
             node engine.mjs "$SELECTED_ACTION"
 
           elif [ "$SCHEDULED_CRON" = "30 4 * * 1-6" ]; then
-            echo "Running Scheduled Outreach..."
+            echo "Running Scheduled Cold Outreach..."
             node engine.mjs outreach
 
           elif [ "$SCHEDULED_CRON" = "0 5 * * 1-6" ]; then
@@ -66,10 +76,10 @@ jobs:
             node engine.mjs followup
 
           elif [ "$SCHEDULED_CRON" = "0 13 * * 1-6" ]; then
-            echo "Running Scheduled Digest..."
+            echo "Running Scheduled Daily Digest..."
             node engine.mjs digest
 
           else
-            echo "Defaulting to Inbox Check..."
+            echo "Running Scheduled Inbox Check..."
             node engine.mjs inbox
           fi
