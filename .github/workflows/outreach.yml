@@ -12,7 +12,7 @@ on:
     - cron: '0 4 * * 1-6'     # 1. Follow-up Engine (09:30 AM IST)
     - cron: '30 4 * * 1-6'    # 2. Cold Outreach (10:00 AM IST)
     - cron: '0 13 * * 1-6'    # 3. Daily Digest (06:30 PM IST)
-    - cron: '*/30 * * * *'    # 4. Inbox Checker (Every 30 mins)
+    - cron: '7,22,37,52 * * * *'    # 4. Inbox Checker (Every 15 mins off-peak)
 
   workflow_dispatch:
     inputs:
