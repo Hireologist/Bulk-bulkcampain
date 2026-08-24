@@ -1,21 +1,25 @@
 name: Universal Outreach Engine
 
-# Prevents multiple jobs from colliding on the Google Sheet
+# 🎯 4 EXPLICIT INDEPENDENT LANES (Zero collisions, no shared queues)
 concurrency:
-  group: outreach-single-lane
-  # If you prefer latest scheduled run to cancel a long-running previous run (avoid backlog),
-  # set cancel-in-progress: true. Keeping false queues runs so none are cancelled.
-  cancel-in-progress: true
+  group: ${{ 
+    (github.event.schedule == '*/30 * * * *' || github.event.inputs.action == 'inbox')    && 'inbox-lane' ||
+    (github.event.schedule == '0 4 * * 1-6'   || github.event.inputs.action == 'followup') && 'followup-lane' ||
+    (github.event.schedule == '0 13 * * 1-6'  || github.event.inputs.action == 'digest')   && 'digest-lane' ||
+    'outreach-lane'
+  }}
+  # Only cancel if a new 30-min inbox check arrives while an old one is hanging
+  cancel-in-progress: ${{ github.event.schedule == '*/30 * * * *' || github.event.inputs.action == 'inbox' }}
 
 permissions:
   contents: read
 
 on:
   schedule:
-    - cron: '0 4 * * 1-6'     # Follow-up (group: outreach-single-lane)
-    - cron: '30 4 * * 1-6'    # Outreach (group: outreach-single-lane)
-    - cron: '0 13 * * 1-6'    # Digest (group: outreach-single-lane)
-    - cron: '*/30 * * * *'    # Inbox (SEPARATE: group: inbox-checker)
+    - cron: '0 4 * * 1-6'     # 1. Follow-up Engine (09:30 AM IST) -> followup-lane
+    - cron: '30 4 * * 1-6'    # 2. Cold Outreach (10:00 AM IST)    -> outreach-lane
+    - cron: '0 13 * * 1-6'    # 3. Daily Digest (06:30 PM IST)     -> digest-lane
+    - cron: '*/30 * * * *'    # 4. Inbox Checker (Every 30 mins)   -> inbox-lane
 
   workflow_dispatch:
     inputs:
@@ -29,7 +33,7 @@ on:
 jobs:
   run-engine:
     runs-on: ubuntu-latest
-    timeout-minutes: 360 # 6-hour execution window
+    timeout-minutes: 360
     env:
       SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
       GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
@@ -43,8 +47,7 @@ jobs:
       - name: Setup Node.js (with cache)
         uses: actions/setup-node@v4
         with:
-          # Recommended: use an LTS for CI (20). Change to 22 if you need it.
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: package-lock.json
 
@@ -60,55 +63,46 @@ jobs:
             exit 1
           fi
 
-      - name: Write service account key (private, not echoed)
+      - name: Write service account key
         run: |
-          # Write service account JSON to a file for Google SDKs to consume.
-          # Note: we avoid echoing the secret itself to logs.
           printf '%s' "$GOOGLE_SERVICE_ACCOUNT_JSON" > /tmp/gsa.json
           chmod 600 /tmp/gsa.json
-          echo "Wrote service account key to /tmp/gsa.json"
-        # env inherited from job
 
-      - name: Install Dependencies (reproducible)
+      - name: Install Dependencies
         run: |
           set -euo pipefail
           npm ci --no-audit --no-fund
-        # cache is handled by setup-node
 
       - name: Run Engine Task
-        # use a stricter shell so failures are visible; do not print secrets
         run: |
           set -euo pipefail
 
-          echo "Trigger Source: ${{ github.event_name }}"
-          echo "Schedule: $SCHEDULED_CRON"
+          echo "Trigger: ${{ github.event_name }} | Cron: $SCHEDULED_CRON | Action: $SELECTED_ACTION"
 
           # 1. Manual Trigger
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "Running Manual Action: $SELECTED_ACTION"
             node engine.mjs "$SELECTED_ACTION"
 
-          # 2. Follow-Up Engine (Runs first at 9:30 AM IST)
+          # 2. Follow-Up Engine (09:30 AM IST)
           elif [ "$SCHEDULED_CRON" = "0 4 * * 1-6" ]; then
-            echo "Starting Follow-up Engine..."
             node engine.mjs followup
 
-          # 3. Cold Outreach (Starts at 10:00 AM IST)
+          # 3. Cold Outreach (10:00 AM IST)
           elif [ "$SCHEDULED_CRON" = "30 4 * * 1-6" ]; then
-            echo "Starting Cold Outreach..."
             node engine.mjs outreach
 
           # 4. Daily Digest (06:30 PM IST)
           elif [ "$SCHEDULED_CRON" = "0 13 * * 1-6" ]; then
-            echo "Generating Daily Digest..."
             node engine.mjs digest
 
           # 5. Inbox Checker (Every 30 Mins 24/7)
+          elif [ "$SCHEDULED_CRON" = "*/30 * * * *" ]; then
+            node engine.mjs inbox
+            
           else
-            echo "Running Inbox Checker..."
+            echo "Unknown trigger. Defaulting to inbox check."
             node engine.mjs inbox
           fi
         env:
-          # Make the file available for Google libs if they look at GOOGLE_APPLICATION_CREDENTIALS
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/gsa.json
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
