@@ -1,22 +1,28 @@
 name: Universal Outreach Engine
 
+# Prevents multiple jobs from colliding on the Google Sheet
 concurrency:
-  # This creates a unique 'lane' for each task so they don't kill each other.
-  # Outreach (6h), Follow-up (6h), and Inbox (20s) can all run at once.
-  group: outreach-${{ github.event.schedule || github.event.inputs.action || 'manual' }}
-  cancel-in-progress: true
+  group: outreach-single-lane
+  cancel-in-progress: false
 
 on:
   schedule:
-    - cron: '30 4 * * 1-6'   # 1. Cold Outreach (10:00 AM IST) - 6h
-    - cron: '0 5 * * 1-6'    # 2. Follow-Up Engine (10:30 AM IST) - 6h
-    - cron: '*/30 * * * *'   # 3. Inbox Checker (Every 30 mins) - 20s
-    - cron: '0 13 * * 1-6'   # 4. Daily Digest (06:30 PM IST) - 1m
+    # 1. Follow-Up Engine: Mon-Sat at 09:30 AM IST (04:00 UTC) - Runs first (~15 mins)
+    - cron: '0 4 * * 1-6'
+    
+    # 2. Cold Outreach: Mon-Sat at 10:00 AM IST (04:30 UTC) - Long running
+    - cron: '30 4 * * 1-6'
+    
+    # 3. Daily Digest: Mon-Sat at 06:30 PM IST (13:00 UTC) - Summary report
+    - cron: '0 13 * * 1-6'
+    
+    # 4. Inbox Checker: 24/7 every 30 minutes
+    - cron: '*/30 * * * *'
 
   workflow_dispatch:
     inputs:
       action:
-        description: 'Choose task'
+        description: 'Choose task to run manually'
         required: true
         default: 'inbox'
         type: choice
@@ -25,9 +31,8 @@ on:
 jobs:
   run-engine:
     runs-on: ubuntu-latest
-    # FIXED: Increased from 15m to 360m (6 hours)
-    timeout-minutes: 360 
-    
+    timeout-minutes: 360 # 6-hour execution window
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -35,7 +40,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22 # FIXED: Using stable Node 22 to stop the warnings
+          node-version: 22
 
       - name: Install Dependencies
         run: npm install
@@ -47,30 +52,30 @@ jobs:
           SCHEDULED_CRON: ${{ github.event.schedule }}
           SELECTED_ACTION: ${{ github.event.inputs.action }}
         run: |
-          echo "Trigger source: ${{ github.event_name }}"
-          echo "Active Schedule String: $SCHEDULED_CRON"
+          echo "Trigger Source: ${{ github.event_name }}"
+          echo "Schedule: $SCHEDULED_CRON"
 
-          # 1. Manual Dispatch
+          # 1. Manual Trigger
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "Running Manual Task: $SELECTED_ACTION"
+            echo "Running Manual Action: $SELECTED_ACTION"
             node engine.mjs "$SELECTED_ACTION"
 
-          # 2. Cold Outreach (Long Running)
-          elif [ "$SCHEDULED_CRON" = "30 4 * * 1-6" ]; then
-            echo "Starting Cold Outreach (6-hour window)..."
-            node engine.mjs outreach
-
-          # 3. Follow-up (Long Running)
-          elif [ "$SCHEDULED_CRON" = "0 5 * * 1-6" ]; then
-            echo "Starting Follow-up Engine (6-hour window)..."
+          # 2. Follow-Up Engine (Runs first at 9:30 AM IST)
+          elif [ "$SCHEDULED_CRON" = "0 4 * * 1-6" ]; then
+            echo "Starting Follow-up Engine..."
             node engine.mjs followup
 
-          # 4. Daily Digest
+          # 3. Cold Outreach (Starts at 10:00 AM IST)
+          elif [ "$SCHEDULED_CRON" = "30 4 * * 1-6" ]; then
+            echo "Starting Cold Outreach..."
+            node engine.mjs outreach
+
+          # 4. Daily Digest (06:30 PM IST)
           elif [ "$SCHEDULED_CRON" = "0 13 * * 1-6" ]; then
             echo "Generating Daily Digest..."
             node engine.mjs digest
 
-          # 5. Inbox Checker (Standard Cycle)
+          # 5. Inbox Checker (Every 30 Mins 24/7)
           else
             echo "Running Inbox Checker..."
             node engine.mjs inbox
