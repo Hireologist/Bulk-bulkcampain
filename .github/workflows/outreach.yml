@@ -92,8 +92,8 @@ jobs:
             echo "Generating Daily Digest..."
             node engine.mjs digest
 
-          # 5. Inbox Checker (Every 30 Mins 24/7)
-          elif [ "$SCHEDULED_CRON" = "*/30 * * * *" ]; then
+          # 5. Inbox Checker (Every 15 Mins Off-Peak)
+          elif [ "$SCHEDULED_CRON" = "7,22,37,52 * * * *" ]; then
             echo "Running Inbox Checker..."
             node engine.mjs inbox
             
