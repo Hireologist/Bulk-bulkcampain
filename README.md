@@ -6,49 +6,77 @@ An automated, serverless cold email outreach engine built with **Node.js**, **Go
 
 ## 📋 Table of Contents
 1. [Key Features](#-key-features)
-2. [Online Web Dashboard (GitHub Pages)](#-online-web-dashboard-github-pages)
-3. [Prerequisites & Requirements](#-prerequisites--requirements)
-4. [Step-by-Step Initial Setup](#-step-by-step-initial-setup)
+2. [How to Import & Setup Your Own GitHub Repo](#-how-to-import--setup-your-own-github-repo)
+3. [Online Web Dashboard (GitHub Pages)](#-online-web-dashboard-github-pages)
+4. [Prerequisites & Requirements](#-prerequisites--requirements)
+5. [Step-by-Step Initial Setup](#-step-by-step-initial-setup)
    - [Step 1: Google Sheet Setup (1-Click Apps Script)](#step-1-google-sheet-setup-1-click-apps-script)
    - [Step 2: Google Cloud Service Account Setup](#step-2-google-cloud-service-account-setup)
    - [Step 3: Email Inboxes & App Passwords](#step-3-email-inboxes--app-passwords)
    - [Step 4: Groq AI & Discord Webhooks](#step-4-groq-ai--discord-webhooks)
    - [Step 5: GitHub Repository Secrets Configuration](#step-5-github-repository-secrets-configuration)
-5. [GitHub Personal Access Token (PAT) Setup (For 1-Click Triggers)](#-github-personal-access-token-pat-setup-for-1-click-triggers)
-6. [Running & Testing the Engine](#-running--testing-the-engine)
+6. [GitHub Personal Access Token (PAT) Setup (For 1-Click Triggers)](#-github-personal-access-token-pat-setup-for-1-click-triggers)
+7. [Running & Testing the Engine](#-running--testing-the-engine)
    - [Option A: 100% Online Web Dashboard (GitHub Pages)](#option-a-100-online-web-dashboard-github-pages)
    - [Option B: Local Express Dashboard (`npm start`)](#option-b-local-express-dashboard-npm-start)
    - [Option C: Automatic GitHub Actions Schedule](#option-c-automatic-github-actions-schedule)
    - [Option D: Native Unit Test Suite (`npm test`)](#option-d-native-unit-test-suite-npm-test)
-7. [How to Create & Manage Multiple Campaigns (Adding Second Sheets)](#-how-to-create--manage-multiple-campaigns-adding-second-sheets)
+8. [How to Create & Manage Multiple Campaigns (Adding Second Sheets)](#-how-to-create--manage-multiple-campaigns-adding-second-sheets)
    - [Method 1: Multi-Campaign Manager in Web Dashboard](#method-1-multi-campaign-manager-in-web-dashboard)
    - [Method 2: Multi-Campaign GitHub Workflows](#method-2-multi-campaign-github-workflows)
-8. [Google Sheets Architecture & 11 Color-Coded Tabs](#-google-sheets-architecture--11-color-coded-tabs)
+9. [Google Sheets Architecture & 11 Color-Coded Tabs](#-google-sheets-architecture--11-color-coded-tabs)
 
 ---
 
 ## ⚡ Key Features
 
-- **🌐 100% Online GitHub Pages Web Dashboard**: Live browser view (`https://rohanpatel16.github.io/Sheet-bot/`) for 24/7 visual analytics, lead search, inbox health, and 1-click cloud triggers without running anything offline.
+- **🌐 100% Online GitHub Pages Web Dashboard**: Live browser view (`https://<YOUR_USERNAME>.github.io/<YOUR_REPO_NAME>/`) for 24/7 visual analytics, lead search, inbox health, and 1-click cloud triggers without running anything offline.
 - **🎯 Multi-Campaign & Multi-Sheet Switcher**: Manage unlimited separate campaigns and Google Sheets in 1 click right from the top header.
 - **🛡️ 100% Free Pre-Send MX & Domain Validation**: Uses Node's built-in `node:dns/promises` to perform real-time `dns.resolveMx(domain)` lookups. Automatically flags invalid/dead email domains as `bounced` before sending, protecting your sender IP reputation without any paid APIs.
 - **1-Click Google Sheet Generator**: Apps Script (`Code.gs`) automatically builds all 11 color-coded tabs with headers, sample data, and dynamic `=LET(...)` formulas.
 - **Smart Rotation & Alias Matcher**: Rotates through active email inboxes and matches original sender aliases on follow-ups.
 - **Automated Follow-Up Sequence**: Sends scheduled follow-ups and automatically halts when a prospect replies, unsubscribes, or bounces.
 - **AI Reply Sentiment Analysis**: Uses Groq LLM (`llama-3.3-70b-versatile`) to categorize replies as `POSITIVE`, `NEUTRAL`, `NEGATIVE`, or `OOO`.
-- **Discord Integration & 6:30 PM IST Daily Digest**: Real-time alerts for positive leads, batch status, and a 6:30 PM IST Daily Performance Digest card.
+- **Discord Integration & Daily Digest**: Real-time alerts for positive leads, batch status, daily limit warnings, and a 6:30 PM IST Daily Performance Digest card.
 - **🔒 Concurrency & Double-Sending Safety Lock**: Workflow concurrency lock (`group: outreach-engine`) prevents parallel execution and guarantees zero double-sending.
+
+---
+
+## 📥 How to Import & Setup Your Own GitHub Repo
+
+To deploy and run your own independent version of this cold outreach engine, follow these simple steps:
+
+### 1. Import or Fork to Your GitHub Account
+- **Option A (Import)**: Go to **[GitHub Repository Import](https://github.com/new/import)**.
+  - Enter the source repository URL.
+  - Enter your target repository name (e.g., `sheet-bot` or `cold-outreach-engine`).
+  - Select **Public** or **Private** and click **Begin import**.
+- **Option B (Fork)**: Click the **Fork** button at the top right of this repository page to create a copy under your account.
+
+### 2. Enable GitHub Action Permissions
+1. In your new repository, go to **Settings** ⚙️ > **Actions** > **General**.
+2. Under **Workflow permissions**, select **Read and write permissions**.
+3. Check **Allow GitHub Actions to create and approve pull requests** and click **Save**.
+
+### 3. Enable Online Web Dashboard (GitHub Pages)
+1. Go to **Settings** ⚙️ > **Pages** (on the left menu).
+2. Under **Build and deployment**:
+   - **Source**: Select `Deploy from a branch`
+   - **Branch**: Select **`main`**
+   - **Folder**: Select **`/docs`** (or **`/ (root)`**)
+3. Click **Save** 💾.
+4. Your personal web dashboard will be live at: `https://<YOUR_USERNAME>.github.io/<YOUR_REPO_NAME>/`
 
 ---
 
 ## 🌐 Online Web Dashboard (GitHub Pages)
 
-Your dashboard is hosted 100% online directly on GitHub Pages:
+Your dashboard is hosted 100% online directly on your repository's GitHub Pages:
 
-👉 **[https://rohanpatel16.github.io/Sheet-bot/](https://rohanpatel16.github.io/Sheet-bot/)**
+👉 **`https://<YOUR_USERNAME>.github.io/<YOUR_REPO_NAME>/`**
 
 ### 1-Minute GitHub Pages Enablement (One-Time Setup):
-1. Go to your repository on GitHub: `https://github.com/Rohanpatel16/Sheet-bot`
+1. Go to your repository on GitHub: `https://github.com/<YOUR_USERNAME>/<YOUR_REPO_NAME>`
 2. Click **Settings** ⚙️ > **Pages** (on the left menu).
 3. Under **Build and deployment**:
    - **Source**: Select `Deploy from a branch`
@@ -129,7 +157,7 @@ Open the **Settings** tab in your Google Sheet:
 ---
 
 ### Step 5: GitHub Repository Secrets Configuration
-1. Go to your repository on GitHub: `https://github.com/YourUsername/Sheet-bot`
+1. Go to your repository on GitHub: `https://github.com/<YOUR_USERNAME>/<YOUR_REPO_NAME>`
 2. Navigate to **Settings** > **Secrets and variables** > **Actions**.
 3. Add the following **Repository Secrets**:
 
@@ -150,14 +178,14 @@ If you see `GitHub Dispatch Error: Resource not accessible by personal access to
    - ✅ **`repo`** *(Full control of private/public repositories)*
    - ✅ **`workflow`** *(Update GitHub Action workflows)*
 4. Click **Generate token** at the bottom and copy your token (`ghp_...`).
-5. Open your online dashboard at **`https://rohanpatel16.github.io/Sheet-bot/`**, go to **Campaigns & Connect Settings**, paste your token, and click **Save Token**.
+5. Open your online dashboard at **`https://<YOUR_USERNAME>.github.io/<YOUR_REPO_NAME>/`**, go to **Campaigns & Connect Settings**, paste your token, and click **Save Token**.
 
 ---
 
 ## 🧪 Running & Testing the Engine
 
 ### Option A: 100% Online Web Dashboard (GitHub Pages)
-- Open **`https://rohanpatel16.github.io/Sheet-bot/`** in any browser (Phone, Laptop, Tablet).
+- Open **`https://<YOUR_USERNAME>.github.io/<YOUR_REPO_NAME>/`** in any browser (Phone, Laptop, Tablet).
 - View live charts, search lead directory, monitor inbox daily limits, and trigger runs in 1 click!
 
 ### Option B: Local Express Dashboard (`npm start`)
@@ -179,7 +207,7 @@ The workflow in `.github/workflows/outreach.yml` runs automatically on a schedul
 ## 🎯 How to Create & Manage Multiple Campaigns (Adding Second Sheets)
 
 ### Method 1: Multi-Campaign Manager in Web Dashboard
-1. Open **[https://rohanpatel16.github.io/Sheet-bot/](https://rohanpatel16.github.io/Sheet-bot/)**.
+1. Open **`https://<YOUR_USERNAME>.github.io/<YOUR_REPO_NAME>/`**.
 2. Click **+ Add Campaign** (or **Campaigns & Connect** on the left menu).
 3. Enter a Campaign Name (e.g. `Campaign B - SaaS Founders`) and paste the Google Sheet ID.
 4. Click **Add Campaign Sheet**.

@@ -5,6 +5,8 @@ import { simpleParser } from 'mailparser';
 import Groq from 'groq-sdk';
 import axios from 'axios';
 import dns from 'node:dns/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
 
@@ -77,13 +79,42 @@ function isPastCutoff(hour = 18, minute = 30) {
 
 // Discord Webhook Notification
 async function notifyDiscord(url, content) {
-  if (url && url.startsWith('http')) {
+  const targetUrl = url || process.env.DISCORD_WEBHOOK_URL;
+  if (targetUrl && targetUrl.startsWith('http')) {
     try {
-      await axios.post(url, { content });
+      await axios.post(targetUrl, { content });
     } catch (e) {
       console.error('Discord error:', e.message);
     }
   }
+}
+
+// Check if error is a daily sending limit / quota exceeded error
+export function isDailyLimitError(err) {
+  if (!err) return false;
+  const msg = (typeof err === 'string' ? err : err.message || err.toString() || '').toLowerCase();
+  return (
+    msg.includes('daily user sending limit exceeded') ||
+    msg.includes('550-5.4.5') ||
+    msg.includes('550 5.4.5') ||
+    msg.includes('sending limits') ||
+    msg.includes('user sending limit') ||
+    msg.includes('daily sending limit') ||
+    msg.includes('quota exceeded') ||
+    msg.includes('rate limit exceeded')
+  );
+}
+
+// Helper for random date variations (DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY)
+export function getRandomFormattedDate(date = new Date()) {
+  const formatted = date.toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' });
+  const [d, m, y] = formatted.split('/');
+  const formats = [
+    `${d}/${m}/${y}`,
+    `${d}-${m}-${y}`,
+    `${d}.${m}.${y}`
+  ];
+  return formats[Math.floor(Math.random() * formats.length)];
 }
 
 // ============================================================================
@@ -103,6 +134,7 @@ export async function runColdOutreach() {
   const col = Object.fromEntries(headers.map((h, i) => [h.trim(), i]));
 
   const inboxUsage = Object.fromEntries(config.inboxes.map(i => [i.email, 0]));
+  const limitExceededInboxes = new Set();
   let inboxIdx = 0;
   let emailsSentThisRun = 0;
   const MAX_PER_RUN = parseInt(config.settings.max_emails_per_run || '1000', 10);
@@ -155,13 +187,17 @@ export async function runColdOutreach() {
     for (let attempt = 0; attempt < config.inboxes.length; attempt++) {
       const candidate = config.inboxes[inboxIdx];
       inboxIdx = (inboxIdx + 1) % config.inboxes.length;
-      if (inboxUsage[candidate.email] < parseInt(candidate.daily_limit || '50', 10)) {
+      if (!limitExceededInboxes.has(candidate.email) && inboxUsage[candidate.email] < parseInt(candidate.daily_limit || '50', 10)) {
         inbox = candidate;
         break;
       }
     }
     if (!inbox) {
-      console.log('🛑 All inboxes have reached their daily limit for today.');
+      const stopMsg = limitExceededInboxes.size > 0
+        ? `🛑 **Outreach Stopped:** All active inboxes have hit daily sending limits / quotas (${limitExceededInboxes.size} rate-limited).`
+        : '🛑 All inboxes have reached their daily limit for today.';
+      console.log(stopMsg);
+      await notifyDiscord(config.settings.discord_updates_webhook, stopMsg);
       break;
     }
 
@@ -191,7 +227,7 @@ export async function runColdOutreach() {
       .replace(/{{location}}/gi, location)
       .replace(/{{other_locations}}/gi, randomLocs)
       .replace(/{{clients}}/gi, clientStr)
-      .replace(/{{Date}}/gi, new Date().toLocaleDateString('en-GB'));
+      .replace(/{{Date}}/gi, getRandomFormattedDate());
 
     const subject = replaceTags(template.Subject || template['Subject line']);
     const body = replaceTags(template.Body || template.body);
@@ -233,6 +269,29 @@ export async function runColdOutreach() {
       });
     } catch (err) {
       console.error(`Failed to send to ${email}:`, err.message);
+      if (isDailyLimitError(err)) {
+        console.warn(`⚠️ Daily sending limit hit for inbox [${inbox.email}]. Disabling inbox for this run.`);
+        limitExceededInboxes.add(inbox.email);
+        inboxUsage[inbox.email] = Infinity;
+
+        const alertMsg = `⚠️ **Daily User Sending Limit Exceeded Alert**\n` +
+          `**Inbox:** \`${inbox.email}\`\n` +
+          `**Failed Recipient:** \`${email}\`\n` +
+          `**Error:** \`${err.message.split('\n')[0]}\`\n` +
+          `ℹ️ Disabling \`${inbox.email}\` for the rest of this run.`;
+
+        await notifyDiscord(config.settings.discord_updates_webhook, alertMsg);
+
+        const hasAvailableInboxes = config.inboxes.some(
+          i => !limitExceededInboxes.has(i.email) && inboxUsage[i.email] < parseInt(i.daily_limit || '50', 10)
+        );
+        if (!hasAvailableInboxes) {
+          const stopMsg = `🛑 **Outreach Terminated**\nAll active inboxes hit daily sending limits / quotas. Outreach run stopped safely.`;
+          console.log(stopMsg);
+          await notifyDiscord(config.settings.discord_updates_webhook, stopMsg);
+          break;
+        }
+      }
     }
 
     // Delay between sends
@@ -258,6 +317,7 @@ export async function runFollowups() {
   const detailsRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: "'Details'!A:Z" });
   const [headers, ...rows] = detailsRes.data.values || [];
   const col = Object.fromEntries(headers.map((h, i) => [h.trim(), i]));
+  const limitExceededInboxes = new Set();
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -318,6 +378,17 @@ export async function runFollowups() {
     }
     if (!inboxToUse) inboxToUse = config.inboxes[0];
 
+    if (limitExceededInboxes.has(inboxToUse.email)) {
+      inboxToUse = config.inboxes.find(i => !limitExceededInboxes.has(i.email));
+    }
+
+    if (!inboxToUse) {
+      const stopMsg = `🛑 **Follow-ups Terminated:** All active inboxes have hit daily sending limits / quotas.`;
+      console.log(stopMsg);
+      await notifyDiscord(config.settings.discord_updates_webhook, stopMsg);
+      break;
+    }
+
     const fullName = (row[col['full_name']] || 'there').trim();
     const companyName = (row[col['company_name']] || 'your company').trim();
     const location = (row[col['location']] || 'your city').trim();
@@ -330,7 +401,7 @@ export async function runFollowups() {
     const replaceTags = (txt = '') => txt
       .replace(/{{full_name}}/g, fullName)
       .replace(/{{company_name}}/g, companyName)
-      .replace(/{{Date}}/g, new Date().toLocaleDateString('en-GB'))
+      .replace(/{{Date}}/gi, getRandomFormattedDate())
       .replace(/{{location}}/g, location)
       .replace(/{{other_locations}}/g, randomLocs)
       .replace(/{{clients}}/g, clientStr)
@@ -381,6 +452,25 @@ export async function runFollowups() {
       });
     } catch (e) {
       console.error(`Follow-up failed for ${email}:`, e.message);
+      if (isDailyLimitError(e)) {
+        console.warn(`⚠️ Daily sending limit hit for inbox [${inboxToUse.email}]. Disabling inbox for follow-ups.`);
+        limitExceededInboxes.add(inboxToUse.email);
+
+        const alertMsg = `⚠️ **Daily User Sending Limit Exceeded Alert (Follow-up)**\n` +
+          `**Inbox:** \`${inboxToUse.email}\`\n` +
+          `**Failed Recipient:** \`${email}\`\n` +
+          `**Error:** \`${e.message.split('\n')[0]}\`\n` +
+          `ℹ️ Disabling \`${inboxToUse.email}\` for follow-ups.`;
+
+        await notifyDiscord(config.settings.discord_updates_webhook, alertMsg);
+
+        if (config.inboxes.every(i => limitExceededInboxes.has(i.email))) {
+          const stopMsg = `🛑 **Follow-ups Terminated**\nAll active inboxes hit daily sending limits / quotas. Follow-up run stopped safely.`;
+          console.log(stopMsg);
+          await notifyDiscord(config.settings.discord_updates_webhook, stopMsg);
+          break;
+        }
+      }
     }
 
     await new Promise(r => setTimeout(r, 20000));
@@ -582,10 +672,35 @@ export async function generateDailyDigest() {
 }
 
 // ==========================================
-// 🏁 ROUTER
+// 🏁 ROUTER & MAIN ENTRY POINT
 // ==========================================
-const task = process.argv[2];
-if (task === 'outreach') runColdOutreach().catch(console.error);
-else if (task === 'followup') runFollowups().catch(console.error);
-else if (task === 'inbox') runInboxChecker().catch(console.error);
-else if (task === 'digest') generateDailyDigest().catch(console.error);
+async function main() {
+  const task = process.argv[2];
+  try {
+    if (task === 'outreach') await runColdOutreach();
+    else if (task === 'followup') await runFollowups();
+    else if (task === 'inbox') await runInboxChecker();
+    else if (task === 'digest') await generateDailyDigest();
+    else if (task) console.warn(`Unknown task: ${task}`);
+  } catch (err) {
+    console.error(`Fatal error during task [${task}]:`, err);
+    try {
+      const sheets = await getSheets();
+      const config = await loadConfig(sheets);
+      await notifyDiscord(
+        config.settings.discord_updates_webhook,
+        `❌ **Engine Task Failed Alert**\n**Task:** \`${task}\`\n**Error:** \`${err.message || err}\``
+      );
+    } catch (notifyErr) {
+      await notifyDiscord(
+        null,
+        `❌ **Engine Task Failed Alert**\n**Task:** \`${task}\`\n**Error:** \`${err.message || err}\``
+      );
+    }
+    process.exit(1);
+  }
+}
+
+if (process.argv[1] && path.resolve(fileURLToPath(import.meta.url)) === path.resolve(process.argv[1])) {
+  main();
+}
