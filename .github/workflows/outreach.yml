@@ -3,19 +3,24 @@ name: Universal Outreach Engine
 # Prevents multiple jobs from colliding on the Google Sheet
 concurrency:
   group: outreach-single-lane
+  # If you prefer latest scheduled run to cancel a long-running previous run (avoid backlog),
+  # set cancel-in-progress: true. Keeping false queues runs so none are cancelled.
   cancel-in-progress: false
+
+permissions:
+  contents: read
 
 on:
   schedule:
     # 1. Follow-Up Engine: Mon-Sat at 09:30 AM IST (04:00 UTC) - Runs first (~15 mins)
     - cron: '0 4 * * 1-6'
-    
+
     # 2. Cold Outreach: Mon-Sat at 10:00 AM IST (04:30 UTC) - Long running
     - cron: '30 4 * * 1-6'
-    
+
     # 3. Daily Digest: Mon-Sat at 06:30 PM IST (13:00 UTC) - Summary report
     - cron: '0 13 * * 1-6'
-    
+
     # 4. Inbox Checker: 24/7 every 30 minutes
     - cron: '*/30 * * * *'
 
@@ -32,26 +37,56 @@ jobs:
   run-engine:
     runs-on: ubuntu-latest
     timeout-minutes: 360 # 6-hour execution window
+    env:
+      SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+      GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+      SCHEDULED_CRON: ${{ github.event.schedule }}
+      SELECTED_ACTION: ${{ github.event.inputs.action }}
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js (with cache)
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          # Recommended: use an LTS for CI (20). Change to 22 if you need it.
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
 
-      - name: Install Dependencies
-        run: npm install
+      - name: Validate required secrets
+        run: |
+          set -eu
+          if [ -z "${SPREADSHEET_ID:-}" ]; then
+            echo "ERROR: SPREADSHEET_ID is not set" >&2
+            exit 1
+          fi
+          if [ -z "${GOOGLE_SERVICE_ACCOUNT_JSON:-}" ]; then
+            echo "ERROR: GOOGLE_SERVICE_ACCOUNT_JSON is not set" >&2
+            exit 1
+          fi
+
+      - name: Write service account key (private, not echoed)
+        run: |
+          # Write service account JSON to a file for Google SDKs to consume.
+          # Note: we avoid echoing the secret itself to logs.
+          printf '%s' "$GOOGLE_SERVICE_ACCOUNT_JSON" > /tmp/gsa.json
+          chmod 600 /tmp/gsa.json
+          echo "Wrote service account key to /tmp/gsa.json"
+        # env inherited from job
+
+      - name: Install Dependencies (reproducible)
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+        # cache is handled by setup-node
 
       - name: Run Engine Task
-        env:
-          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
-          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-          SCHEDULED_CRON: ${{ github.event.schedule }}
-          SELECTED_ACTION: ${{ github.event.inputs.action }}
+        # use a stricter shell so failures are visible; do not print secrets
         run: |
+          set -euo pipefail
+
           echo "Trigger Source: ${{ github.event_name }}"
           echo "Schedule: $SCHEDULED_CRON"
 
@@ -80,3 +115,7 @@ jobs:
             echo "Running Inbox Checker..."
             node engine.mjs inbox
           fi
+        env:
+          # Make the file available for Google libs if they look at GOOGLE_APPLICATION_CREDENTIALS
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/gsa.json
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
