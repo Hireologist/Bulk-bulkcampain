@@ -1,43 +1,32 @@
 name: Universal Outreach Engine
 
 concurrency:
-  # This dynamic group allows Inbox and Outreach to run at the same time.
-  # If a second Inbox check starts while one is still running, it cancels the old one.
+  # This creates a unique 'lane' for each task so they don't kill each other.
+  # Outreach (6h), Follow-up (6h), and Inbox (20s) can all run at once.
   group: outreach-${{ github.event.schedule || github.event.inputs.action || 'manual' }}
   cancel-in-progress: true
 
 on:
   schedule:
-    # 1. Cold Outreach: Mon-Sat at 10:00 AM IST (04:30 UTC)
-    - cron: '30 4 * * 1-6'
-    
-    # 2. Follow-Up Engine: Mon-Sat at 10:30 AM IST (05:00 UTC)
-    - cron: '0 5 * * 1-6'
-    
-    # 3. Inbox Checker: 24/7 every 30 minutes
-    - cron: '*/30 * * * *'
-
-    # 4. Daily Digest Summary: Mon-Sat at 6:30 PM IST (13:00 UTC)
-    - cron: '0 13 * * 1-6'
+    - cron: '30 4 * * 1-6'   # 1. Cold Outreach (10:00 AM IST) - 6h
+    - cron: '0 5 * * 1-6'    # 2. Follow-Up Engine (10:30 AM IST) - 6h
+    - cron: '*/30 * * * *'   # 3. Inbox Checker (Every 30 mins) - 20s
+    - cron: '0 13 * * 1-6'   # 4. Daily Digest (06:30 PM IST) - 1m
 
   workflow_dispatch:
     inputs:
       action:
-        description: 'Choose task to run manually'
+        description: 'Choose task'
         required: true
         default: 'inbox'
         type: choice
-        options:
-          - outreach
-          - followup
-          - inbox
-          - digest
+        options: [outreach, followup, inbox, digest]
 
 jobs:
   run-engine:
     runs-on: ubuntu-latest
-    # Safety: stops the job if it hangs for more than 15 minutes
-    timeout-minutes: 15 
+    # FIXED: Increased from 15m to 360m (6 hours)
+    timeout-minutes: 360 
     
     steps:
       - name: Checkout Code
@@ -46,40 +35,43 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 22 # FIXED: Using stable Node 22 to stop the warnings
 
       - name: Install Dependencies
         run: npm install
 
       - name: Run Engine Task
         env:
-          # Your essential secrets
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-          # Environment variables for logic
           SCHEDULED_CRON: ${{ github.event.schedule }}
           SELECTED_ACTION: ${{ github.event.inputs.action }}
         run: |
-          echo "Trigger Source: ${{ github.event_name }}"
-          echo "Cron string detected: $SCHEDULED_CRON"
+          echo "Trigger source: ${{ github.event_name }}"
+          echo "Active Schedule String: $SCHEDULED_CRON"
 
+          # 1. Manual Dispatch
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "Running manual action: $SELECTED_ACTION"
+            echo "Running Manual Task: $SELECTED_ACTION"
             node engine.mjs "$SELECTED_ACTION"
 
+          # 2. Cold Outreach (Long Running)
           elif [ "$SCHEDULED_CRON" = "30 4 * * 1-6" ]; then
-            echo "Running Scheduled Cold Outreach..."
+            echo "Starting Cold Outreach (6-hour window)..."
             node engine.mjs outreach
 
+          # 3. Follow-up (Long Running)
           elif [ "$SCHEDULED_CRON" = "0 5 * * 1-6" ]; then
-            echo "Running Scheduled Follow-up..."
+            echo "Starting Follow-up Engine (6-hour window)..."
             node engine.mjs followup
 
+          # 4. Daily Digest
           elif [ "$SCHEDULED_CRON" = "0 13 * * 1-6" ]; then
-            echo "Running Scheduled Daily Digest..."
+            echo "Generating Daily Digest..."
             node engine.mjs digest
 
+          # 5. Inbox Checker (Standard Cycle)
           else
-            echo "Running Scheduled Inbox Check..."
+            echo "Running Inbox Checker..."
             node engine.mjs inbox
           fi
