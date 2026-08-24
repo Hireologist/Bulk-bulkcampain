@@ -5,24 +5,17 @@ concurrency:
   group: outreach-single-lane
   # If you prefer latest scheduled run to cancel a long-running previous run (avoid backlog),
   # set cancel-in-progress: true. Keeping false queues runs so none are cancelled.
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 on:
   schedule:
-    # 1. Follow-Up Engine: Mon-Sat at 09:30 AM IST (04:00 UTC) - Runs first (~15 mins)
-    - cron: '0 4 * * 1-6'
-
-    # 2. Cold Outreach: Mon-Sat at 10:00 AM IST (04:30 UTC) - Long running
-    - cron: '30 4 * * 1-6'
-
-    # 3. Daily Digest: Mon-Sat at 06:30 PM IST (13:00 UTC) - Summary report
-    - cron: '0 13 * * 1-6'
-
-    # 4. Inbox Checker: 24/7 every 30 minutes
-    - cron: '*/30 * * * *'
+    - cron: '0 4 * * 1-6'     # Follow-up (group: outreach-single-lane)
+    - cron: '30 4 * * 1-6'    # Outreach (group: outreach-single-lane)
+    - cron: '0 13 * * 1-6'    # Digest (group: outreach-single-lane)
+    - cron: '*/30 * * * *'    # Inbox (SEPARATE: group: inbox-checker)
 
   workflow_dispatch:
     inputs:
