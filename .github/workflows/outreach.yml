@@ -1,25 +1,18 @@
 name: Universal Outreach Engine
 
-# 🎯 4 EXPLICIT INDEPENDENT LANES (Zero collisions, no shared queues)
 concurrency:
-  group: ${{ 
-    (github.event.schedule == '*/30 * * * *' || github.event.inputs.action == 'inbox')    && 'inbox-lane' ||
-    (github.event.schedule == '0 4 * * 1-6'   || github.event.inputs.action == 'followup') && 'followup-lane' ||
-    (github.event.schedule == '0 13 * * 1-6'  || github.event.inputs.action == 'digest')   && 'digest-lane' ||
-    'outreach-lane'
-  }}
-  # Only cancel if a new 30-min inbox check arrives while an old one is hanging
-  cancel-in-progress: ${{ github.event.schedule == '*/30 * * * *' || github.event.inputs.action == 'inbox' }}
+  group: outreach-${{ github.event.schedule || github.event.inputs.action || 'manual' }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
 
 on:
   schedule:
-    - cron: '0 4 * * 1-6'     # 1. Follow-up Engine (09:30 AM IST) -> followup-lane
-    - cron: '30 4 * * 1-6'    # 2. Cold Outreach (10:00 AM IST)    -> outreach-lane
-    - cron: '0 13 * * 1-6'    # 3. Daily Digest (06:30 PM IST)     -> digest-lane
-    - cron: '*/30 * * * *'    # 4. Inbox Checker (Every 30 mins)   -> inbox-lane
+    - cron: '0 4 * * 1-6'     # 1. Follow-up Engine (09:30 AM IST)
+    - cron: '30 4 * * 1-6'    # 2. Cold Outreach (10:00 AM IST)
+    - cron: '0 13 * * 1-6'    # 3. Daily Digest (06:30 PM IST)
+    - cron: '*/30 * * * *'    # 4. Inbox Checker (Every 30 mins)
 
   workflow_dispatch:
     inputs:
@@ -81,22 +74,27 @@ jobs:
 
           # 1. Manual Trigger
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Running Manual Action: $SELECTED_ACTION"
             node engine.mjs "$SELECTED_ACTION"
 
           # 2. Follow-Up Engine (09:30 AM IST)
           elif [ "$SCHEDULED_CRON" = "0 4 * * 1-6" ]; then
+            echo "Starting Follow-up Engine..."
             node engine.mjs followup
 
           # 3. Cold Outreach (10:00 AM IST)
           elif [ "$SCHEDULED_CRON" = "30 4 * * 1-6" ]; then
+            echo "Starting Cold Outreach..."
             node engine.mjs outreach
 
           # 4. Daily Digest (06:30 PM IST)
           elif [ "$SCHEDULED_CRON" = "0 13 * * 1-6" ]; then
+            echo "Generating Daily Digest..."
             node engine.mjs digest
 
           # 5. Inbox Checker (Every 30 Mins 24/7)
           elif [ "$SCHEDULED_CRON" = "*/30 * * * *" ]; then
+            echo "Running Inbox Checker..."
             node engine.mjs inbox
             
           else
