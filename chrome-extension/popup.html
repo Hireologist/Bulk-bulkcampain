@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sheet-Bot Remote Dispatcher</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <div class="ext-container">
+    
+    <!-- Top Header -->
+    <header class="ext-header">
+      <div class="brand-wrapper">
+        <div class="brand-logo">
+          <i class="fa-solid fa-paper-plane"></i>
+        </div>
+        <div>
+          <div class="brand-title">Sheet-Bot Remote</div>
+          <div class="brand-sub">GitHub Email Dispatcher</div>
+        </div>
+      </div>
+      <span id="status-tag" class="status-tag unconfigured">Setup Token</span>
+    </header>
+
+    <!-- Active Campaign Selector Bar -->
+    <div class="active-campaign-bar glass-card" style="padding:8px 12px; display:flex; justify-content:space-between; align-items:center; gap:8px;">
+      <span style="font-size:11px; color:var(--text-muted); font-weight:600;"><i class="fa-solid fa-folder-tree" style="color:var(--accent-blue);"></i> Campaign:</span>
+      <select id="campaign-select-dropdown" class="form-input" style="padding:4px 8px; font-size:11px; flex:1;">
+        <option value="default">Campaign 1 (Default)</option>
+      </select>
+    </div>
+
+    <!-- Alert Banner -->
+    <div id="alert-banner" class="alert hidden">
+      <i id="alert-icon" class="fa-solid fa-circle-info"></i>
+      <span id="alert-text">Alert message</span>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <nav class="tabs-nav">
+      <button class="tab-btn active" data-tab="single">
+        <i class="fa-solid fa-user"></i> Single Email
+      </button>
+      <button class="tab-btn" data-tab="bulk">
+        <i class="fa-solid fa-users"></i> Bulk Batch
+      </button>
+      <button class="tab-btn" data-tab="settings">
+        <i class="fa-solid fa-gear"></i> Settings
+      </button>
+    </nav>
+
+    <!-- TAB 1: SINGLE LEAD DISPATCH -->
+    <section id="tab-single" class="tab-content active">
+      <div class="glass-card">
+        
+        <div class="form-group">
+          <label class="form-label" for="single-email">
+            <span>Recipient Email</span>
+            <span class="auto-tag">⚡ Auto Parsing</span>
+          </label>
+          <input type="email" id="single-email" class="form-input" placeholder="e.g. rohan.patel@hireologist.in">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="single-name">Full Name</label>
+          <input type="text" id="single-name" class="form-input" placeholder="Auto-extracted name">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="single-company">Company Name</label>
+          <input type="text" id="single-company" class="form-input" placeholder="Auto-extracted company">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="single-location">Location</label>
+          <input type="text" id="single-location" class="form-input" placeholder="e.g. Mumbai (or leave blank)">
+        </div>
+
+        <!-- Live Extraction Preview -->
+        <div class="preview-box">
+          <div class="preview-row">
+            <span>Parsed Name:</span>
+            <span id="prev-name" class="preview-val">—</span>
+          </div>
+          <div class="preview-row">
+            <span>Parsed Company:</span>
+            <span id="prev-company" class="preview-val">—</span>
+          </div>
+        </div>
+
+        <button id="btn-send-single" class="btn btn-primary">
+          <i class="fa-solid fa-paper-plane"></i> Send Instant Email
+        </button>
+
+      </div>
+    </section>
+
+    <!-- TAB 2: BULK BATCH DISPATCH -->
+    <section id="tab-bulk" class="tab-content">
+      <div class="glass-card">
+        
+        <div class="form-group">
+          <label class="form-label" for="bulk-input">
+            <span>Paste Emails List (One per line or CSV)</span>
+            <span class="auto-tag">⚡ Batch Extractor</span>
+          </label>
+          <textarea id="bulk-input" class="form-textarea" placeholder="rohan.patel@hireologist.in&#10;hr@acme-technologies.com&#10;john.doe@techflow.io"></textarea>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <span style="font-size:11px; color:var(--text-muted);">
+            Detected: <strong id="bulk-count" style="color:#FFF;">0</strong> leads
+          </span>
+          <button id="btn-parse-bulk" class="btn btn-secondary" style="width:auto; padding:5px 12px; font-size:11px;">
+            <i class="fa-solid fa-wand-magic-sparkles"></i> Parse List
+          </button>
+        </div>
+
+        <!-- Live Parsed Table -->
+        <div class="table-wrapper">
+          <table class="bulk-table">
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>Parsed Name</th>
+                <th>Company</th>
+              </tr>
+            </thead>
+            <tbody id="bulk-tbody">
+              <tr>
+                <td colspan="3" style="text-align:center; color:var(--text-muted); padding:16px;">
+                  Paste emails above and click "Parse List".
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Batch Progress -->
+        <div id="bulk-progress-wrapper" class="progress-container">
+          <div class="progress-text">
+            <span id="progress-label">Dispatching batch...</span>
+            <span id="progress-stats">0 / 0</span>
+          </div>
+          <div class="progress-track">
+            <div id="progress-bar" class="progress-fill"></div>
+          </div>
+        </div>
+
+        <button id="btn-send-bulk" class="btn btn-primary" disabled>
+          <i class="fa-solid fa-rocket"></i> Dispatch Bulk Batch to GitHub
+        </button>
+
+      </div>
+    </section>
+
+    <!-- TAB 3: SETTINGS -->
+    <section id="tab-settings" class="tab-content">
+      
+      <!-- Global GitHub Connection -->
+      <div class="glass-card">
+        <h4 style="font-size:13px; color:#FFF; font-weight:700;"><i class="fa-brands fa-github"></i> GitHub API Connection</h4>
+        
+        <div class="form-group">
+          <label class="form-label" for="cfg-github-token">
+            <span>GitHub PAT Token</span>
+            <span style="color:var(--accent-blue);">repo scope</span>
+          </label>
+          <input type="password" id="cfg-github-token" class="form-input" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="cfg-github-owner">GitHub Repo Owner</label>
+          <input type="text" id="cfg-github-owner" class="form-input" placeholder="e.g. Rohanpatel16">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="cfg-github-repo">GitHub Repository Name</label>
+          <input type="text" id="cfg-github-repo" class="form-input" placeholder="e.g. Sheet-bot">
+        </div>
+
+        <button id="btn-save-settings" class="btn btn-secondary" style="padding:6px 12px; font-size:11px;">
+          <i class="fa-solid fa-floppy-disk"></i> Save GitHub Credentials
+        </button>
+      </div>
+
+      <!-- Multi-Campaign & Webhook Profiles Manager -->
+      <div class="glass-card" style="margin-top:10px;">
+        <h4 style="font-size:13px; color:#FFF; font-weight:700;"><i class="fa-solid fa-layer-group"></i> Multi-Campaign & Webhook Profiles</h4>
+        
+        <div class="form-group">
+          <label class="form-label" for="cfg-camp-name">Campaign Profile Name</label>
+          <input type="text" id="cfg-camp-name" class="form-input" placeholder="e.g. Hireologist Main or SaaS Outreach">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="cfg-camp-sheet">Google Sheet ID</label>
+          <input type="text" id="cfg-camp-sheet" class="form-input" placeholder="e.g. 1lKOCHIiDe2A27pHMqSqUavc0pt-TLXV5ZxoXuIRVncQ">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="cfg-camp-webhook">Custom Webhook URL (Discord / n8n / Zapier)</label>
+          <input type="url" id="cfg-camp-webhook" class="form-input" placeholder="e.g. https://discord.com/api/webhooks/... or n8n URL">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="cfg-camp-location">Default Location Fallback</label>
+          <input type="text" id="cfg-camp-location" class="form-input" placeholder="e.g. India or Mumbai">
+        </div>
+
+        <button id="btn-save-campaign" class="btn btn-primary">
+          <i class="fa-solid fa-plus"></i> Save / Add Campaign Profile
+        </button>
+
+        <div style="margin-top:12px;">
+          <label class="form-label">Saved Campaign Profiles:</label>
+          <div id="campaigns-list-container" style="display:flex; flex-direction:column; gap:6px; margin-top:6px;">
+            <!-- Rendered list of saved campaigns -->
+          </div>
+        </div>
+
+      </div>
+
+    </section>
+
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

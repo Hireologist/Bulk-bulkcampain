@@ -619,6 +619,65 @@ async function triggerGitHubAction(taskName) {
   }
 }
 
+// 8. Single Lead Instant GitHub Dispatcher
+async function triggerSingleLeadGitHubAction() {
+  const emailInput = document.getElementById('single-lead-email');
+  const email = (emailInput ? emailInput.value : '').trim();
+
+  if (!email) {
+    alert('Please enter a recipient email address.');
+    return;
+  }
+
+  const name = (document.getElementById('single-lead-name')?.value || '').trim();
+  const company = (document.getElementById('single-lead-company')?.value || '').trim();
+  const location = (document.getElementById('single-lead-location')?.value || '').trim();
+
+  if (!githubToken) {
+    const token = prompt('Enter your GitHub Personal Access Token (PAT) with "Actions: Read & Write" permission:');
+    if (token) {
+      githubToken = token.trim();
+      localStorage.setItem('sheet_bot_github_token', githubToken);
+    } else {
+      alert('GitHub Personal Access Token is required to trigger cloud workflows.');
+      return;
+    }
+  }
+
+  showAlert(`Dispatching single lead email for [${email}] to GitHub Actions...`, 'blue');
+
+  try {
+    const url = `https://api.github.com/repos/${repoOwner}/${repoName}/dispatches`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/vnd.github.v3+json',
+        'Authorization': `Bearer ${githubToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        event_type: 'send_single_email',
+        client_payload: {
+          email,
+          full_name: name,
+          company_name: company,
+          location
+        }
+      })
+    });
+
+    if (res.ok || res.status === 204) {
+      showAlert(`🚀 Successfully dispatched instant email for [${email}] via GitHub Actions!`, 'green');
+      if (emailInput) emailInput.value = '';
+    } else {
+      const errData = await res.json().catch(() => ({}));
+      alert(`GitHub API Error: ${errData.message || res.statusText}`);
+    }
+  } catch (err) {
+    alert(`Failed to connect to GitHub API: ${err.message}`);
+  }
+}
+
 function showAlert(msg, type = 'blue') {
   const alertBanner = document.getElementById('alert-banner');
   alertBanner.classList.remove('hidden');

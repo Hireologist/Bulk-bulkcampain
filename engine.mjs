@@ -11,25 +11,31 @@ import { fileURLToPath } from 'node:url';
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
 
 // Google Sheets Authentication
-async function getSheets() {
+async function getSheets(customSheetId) {
+  const targetSheetId = customSheetId || process.env.SINGLE_SHEET_ID || SPREADSHEET_ID;
+  if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON || !targetSheetId) {
+    throw new Error('Spreadsheet credentials not set. Set SPREADSHEET_ID and GOOGLE_SERVICE_ACCOUNT_JSON.');
+  }
   const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
   const auth = new google.auth.GoogleAuth({
     credentials,
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
-  return google.sheets({ version: 'v4', auth });
+  return { sheets: google.sheets({ version: 'v4', auth }), spreadsheetId: targetSheetId };
 }
 
 // Load a specific tab
-async function loadTab(sheets, tabName) {
+async function loadTab(sheetsObj, tabName) {
+  const sheets = sheetsObj?.sheets || sheetsObj;
+  const spreadsheetId = sheetsObj?.spreadsheetId || process.env.SINGLE_SHEET_ID || SPREADSHEET_ID;
   try {
     const res = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
+      spreadsheetId,
       range: `'${tabName}'!A:Z`,
     });
     const [headers, ...rows] = res.data.values || [];
     if (!headers) return [];
-    return rows.map(r => Object.fromEntries(headers.map((h, i) => [h.trim(), (r[i] || '').trim()])));
+    return rows.map(r => Object.fromEntries(headers.map((h, i) => [(h || '').trim(), (r[i] || '').trim()])));
   } catch (e) {
     console.warn(`Could not load tab [${tabName}]: ${e.message}`);
     return [];
@@ -302,6 +308,171 @@ export async function runColdOutreach() {
   }
 
   await notifyDiscord(config.settings.discord_updates_webhook, '🏁 Cold outreach run completed.');
+}
+
+// ============================================================================
+// ⚡ 1B. INSTANT SINGLE LEAD OUTREACH (Remote Webhook / GitHub Trigger)
+// ============================================================================
+export async function runSingleLeadOutreach(singleLead = {}) {
+  const email = (singleLead.email || process.env.SINGLE_EMAIL || '').trim();
+  const fullName = (singleLead.full_name || singleLead.personName || process.env.SINGLE_NAME || 'there').trim();
+  const companyName = (singleLead.company_name || singleLead.companyName || process.env.SINGLE_COMPANY || 'your company').trim();
+  const location = (singleLead.location || process.env.SINGLE_LOCATION || 'your city').trim();
+  const targetSheetId = (singleLead.spreadsheet_id || singleLead.sheet_id || process.env.SINGLE_SHEET_ID || SPREADSHEET_ID || '').trim();
+  const customWebhookUrl = (singleLead.webhook_url || singleLead.discord_webhook || process.env.SINGLE_WEBHOOK_URL || '').trim();
+
+  if (!email) {
+    const err = new Error('Recipient email (SINGLE_EMAIL) is required for single lead dispatch.');
+    console.error('❌ Single Lead Email Error:', err.message);
+    throw err;
+  }
+
+  // 🛡️ PRE-SEND DOMAIN & MX CHECK
+  const isDomainValid = await isValidEmailDomain(email);
+  if (!isDomainValid) {
+    const errorMsg = `Invalid email address or domain has no MX records.`;
+    console.error(`⚠️ Single Email Failed for [${email}]: ${errorMsg}`);
+
+    try {
+      const sheetsObj = await getSheets(targetSheetId);
+      const config = await loadConfig(sheetsObj);
+      const webhookToUse = customWebhookUrl || config.settings.discord_updates_webhook || process.env.DISCORD_WEBHOOK_URL;
+      await notifyDiscord(
+        webhookToUse,
+        `❌ **Single Email Dispatch Error**\n**Recipient:** \`${email}\`\n**Error:** \`${errorMsg}\``
+      );
+    } catch (e) {
+      await notifyDiscord(
+        customWebhookUrl || process.env.DISCORD_WEBHOOK_URL,
+        `❌ **Single Email Dispatch Error**\n**Recipient:** \`${email}\`\n**Error:** \`${errorMsg}\``
+      );
+    }
+    throw new Error(errorMsg);
+  }
+
+  const sheetsObj = await getSheets(targetSheetId);
+  const { sheets, spreadsheetId } = sheetsObj;
+  const config = await loadConfig(sheetsObj);
+  const activeWebhookUrl = customWebhookUrl || config.settings.discord_updates_webhook || process.env.DISCORD_WEBHOOK_URL;
+
+  if (!config.inboxes.length) {
+    const err = new Error('No active Inboxes configured in "Inboxes" tab.');
+    await notifyDiscord(
+      activeWebhookUrl,
+      `❌ **Single Email Dispatch Error**\n**Recipient:** \`${email}\`\n**Error:** \`${err.message}\``
+    );
+    throw err;
+  }
+  if (!config.coldTemplates.length) {
+    const err = new Error('No Templates found in "Templates" tab.');
+    await notifyDiscord(
+      activeWebhookUrl,
+      `❌ **Single Email Dispatch Error**\n**Recipient:** \`${email}\`\n**Error:** \`${err.message}\``
+    );
+    throw err;
+  }
+
+  // Select active inbox
+  const inbox = config.inboxes[Math.floor(Math.random() * config.inboxes.length)];
+  let senderEmail = inbox.email;
+  let senderName = inbox.display_name || 'Team';
+  if (config.aliases.length > 0) {
+    const chosenAlias = config.aliases[Math.floor(Math.random() * config.aliases.length)];
+    senderEmail = chosenAlias.alias_email;
+    senderName = chosenAlias.display_name || chosenAlias.alias_email.split('@')[0];
+  }
+
+  const template = config.coldTemplates[Math.floor(Math.random() * config.coldTemplates.length)];
+
+  // Personalization
+  const randomLocs = config.locations.filter(l => l.toLowerCase() !== location.toLowerCase())
+    .sort(() => 0.5 - Math.random()).slice(0, 4).join(', ');
+  const clientStr = config.clients.sort(() => 0.5 - Math.random()).slice(0, 5)
+    .map(c => c.client_name || c.name).join(', ');
+
+  const replaceTags = (txt = '') => txt
+    .replace(/{{full_name}}/gi, fullName)
+    .replace(/{{company_name}}/gi, companyName)
+    .replace(/{{location}}/gi, location)
+    .replace(/{{other_locations}}/gi, randomLocs)
+    .replace(/{{clients}}/gi, clientStr)
+    .replace(/{{Date}}/gi, getRandomFormattedDate());
+
+  const subject = replaceTags(template.Subject || template['Subject line']);
+  const body = replaceTags(template.Body || template.body);
+
+  const transporter = nodemailer.createTransport({
+    host: inbox.smtp_host,
+    port: parseInt(inbox.smtp_port, 10),
+    secure: parseInt(inbox.smtp_port, 10) === 465,
+    auth: { user: inbox.smtp_user, pass: inbox.smtp_pass },
+  });
+
+  try {
+    await transporter.sendMail({
+      from: `"${senderName}" <${senderEmail}>`,
+      to: email,
+      subject,
+      html: body,
+    });
+
+    console.log(`[Single Sent Successfully] "${senderName}" <${senderEmail}> -> ${email}`);
+
+    // Update or Append row in 'Details' Google Sheet
+    const detailsRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Details'!A:Z" });
+    const [headers, ...rows] = detailsRes.data.values || [];
+    const col = Object.fromEntries((headers || []).map((h, i) => [(h || '').trim(), i]));
+
+    const existingIndex = rows.findIndex(r => (r[col['email']] || '').trim().toLowerCase() === email.toLowerCase());
+
+    const timeStr = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: true });
+    const dateStr = new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' });
+
+    if (existingIndex >= 0) {
+      const rowNum = existingIndex + 2;
+      const targetRow = rows[existingIndex];
+      targetRow[col['full_name']] = fullName;
+      targetRow[col['company_name']] = companyName;
+      targetRow[col['location']] = location;
+      targetRow[col['Subject Line']] = subject;
+      targetRow[col['Sent From']] = senderEmail;
+      targetRow[col['Sent Status']] = 'SENT';
+      targetRow[col['Time']] = timeStr;
+      targetRow[col['Date Sent']] = dateStr;
+      targetRow[col['Follow Up Count']] = 0;
+      targetRow[col['Follow up']] = '';
+
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: `'Details'!A${rowNum}:Z${rowNum}`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: [targetRow] },
+      });
+    } else {
+      const newRow = [
+        fullName, email, companyName, location,
+        subject, senderEmail, 'SENT', timeStr,
+        dateStr, '', 0, ''
+      ];
+      await sheets.spreadsheets.values.append({
+        spreadsheetId,
+        range: "'Details'!A:Z",
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: [newRow] },
+      });
+    }
+
+    return { success: true, email, subject, sender: senderEmail };
+  } catch (err) {
+    console.error(`Failed single send to ${email}:`, err.message);
+
+    // Discord alert ONLY on error
+    await notifyDiscord(
+      activeWebhookUrl,
+      `❌ **Single Email Dispatch Error**\n**Recipient:** \`${email}\`\n**Error:** \`${err.message}\``
+    );
+    throw err;
+  }
 }
 
 // ============================================================================
@@ -678,6 +849,7 @@ async function main() {
   const task = process.argv[2];
   try {
     if (task === 'outreach') await runColdOutreach();
+    else if (task === 'single_lead') await runSingleLeadOutreach();
     else if (task === 'followup') await runFollowups();
     else if (task === 'inbox') await runInboxChecker();
     else if (task === 'digest') await generateDailyDigest();

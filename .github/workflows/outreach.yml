@@ -14,6 +14,9 @@ on:
     - cron: '0 13 * * 1-6'    # 3. Daily Digest (06:30 PM IST)
     - cron: '7,22,37,52 * * * *'    # 4. Inbox Checker (Every 15 mins off-peak)
 
+  repository_dispatch:
+    types: [send_single_email]
+
   workflow_dispatch:
     inputs:
       action:
@@ -21,7 +24,19 @@ on:
         required: true
         default: 'inbox'
         type: choice
-        options: [outreach, followup, inbox, digest]
+        options: [outreach, followup, inbox, digest, single_lead]
+      email:
+        description: 'Recipient Email (for single_lead)'
+        required: false
+      full_name:
+        description: 'Recipient Full Name (for single_lead)'
+        required: false
+      company_name:
+        description: 'Recipient Company Name (for single_lead)'
+        required: false
+      location:
+        description: 'Recipient Location (for single_lead)'
+        required: false
 
 jobs:
   run-engine:
@@ -72,27 +87,44 @@ jobs:
 
           echo "Trigger: ${{ github.event_name }} | Cron: $SCHEDULED_CRON | Action: $SELECTED_ACTION"
 
-          # 1. Manual Trigger
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          # 1. Webhook Repository Dispatch (Single Lead Remote Trigger)
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            echo "Running Single Lead Remote Dispatch from Repository Webhook..."
+            export SINGLE_EMAIL="${{ github.event.client_payload.email }}"
+            export SINGLE_NAME="${{ github.event.client_payload.full_name || github.event.client_payload.personName }}"
+            export SINGLE_COMPANY="${{ github.event.client_payload.company_name || github.event.client_payload.companyName }}"
+            export SINGLE_LOCATION="${{ github.event.client_payload.location }}"
+            export SINGLE_SHEET_ID="${{ github.event.client_payload.spreadsheet_id || github.event.client_payload.sheet_id }}"
+            export SINGLE_WEBHOOK_URL="${{ github.event.client_payload.webhook_url || github.event.client_payload.discord_webhook }}"
+            node engine.mjs single_lead
+
+          # 2. Manual Workflow Dispatch Trigger
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "Running Manual Action: $SELECTED_ACTION"
+            if [ "$SELECTED_ACTION" = "single_lead" ]; then
+              export SINGLE_EMAIL="${{ github.event.inputs.email }}"
+              export SINGLE_NAME="${{ github.event.inputs.full_name }}"
+              export SINGLE_COMPANY="${{ github.event.inputs.company_name }}"
+              export SINGLE_LOCATION="${{ github.event.inputs.location }}"
+            fi
             node engine.mjs "$SELECTED_ACTION"
 
-          # 2. Follow-Up Engine (09:30 AM IST)
+          # 3. Follow-Up Engine (09:30 AM IST)
           elif [ "$SCHEDULED_CRON" = "0 4 * * 1-6" ]; then
             echo "Starting Follow-up Engine..."
             node engine.mjs followup
 
-          # 3. Cold Outreach (10:00 AM IST)
+          # 4. Cold Outreach (10:00 AM IST)
           elif [ "$SCHEDULED_CRON" = "30 4 * * 1-6" ]; then
             echo "Starting Cold Outreach..."
             node engine.mjs outreach
 
-          # 4. Daily Digest (06:30 PM IST)
+          # 5. Daily Digest (06:30 PM IST)
           elif [ "$SCHEDULED_CRON" = "0 13 * * 1-6" ]; then
             echo "Generating Daily Digest..."
             node engine.mjs digest
 
-          # 5. Inbox Checker (Every 15 Mins Off-Peak)
+          # 6. Inbox Checker (Every 15 Mins Off-Peak)
           elif [ "$SCHEDULED_CRON" = "7,22,37,52 * * * *" ]; then
             echo "Running Inbox Checker..."
             node engine.mjs inbox

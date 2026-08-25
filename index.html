@@ -268,6 +268,26 @@
             </button>
           </div>
 
+          <!-- Instant Single Lead Email Remote Dispatch Card -->
+          <div class="trigger-card glass-card full-width" style="grid-column: 1 / -1; margin-top: 16px;">
+            <div class="trigger-header">
+              <div class="trigger-icon purple"><i class="fa-solid fa-paper-plane"></i></div>
+              <div class="trigger-title">
+                <h3>⚡ Instant Single-Lead Remote Dispatch</h3>
+                <p>Send a personalized cold email to a single prospect remotely via GitHub Actions cloud.</p>
+              </div>
+            </div>
+            <div class="single-lead-form-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 16px 0;">
+              <input type="email" id="single-lead-email" class="form-input" placeholder="Email (required)">
+              <input type="text" id="single-lead-name" class="form-input" placeholder="Full Name (e.g. John Doe)">
+              <input type="text" id="single-lead-company" class="form-input" placeholder="Company (e.g. Acme)">
+              <input type="text" id="single-lead-location" class="form-input" placeholder="Location (e.g. Mumbai)">
+            </div>
+            <button class="btn btn-primary" onclick="triggerSingleLeadGitHubAction()">
+              <i class="fa-solid fa-bolt"></i> Send Instant Email
+            </button>
+          </div>
+
         </div>
       </section>
 
