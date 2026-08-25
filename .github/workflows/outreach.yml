@@ -87,15 +87,16 @@ jobs:
 
           echo "Trigger: ${{ github.event_name }} | Cron: $SCHEDULED_CRON | Action: $SELECTED_ACTION"
 
-          # 1. Webhook Repository Dispatch (Single Lead Remote Trigger)
+          # 1. Webhook Repository Dispatch (Single / Bulk Remote Trigger)
           if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
-            echo "Running Single Lead Remote Dispatch from Repository Webhook..."
+            echo "Running Remote Dispatch from Repository Webhook..."
             export SINGLE_EMAIL="${{ github.event.client_payload.email }}"
             export SINGLE_NAME="${{ github.event.client_payload.full_name || github.event.client_payload.personName }}"
             export SINGLE_COMPANY="${{ github.event.client_payload.company_name || github.event.client_payload.companyName }}"
             export SINGLE_LOCATION="${{ github.event.client_payload.location }}"
             export SINGLE_SHEET_ID="${{ github.event.client_payload.spreadsheet_id || github.event.client_payload.sheet_id }}"
             export SINGLE_WEBHOOK_URL="${{ github.event.client_payload.webhook_url || github.event.client_payload.discord_webhook }}"
+            export SINGLE_LEADS_JSON='${{ toJson(github.event.client_payload.leads) }}'
             node engine.mjs single_lead
 
           # 2. Manual Workflow Dispatch Trigger

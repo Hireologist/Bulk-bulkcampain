@@ -311,44 +311,53 @@ export async function runColdOutreach() {
 }
 
 // ============================================================================
-// ⚡ 1B. INSTANT SINGLE LEAD OUTREACH (Remote Webhook / GitHub Trigger)
+// ⚡ 1B. INSTANT / BULK REMOTE LEAD DISPATCHER (GitHub / Webhook Trigger)
 // ============================================================================
-export async function runSingleLeadOutreach(singleLead = {}) {
-  const email = (singleLead.email || process.env.SINGLE_EMAIL || '').trim();
-  const fullName = (singleLead.full_name || singleLead.personName || process.env.SINGLE_NAME || 'there').trim();
-  const companyName = (singleLead.company_name || singleLead.companyName || process.env.SINGLE_COMPANY || 'your company').trim();
-  const location = (singleLead.location || process.env.SINGLE_LOCATION || 'your city').trim();
-  const targetSheetId = (singleLead.spreadsheet_id || singleLead.sheet_id || process.env.SINGLE_SHEET_ID || SPREADSHEET_ID || '').trim();
-  const customWebhookUrl = (singleLead.webhook_url || singleLead.discord_webhook || process.env.SINGLE_WEBHOOK_URL || '').trim();
-
-  if (!email) {
-    const err = new Error('Recipient email (SINGLE_EMAIL) is required for single lead dispatch.');
-    console.error('❌ Single Lead Email Error:', err.message);
-    throw err;
-  }
-
-  // 🛡️ PRE-SEND DOMAIN & MX CHECK
-  const isDomainValid = await isValidEmailDomain(email);
-  if (!isDomainValid) {
-    const errorMsg = `Invalid email address or domain has no MX records.`;
-    console.error(`⚠️ Single Email Failed for [${email}]: ${errorMsg}`);
-
+export async function runSingleLeadOutreach(singleLeadPayload = {}) {
+  // Check if leads is passed as an array or JSON string
+  let leadsList = [];
+  if (Array.isArray(singleLeadPayload.leads) && singleLeadPayload.leads.length > 0) {
+    leadsList = singleLeadPayload.leads;
+  } else if (Array.isArray(singleLeadPayload.batch) && singleLeadPayload.batch.length > 0) {
+    leadsList = singleLeadPayload.batch;
+  } else if (process.env.SINGLE_LEADS_JSON) {
     try {
-      const sheetsObj = await getSheets(targetSheetId);
-      const config = await loadConfig(sheetsObj);
-      const webhookToUse = customWebhookUrl || config.settings.discord_updates_webhook || process.env.DISCORD_WEBHOOK_URL;
-      await notifyDiscord(
-        webhookToUse,
-        `❌ **Single Email Dispatch Error**\n**Recipient:** \`${email}\`\n**Error:** \`${errorMsg}\``
-      );
+      const parsed = JSON.parse(process.env.SINGLE_LEADS_JSON);
+      if (Array.isArray(parsed) && parsed.length > 0) leadsList = parsed;
     } catch (e) {
-      await notifyDiscord(
-        customWebhookUrl || process.env.DISCORD_WEBHOOK_URL,
-        `❌ **Single Email Dispatch Error**\n**Recipient:** \`${email}\`\n**Error:** \`${errorMsg}\``
-      );
+      console.warn('Could not parse SINGLE_LEADS_JSON:', e.message);
     }
-    throw new Error(errorMsg);
   }
+
+  // If no list, build single lead item from payload/env
+  if (leadsList.length === 0) {
+    const email = (singleLeadPayload.email || process.env.SINGLE_EMAIL || '').trim();
+    if (!email) {
+      const err = new Error('Recipient email (SINGLE_EMAIL) is required for single lead dispatch.');
+      console.error('❌ Lead Email Error:', err.message);
+      throw err;
+    }
+
+    // Single Lead pre-send MX check before getSheets
+    const isDomainValid = await isValidEmailDomain(email);
+    if (!isDomainValid) {
+      const errorMsg = `Invalid email address or domain has no MX records.`;
+      console.error(`⚠️ Single Email Failed for [${email}]: ${errorMsg}`);
+      throw new Error(errorMsg);
+    }
+
+    leadsList = [{
+      email,
+      full_name: singleLeadPayload.full_name || singleLeadPayload.personName || process.env.SINGLE_NAME || 'there',
+      company_name: singleLeadPayload.company_name || singleLeadPayload.companyName || process.env.SINGLE_COMPANY || 'your company',
+      location: singleLeadPayload.location || process.env.SINGLE_LOCATION || 'your city',
+      spreadsheet_id: singleLeadPayload.spreadsheet_id || singleLeadPayload.sheet_id || process.env.SINGLE_SHEET_ID,
+      webhook_url: singleLeadPayload.webhook_url || singleLeadPayload.discord_webhook || process.env.SINGLE_WEBHOOK_URL
+    }];
+  }
+
+  const targetSheetId = (singleLeadPayload.spreadsheet_id || singleLeadPayload.sheet_id || leadsList[0]?.spreadsheet_id || process.env.SINGLE_SHEET_ID || SPREADSHEET_ID || '').trim();
+  const customWebhookUrl = (singleLeadPayload.webhook_url || singleLeadPayload.discord_webhook || leadsList[0]?.webhook_url || process.env.SINGLE_WEBHOOK_URL || '').trim();
 
   const sheetsObj = await getSheets(targetSheetId);
   const { sheets, spreadsheetId } = sheetsObj;
@@ -357,122 +366,155 @@ export async function runSingleLeadOutreach(singleLead = {}) {
 
   if (!config.inboxes.length) {
     const err = new Error('No active Inboxes configured in "Inboxes" tab.');
-    await notifyDiscord(
-      activeWebhookUrl,
-      `❌ **Single Email Dispatch Error**\n**Recipient:** \`${email}\`\n**Error:** \`${err.message}\``
-    );
+    await notifyDiscord(activeWebhookUrl, `❌ **Email Dispatch Error**\n**Error:** \`${err.message}\``);
     throw err;
   }
   if (!config.coldTemplates.length) {
     const err = new Error('No Templates found in "Templates" tab.');
-    await notifyDiscord(
-      activeWebhookUrl,
-      `❌ **Single Email Dispatch Error**\n**Recipient:** \`${email}\`\n**Error:** \`${err.message}\``
-    );
+    await notifyDiscord(activeWebhookUrl, `❌ **Email Dispatch Error**\n**Error:** \`${err.message}\``);
     throw err;
   }
 
-  // Select active inbox
-  const inbox = config.inboxes[Math.floor(Math.random() * config.inboxes.length)];
-  let senderEmail = inbox.email;
-  let senderName = inbox.display_name || 'Team';
-  if (config.aliases.length > 0) {
-    const chosenAlias = config.aliases[Math.floor(Math.random() * config.aliases.length)];
-    senderEmail = chosenAlias.alias_email;
-    senderName = chosenAlias.display_name || chosenAlias.alias_email.split('@')[0];
-  }
+  console.log(`🚀 Starting Remote Dispatch batch of ${leadsList.length} lead(s)...`);
 
-  const template = config.coldTemplates[Math.floor(Math.random() * config.coldTemplates.length)];
+  const results = [];
+  const minD = parseInt(config.settings.min_delay_seconds || '15', 10) * 1000;
+  const maxD = parseInt(config.settings.max_delay_seconds || '45', 10) * 1000;
 
-  // Personalization
-  const randomLocs = config.locations.filter(l => l.toLowerCase() !== location.toLowerCase())
-    .sort(() => 0.5 - Math.random()).slice(0, 4).join(', ');
-  const clientStr = config.clients.sort(() => 0.5 - Math.random()).slice(0, 5)
-    .map(c => c.client_name || c.name).join(', ');
+  for (let idx = 0; idx < leadsList.length; idx++) {
+    const item = leadsList[idx];
+    const email = (item.email || '').trim();
+    const fullName = (item.full_name || item.personName || 'there').trim();
+    const companyName = (item.company_name || item.companyName || 'your company').trim();
+    const location = (item.location || config.settings.default_location || 'your city').trim();
 
-  const replaceTags = (txt = '') => txt
-    .replace(/{{full_name}}/gi, fullName)
-    .replace(/{{company_name}}/gi, companyName)
-    .replace(/{{location}}/gi, location)
-    .replace(/{{other_locations}}/gi, randomLocs)
-    .replace(/{{clients}}/gi, clientStr)
-    .replace(/{{Date}}/gi, getRandomFormattedDate());
+    if (!email) continue;
 
-  const subject = replaceTags(template.Subject || template['Subject line']);
-  const body = replaceTags(template.Body || template.body);
+    console.log(`[Processing ${idx + 1}/${leadsList.length}] Recipient: ${email}`);
 
-  const transporter = nodemailer.createTransport({
-    host: inbox.smtp_host,
-    port: parseInt(inbox.smtp_port, 10),
-    secure: parseInt(inbox.smtp_port, 10) === 465,
-    auth: { user: inbox.smtp_user, pass: inbox.smtp_pass },
-  });
-
-  try {
-    await transporter.sendMail({
-      from: `"${senderName}" <${senderEmail}>`,
-      to: email,
-      subject,
-      html: body,
-    });
-
-    console.log(`[Single Sent Successfully] "${senderName}" <${senderEmail}> -> ${email}`);
-
-    // Update or Append row in 'Details' Google Sheet
-    const detailsRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Details'!A:Z" });
-    const [headers, ...rows] = detailsRes.data.values || [];
-    const col = Object.fromEntries((headers || []).map((h, i) => [(h || '').trim(), i]));
-
-    const existingIndex = rows.findIndex(r => (r[col['email']] || '').trim().toLowerCase() === email.toLowerCase());
-
-    const timeStr = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: true });
-    const dateStr = new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' });
-
-    if (existingIndex >= 0) {
-      const rowNum = existingIndex + 2;
-      const targetRow = rows[existingIndex];
-      targetRow[col['full_name']] = fullName;
-      targetRow[col['company_name']] = companyName;
-      targetRow[col['location']] = location;
-      targetRow[col['Subject Line']] = subject;
-      targetRow[col['Sent From']] = senderEmail;
-      targetRow[col['Sent Status']] = 'SENT';
-      targetRow[col['Time']] = timeStr;
-      targetRow[col['Date Sent']] = dateStr;
-      targetRow[col['Follow Up Count']] = 0;
-      targetRow[col['Follow up']] = '';
-
-      await sheets.spreadsheets.values.update({
-        spreadsheetId,
-        range: `'Details'!A${rowNum}:Z${rowNum}`,
-        valueInputOption: 'USER_ENTERED',
-        requestBody: { values: [targetRow] },
-      });
-    } else {
-      const newRow = [
-        fullName, email, companyName, location,
-        subject, senderEmail, 'SENT', timeStr,
-        dateStr, '', 0, ''
-      ];
-      await sheets.spreadsheets.values.append({
-        spreadsheetId,
-        range: "'Details'!A:Z",
-        valueInputOption: 'USER_ENTERED',
-        requestBody: { values: [newRow] },
-      });
+    // 🛡️ PRE-SEND DOMAIN & MX CHECK
+    const isDomainValid = await isValidEmailDomain(email);
+    if (!isDomainValid) {
+      const errorMsg = `Invalid email address or domain has no MX records.`;
+      console.error(`⚠️ Single Email Failed for [${email}]: ${errorMsg}`);
+      await notifyDiscord(
+        activeWebhookUrl,
+        `❌ **Email Dispatch Error**\n**Recipient:** \`${email}\`\n**Error:** \`${errorMsg}\``
+      );
+      results.push({ email, success: false, error: errorMsg });
+      continue;
     }
 
-    return { success: true, email, subject, sender: senderEmail };
-  } catch (err) {
-    console.error(`Failed single send to ${email}:`, err.message);
+    // Select active inbox & template
+    const inbox = config.inboxes[Math.floor(Math.random() * config.inboxes.length)];
+    let senderEmail = inbox.email;
+    let senderName = inbox.display_name || 'Team';
+    if (config.aliases.length > 0) {
+      const chosenAlias = config.aliases[Math.floor(Math.random() * config.aliases.length)];
+      senderEmail = chosenAlias.alias_email;
+      senderName = chosenAlias.display_name || chosenAlias.alias_email.split('@')[0];
+    }
 
-    // Discord alert ONLY on error
-    await notifyDiscord(
-      activeWebhookUrl,
-      `❌ **Single Email Dispatch Error**\n**Recipient:** \`${email}\`\n**Error:** \`${err.message}\``
-    );
-    throw err;
+    const template = config.coldTemplates[Math.floor(Math.random() * config.coldTemplates.length)];
+
+    // Personalization
+    const randomLocs = config.locations.filter(l => l.toLowerCase() !== location.toLowerCase())
+      .sort(() => 0.5 - Math.random()).slice(0, 4).join(', ');
+    const clientStr = config.clients.sort(() => 0.5 - Math.random()).slice(0, 5)
+      .map(c => c.client_name || c.name).join(', ');
+
+    const replaceTags = (txt = '') => txt
+      .replace(/{{full_name}}/gi, fullName)
+      .replace(/{{company_name}}/gi, companyName)
+      .replace(/{{location}}/gi, location)
+      .replace(/{{other_locations}}/gi, randomLocs)
+      .replace(/{{clients}}/gi, clientStr)
+      .replace(/{{Date}}/gi, getRandomFormattedDate());
+
+    const subject = replaceTags(template.Subject || template['Subject line']);
+    const body = replaceTags(template.Body || template.body);
+
+    const transporter = nodemailer.createTransport({
+      host: inbox.smtp_host,
+      port: parseInt(inbox.smtp_port, 10),
+      secure: parseInt(inbox.smtp_port, 10) === 465,
+      auth: { user: inbox.smtp_user, pass: inbox.smtp_pass },
+    });
+
+    try {
+      await transporter.sendMail({
+        from: `"${senderName}" <${senderEmail}>`,
+        to: email,
+        subject,
+        html: body,
+      });
+
+      console.log(`[Sent ${idx + 1}/${leadsList.length}] "${senderName}" <${senderEmail}> -> ${email}`);
+
+      // Update or Append row in 'Details' Google Sheet
+      const detailsRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Details'!A:Z" });
+      const [headers, ...rows] = detailsRes.data.values || [];
+      const col = Object.fromEntries((headers || []).map((h, i) => [(h || '').trim(), i]));
+
+      const existingIndex = rows.findIndex(r => (r[col['email']] || '').trim().toLowerCase() === email.toLowerCase());
+
+      const timeStr = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: true });
+      const dateStr = new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' });
+
+      if (existingIndex >= 0) {
+        const rowNum = existingIndex + 2;
+        const targetRow = rows[existingIndex];
+        targetRow[col['full_name']] = fullName;
+        targetRow[col['company_name']] = companyName;
+        targetRow[col['location']] = location;
+        targetRow[col['Subject Line']] = subject;
+        targetRow[col['Sent From']] = senderEmail;
+        targetRow[col['Sent Status']] = 'SENT';
+        targetRow[col['Time']] = timeStr;
+        targetRow[col['Date Sent']] = dateStr;
+        targetRow[col['Follow Up Count']] = 0;
+        targetRow[col['Follow up']] = '';
+
+        await sheets.spreadsheets.values.update({
+          spreadsheetId,
+          range: `'Details'!A${rowNum}:Z${rowNum}`,
+          valueInputOption: 'USER_ENTERED',
+          requestBody: { values: [targetRow] },
+        });
+      } else {
+        const newRow = [
+          fullName, email, companyName, location,
+          subject, senderEmail, 'SENT', timeStr,
+          dateStr, '', 0, ''
+        ];
+        await sheets.spreadsheets.values.append({
+          spreadsheetId,
+          range: "'Details'!A:Z",
+          valueInputOption: 'USER_ENTERED',
+          requestBody: { values: [newRow] },
+        });
+      }
+
+      results.push({ email, success: true });
+    } catch (err) {
+      console.error(`Failed send to ${email}:`, err.message);
+      await notifyDiscord(
+        activeWebhookUrl,
+        `❌ **Email Dispatch Error**\n**Recipient:** \`${email}\`\n**Error:** \`${err.message}\``
+      );
+      results.push({ email, success: false, error: err.message });
+    }
+
+    // Delay between sends (following Google Sheet settings) if there are more leads
+    if (idx < leadsList.length - 1) {
+      const delay = Math.floor(Math.random() * (maxD - minD + 1)) + minD;
+      console.log(`⏳ Delaying ${Math.round(delay / 1000)}s before next send (following Sheet settings)...`);
+      await new Promise(r => setTimeout(r, delay));
+    }
   }
+
+  console.log(`🏁 Batch finished! Processed ${leadsList.length} leads.`);
+  return { success: true, count: leadsList.length, results };
 }
 
 // ============================================================================
