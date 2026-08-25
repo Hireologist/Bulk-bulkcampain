@@ -671,7 +671,15 @@ async function triggerSingleLeadGitHubAction() {
       if (emailInput) emailInput.value = '';
     } else {
       const errData = await res.json().catch(() => ({}));
-      alert(`GitHub API Error: ${errData.message || res.statusText}`);
+      let msg = errData.message || res.statusText || `HTTP ${res.status}`;
+      if (res.status === 403 || msg.toLowerCase().includes('resource not accessible')) {
+        msg = '❌ GitHub Permission Error (403): Your PAT Token needs "Contents: Read & write" and "Workflows: Read & write" permissions on GitHub.\n👉 Fix: Go to GitHub -> Settings -> Developer settings -> Personal Access Tokens -> Edit Token -> Set Contents & Workflows permissions to "Read and write".';
+      } else if (res.status === 401 || msg.toLowerCase().includes('bad credentials')) {
+        msg = '❌ GitHub Auth Error (401): Invalid Token. Check your PAT token.';
+      } else if (res.status === 404) {
+        msg = `❌ GitHub Repository Error (404): Repository "${repoOwner}/${repoName}" not found or token has no access.`;
+      }
+      alert(msg);
     }
   } catch (err) {
     alert(`Failed to connect to GitHub API: ${err.message}`);
