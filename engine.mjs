@@ -21,7 +21,12 @@ async function getSheets(customSheetId) {
     credentials,
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
-  return { sheets: google.sheets({ version: 'v4', auth }), spreadsheetId: targetSheetId };
+  const client = google.sheets({ version: 'v4', auth });
+  return { 
+    sheets: client, 
+    spreadsheets: client.spreadsheets, 
+    spreadsheetId: targetSheetId 
+  };
 }
 
 // Load a specific tab
@@ -135,7 +140,7 @@ export async function runColdOutreach() {
 
   await notifyDiscord(config.settings.discord_updates_webhook, '🚀 Auto bulk cold outreach started');
 
-  const detailsRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: "'Details'!A:Z" });
+  const detailsRes = await sheets.spreadsheets.values.get({ spreadsheetId: sheets.spreadsheetId || SPREADSHEET_ID, range: "'Details'!A:Z" });
   const [headers, ...rows] = detailsRes.data.values || [];
   const col = Object.fromEntries(headers.map((h, i) => [h.trim(), i]));
 
@@ -568,7 +573,7 @@ export async function runFollowups() {
   if (!config.inboxes.length) throw new Error('No active Inboxes found.');
   if (!config.followupTemplates.length) throw new Error('No Follow-up Templates found.');
 
-  const detailsRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: "'Details'!A:Z" });
+  const detailsRes = await sheets.spreadsheets.values.get({ spreadsheetId: sheets.spreadsheetId || SPREADSHEET_ID, range: "'Details'!A:Z" });
   const [headers, ...rows] = detailsRes.data.values || [];
   const col = Object.fromEntries(headers.map((h, i) => [h.trim(), i]));
   const limitExceededInboxes = new Set();
@@ -740,7 +745,7 @@ export async function runInboxChecker() {
   const groq = config.settings.groq_api_key && config.settings.groq_api_key.startsWith('gsk_') 
     ? new Groq({ apiKey: config.settings.groq_api_key }) : null;
 
-  const detailsRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: "'Details'!A:Z" });
+  const detailsRes = await sheets.spreadsheets.values.get({ spreadsheetId: sheets.spreadsheetId || SPREADSHEET_ID, range: "'Details'!A:Z" });
   const [headers, ...rows] = detailsRes.data.values || [];
   const col = Object.fromEntries(headers.map((h, i) => [h.trim(), i]));
 
@@ -860,7 +865,7 @@ export async function generateDailyDigest() {
   const config = await loadConfig(sheets);
 
   const detailsRes = await sheets.spreadsheets.values.get({ 
-    spreadsheetId: SPREADSHEET_ID, 
+    spreadsheetId: sheets.spreadsheetId || SPREADSHEET_ID, 
     range: "'Details'!A:Z" 
   });
   const [headers, ...rows] = detailsRes.data.values || [];
