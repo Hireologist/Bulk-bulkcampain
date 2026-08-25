@@ -172,7 +172,7 @@ export async function runColdOutreach() {
       row[col['Time']] = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: true });
 
       await sheets.spreadsheets.values.update({
-        spreadsheetId: SPREADSHEET_ID,
+        spreadsheetId: sheets.spreadsheetId || SPREADSHEET_ID,
         range: `'Details'!A${rowNum}:Z${rowNum}`,
         valueInputOption: 'USER_ENTERED',
         requestBody: { values: [row] },
@@ -273,7 +273,7 @@ export async function runColdOutreach() {
       row[col['Follow up']] = '';
 
       await sheets.spreadsheets.values.update({
-        spreadsheetId: SPREADSHEET_ID,
+        spreadsheetId: sheets.spreadsheetId || SPREADSHEET_ID,
         range: `'Details'!A${rowNum}:Z${rowNum}`,
         valueInputOption: 'USER_ENTERED',
         requestBody: { values: [row] },
@@ -704,7 +704,7 @@ export async function runFollowups() {
       }
 
       await sheets.spreadsheets.values.update({
-        spreadsheetId: SPREADSHEET_ID,
+        spreadsheetId: sheets.spreadsheetId || SPREADSHEET_ID,
         range: `'Details'!A${rowNum}:Z${rowNum}`,
         valueInputOption: 'USER_ENTERED',
         requestBody: { values: [row] },
@@ -794,7 +794,7 @@ export async function runInboxChecker() {
                 rows[rIdx][col['Time']] = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: true });
 
                 await sheets.spreadsheets.values.update({
-                  spreadsheetId: SPREADSHEET_ID,
+                  spreadsheetId: sheets.spreadsheetId || SPREADSHEET_ID,
                   range: `'Details'!A${rIdx + 2}:Z${rIdx + 2}`,
                   valueInputOption: 'USER_ENTERED',
                   requestBody: { values: [rows[rIdx]] },
@@ -833,7 +833,7 @@ export async function runInboxChecker() {
             rows[rIdx][col['Time']] = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: true });
 
             await sheets.spreadsheets.values.update({
-              spreadsheetId: SPREADSHEET_ID,
+              spreadsheetId: sheets.spreadsheetId || SPREADSHEET_ID,
               range: `'Details'!A${rIdx + 2}:Z${rIdx + 2}`,
               valueInputOption: 'USER_ENTERED',
               requestBody: { values: [rows[rIdx]] },
