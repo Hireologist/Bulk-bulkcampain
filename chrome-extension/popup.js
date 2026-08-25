@@ -344,36 +344,45 @@ function setupBulkLeadEvents() {
       return;
     }
 
+    const activeCamp = getActiveCampaign();
     btnSendBulk.disabled = true;
-    const progressWrapper = document.getElementById('bulk-progress-wrapper');
-    const progressBar = document.getElementById('progress-bar');
-    const progressLabel = document.getElementById('progress-label');
-    const progressStats = document.getElementById('progress-stats');
 
-    progressWrapper.style.display = 'flex';
-    let completed = 0;
-    let errors = 0;
+    showAlert(`🚀 Dispatching batch of ${bulkLeads.length} leads to 1 GitHub Action workflow...`, 'info');
 
-    for (let i = 0; i < bulkLeads.length; i++) {
-      const lead = bulkLeads[i];
-      progressLabel.innerText = `Dispatching [${lead.email}]...`;
-      progressStats.innerText = `${i + 1} / ${bulkLeads.length}`;
-      progressBar.style.width = `${Math.round(((i + 1) / bulkLeads.length) * 100)}%`;
+    try {
+      const url = `https://api.github.com/repos/${config.owner}/${config.repo}/dispatches`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/vnd.github.v3+json',
+          'Authorization': `Bearer ${config.token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          event_type: 'send_single_email',
+          client_payload: {
+            leads: bulkLeads,
+            spreadsheet_id: activeCamp.sheetId || '',
+            webhook_url: activeCamp.webhookUrl || ''
+          }
+        })
+      });
 
-      try {
-        await dispatchToGitHub(lead);
-        completed++;
-      } catch (e) {
-        console.error(`Bulk send error for ${lead.email}:`, e);
-        errors++;
+      if (!response.ok && response.status !== 204) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(formatGitHubApiError(response.status, errData.message));
       }
 
-      await new Promise(r => setTimeout(r, 400));
+      showAlert(`🚀 Batch of ${bulkLeads.length} leads dispatched! 1 GitHub Action workflow run will process them with Google Sheet delays.`, 'success');
+      bulkInput.value = '';
+      bulkTbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:var(--text-muted); padding:16px;">Paste emails above and click "Parse List".</td></tr>`;
+      bulkCount.innerText = '0';
+      bulkLeads = [];
+    } catch (err) {
+      showAlert(`GitHub Dispatch Error: ${err.message}`, 'error');
+    } finally {
+      btnSendBulk.disabled = false;
     }
-
-    progressLabel.innerText = 'Batch completed!';
-    showAlert(`🚀 Batch finished! Dispatched ${completed} emails (${errors} errors).`, errors > 0 ? 'info' : 'success');
-    btnSendBulk.disabled = false;
   });
 }
 
