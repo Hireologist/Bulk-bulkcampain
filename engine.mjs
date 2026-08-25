@@ -802,6 +802,13 @@ export async function runInboxChecker() {
                 console.log(`🔒 Marked [${match}] as BOUNCED & Follow-up as DONE`);
               }
             }
+
+            // Mark bounce email as READ in IMAP
+            try {
+              await client.messageFlagsAdd(String(msg.seq), ['\\Seen']);
+            } catch (flagErr) {
+              console.warn(`Could not mark bounce message #${msg.seq} as seen:`, flagErr.message);
+            }
             continue;
           }
 
@@ -840,6 +847,13 @@ export async function runInboxChecker() {
             });
 
             console.log(`🎯 Marked [${fromAddr}] as REPLIED (${sentiment}) & Follow-up as DONE`);
+
+            // Mark reply email as READ in IMAP
+            try {
+              await client.messageFlagsAdd(String(msg.seq), ['\\Seen']);
+            } catch (flagErr) {
+              console.warn(`Could not mark reply message #${msg.seq} as seen:`, flagErr.message);
+            }
 
             if (sentiment === 'POSITIVE' || sentiment === 'NEUTRAL') {
               await notifyDiscord(config.settings.discord_positive_webhook,
