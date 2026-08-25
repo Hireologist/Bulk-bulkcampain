@@ -182,9 +182,23 @@
           <input type="text" id="cfg-github-repo" class="form-input" placeholder="e.g. Sheet-bot">
         </div>
 
-        <button id="btn-save-settings" class="btn btn-secondary" style="padding:6px 12px; font-size:11px;">
-          <i class="fa-solid fa-floppy-disk"></i> Save GitHub Credentials
-        </button>
+        <div style="display:flex; gap:8px;">
+          <button id="btn-save-settings" class="btn btn-secondary" style="padding:6px 12px; font-size:11px; flex:1;">
+            <i class="fa-solid fa-floppy-disk"></i> Save Credentials
+          </button>
+          <button id="btn-test-connection" class="btn btn-primary" style="padding:6px 12px; font-size:11px; flex:1;">
+            <i class="fa-solid fa-plug"></i> Test Connection
+          </button>
+        </div>
+
+        <!-- PAT Token Setup Guide -->
+        <div style="margin-top:10px; padding:8px 10px; background:rgba(59,130,246,0.08); border:1px solid rgba(59,130,246,0.2); border-radius:6px; font-size:10px; color:var(--text-muted);">
+          <strong style="color:var(--accent-blue);"><i class="fa-solid fa-key"></i> Required PAT Token Permissions:</strong>
+          <ul style="margin:4px 0 0 14px; padding:0; line-height:1.4;">
+            <li><strong>Fine-Grained Token:</strong> Set <code>Contents</code> to <em>Read & write</em> and <code>Workflows</code> to <em>Read & write</em>.</li>
+            <li><strong>Classic Token:</strong> Check the <code>repo</code> checkbox.</li>
+          </ul>
+        </div>
       </div>
 
       <!-- Multi-Campaign & Webhook Profiles Manager -->

@@ -404,6 +404,48 @@ function setupSettingsEvents() {
     });
   });
 
+  // Test Connection & Token Permissions
+  const btnTestConnection = document.getElementById('btn-test-connection');
+  if (btnTestConnection) {
+    btnTestConnection.addEventListener('click', async () => {
+      const token = document.getElementById('cfg-github-token').value.trim();
+      const owner = document.getElementById('cfg-github-owner').value.trim();
+      const repo = document.getElementById('cfg-github-repo').value.trim();
+
+      if (!token || !owner || !repo) {
+        showAlert('Please enter GitHub PAT Token, Owner, and Repo before testing connection.', 'error');
+        return;
+      }
+
+      btnTestConnection.disabled = true;
+      btnTestConnection.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Testing...';
+      showAlert('Testing connection to GitHub repository and token permissions...', 'info');
+
+      try {
+        const repoUrl = `https://api.github.com/repos/${owner}/${repo}`;
+        const repoRes = await fetch(repoUrl, {
+          headers: {
+            'Accept': 'application/vnd.github.v3+json',
+            'Authorization': `Bearer ${token}`,
+            'User-Agent': 'SheetBot'
+          }
+        });
+
+        if (!repoRes.ok) {
+          const errData = await repoRes.json().catch(() => ({}));
+          throw new Error(formatGitHubApiError(repoRes.status, errData.message));
+        }
+
+        showAlert(`✅ Connection Success! Token has access to repository "${owner}/${repo}".`, 'success');
+      } catch (err) {
+        showAlert(err.message, 'error');
+      } finally {
+        btnTestConnection.disabled = false;
+        btnTestConnection.innerHTML = '<i class="fa-solid fa-plug"></i> Test Connection';
+      }
+    });
+  }
+
   // Save/Add Campaign Profile
   btnSaveCampaign.addEventListener('click', () => {
     const name = document.getElementById('cfg-camp-name').value.trim();
@@ -444,8 +486,19 @@ function setupSettingsEvents() {
 }
 
 // ----------------------------------------------------------------------------
-// GITHUB DISPATCH API CALL
+// GITHUB DISPATCH API CALL & ERROR DIAGNOSTIC HELPER
 // ----------------------------------------------------------------------------
+function formatGitHubApiError(status, rawMessage = '') {
+  if (status === 403 || rawMessage.toLowerCase().includes('resource not accessible')) {
+    return '❌ GitHub Permission Error (403): Your Personal Access Token needs "Contents: Read & write" and "Workflows: Read & write" permissions on GitHub.\n👉 Fix: Go to GitHub -> Settings -> Developer settings -> Personal Access Tokens -> Edit Token -> Set Contents & Workflows permissions to "Read and write".';
+  } else if (status === 401 || rawMessage.toLowerCase().includes('bad credentials')) {
+    return '❌ GitHub Authentication Error (401): Invalid Token. Check your PAT token in Settings tab.';
+  } else if (status === 404) {
+    return `❌ GitHub Repository Error (404): Repository "${config.owner}/${config.repo}" not found or token has no access. Check Owner and Repo name in Settings.`;
+  }
+  return `❌ GitHub API Error (${status}): ${rawMessage || 'Failed to dispatch workflow.'}`;
+}
+
 async function dispatchToGitHub(lead) {
   const url = `https://api.github.com/repos/${config.owner}/${config.repo}/dispatches`;
   const activeCamp = getActiveCampaign();
@@ -472,7 +525,8 @@ async function dispatchToGitHub(lead) {
 
   if (!response.ok && response.status !== 204) {
     const errData = await response.json().catch(() => ({}));
-    throw new Error(errData.message || response.statusText || `HTTP ${response.status}`);
+    const formattedError = formatGitHubApiError(response.status, errData.message);
+    throw new Error(formattedError);
   }
 
   return true;
