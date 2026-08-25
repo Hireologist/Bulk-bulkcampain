@@ -202,8 +202,11 @@
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="cfg-camp-webhook">Custom Webhook URL (Discord / n8n / Zapier)</label>
-          <input type="url" id="cfg-camp-webhook" class="form-input" placeholder="e.g. https://discord.com/api/webhooks/... or n8n URL">
+          <label class="form-label" for="cfg-camp-webhook">
+            <span>Webhook URL Override</span>
+            <span style="color:var(--accent-blue); font-size:10px;">Optional (Auto-fetched from Sheet)</span>
+          </label>
+          <input type="url" id="cfg-camp-webhook" class="form-input" placeholder="Leave blank to auto-use Sheet's discord_updates_webhook">
         </div>
 
         <div class="form-group">
