@@ -498,11 +498,52 @@ export async function runSingleLeadOutreach(singleLeadPayload = {}) {
       results.push({ email, success: true });
     } catch (err) {
       console.error(`Failed send to ${email}:`, err.message);
+
+      const errLower = (err.message || '').toLowerCase();
+      const isBounce = errLower.includes('550') || errLower.includes('551') || errLower.includes('552') || errLower.includes('553') || errLower.includes('554') || errLower.includes('inactive') || errLower.includes('disabled') || errLower.includes('not found') || errLower.includes('user unknown');
+
+      try {
+        const detailsRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Details'!A:Z" });
+        const [headers, ...rows] = detailsRes.data.values || [];
+        const col = Object.fromEntries((headers || []).map((h, i) => [(h || '').trim(), i]));
+        const existingIndex = rows.findIndex(r => (r[col['email']] || '').trim().toLowerCase() === email.toLowerCase());
+        const timeStr = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: true });
+        const dateStr = new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' });
+
+        if (existingIndex >= 0) {
+          const rowNum = existingIndex + 2;
+          const targetRow = rows[existingIndex];
+          targetRow[col['Sent Status']] = isBounce ? 'bounced' : 'FAILED';
+          targetRow[col['Time']] = timeStr;
+          targetRow[col['Date Sent']] = dateStr;
+          await sheets.spreadsheets.values.update({
+            spreadsheetId,
+            range: `'Details'!A${rowNum}:Z${rowNum}`,
+            valueInputOption: 'USER_ENTERED',
+            requestBody: { values: [targetRow] },
+          });
+        } else {
+          const newRow = [
+            fullName, email, companyName, location,
+            'N/A', senderEmail, isBounce ? 'bounced' : 'FAILED', timeStr,
+            dateStr, 'Done', 0, 'BOUNCED'
+          ];
+          await sheets.spreadsheets.values.append({
+            spreadsheetId,
+            range: "'Details'!A:Z",
+            valueInputOption: 'USER_ENTERED',
+            requestBody: { values: [newRow] },
+          });
+        }
+      } catch (e) {
+        console.warn('Could not record failure status in Google Sheet:', e.message);
+      }
+
       await notifyDiscord(
         activeWebhookUrl,
-        `❌ **Email Dispatch Error**\n**Recipient:** \`${email}\`\n**Error:** \`${err.message}\``
+        `❌ **Email ${isBounce ? 'Bounced (Inactive Account)' : 'Dispatch Error'}**\n**Recipient:** \`${email}\`\n**Error:** \`${err.message}\``
       );
-      results.push({ email, success: false, error: err.message });
+      results.push({ email, success: false, error: err.message, isBounce });
     }
 
     // Delay between sends (following Google Sheet settings) if there are more leads
