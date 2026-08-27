@@ -820,24 +820,30 @@ export async function runInboxChecker() {
       await client.connect();
       lock = await client.getMailboxLock('INBOX');
 
-      const processedUids = new Set();
+      // 1. Fetch all unseen messages into memory so the IMAP fetch stream closes cleanly
+      const unseenMessages = [];
       for await (const msg of client.fetch({ seen: false }, { uid: true, source: true })) {
-        if (msg.uid && processedUids.has(msg.uid)) continue;
-        if (msg.uid) processedUids.add(msg.uid);
+        unseenMessages.push(msg);
+      }
 
+      // 2. Mark all unseen message UIDs as \Seen in one single batch command
+      const uidsToMark = unseenMessages.map(m => m.uid).filter(Boolean);
+      if (uidsToMark.length > 0) {
+        try {
+          await client.messageFlagsAdd(uidsToMark, ['\\Seen'], { uid: true });
+          console.log(`👁️ Marked ${uidsToMark.length} message(s) as \\Seen in ${inbox.email}`);
+        } catch (flagErr) {
+          console.warn(`Could not set \\Seen flags in ${inbox.email}:`, flagErr.message);
+        }
+      }
+
+      // 3. Process each message without blocking IMAP connection
+      const processedFromAddrs = new Set();
+      for (const msg of unseenMessages) {
         const parsed = await simpleParser(msg.source);
         const fromAddr = parsed.from?.value[0]?.address?.toLowerCase() || '';
 
-        // Always mark email as \Seen so it is never re-fetched on subsequent 15-min runs
-        if (msg.uid) {
-          try {
-            await client.messageFlagsAdd(msg.uid, ['\\Seen'], { uid: true });
-          } catch (flagErr) {
-            console.warn(`Could not set \\Seen flag for msg UID ${msg.uid}:`, flagErr.message);
-          }
-        }
-
-        if (internalEmails.includes(fromAddr)) continue;
+        if (!fromAddr || internalEmails.includes(fromAddr)) continue;
 
         // A. Bounce Detection
         const isBounce = parsed.from?.text?.includes('mailer-daemon') ||
