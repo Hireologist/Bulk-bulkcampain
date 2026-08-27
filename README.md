@@ -36,7 +36,7 @@ An automated, serverless cold email outreach engine built with **Node.js**, **Go
 - **1-Click Google Sheet Generator**: Apps Script (`Code.gs`) automatically builds all 11 color-coded tabs with headers, sample data, and dynamic `=LET(...)` formulas.
 - **Smart Rotation & Alias Matcher**: Rotates through active email inboxes and matches original sender aliases on follow-ups.
 - **Automated Follow-Up Sequence**: Sends scheduled follow-ups and automatically halts when a prospect replies, unsubscribes, or bounces.
-- **AI Reply Sentiment Analysis**: Uses Groq LLM (`llama-3.3-70b-versatile`) to categorize replies as `POSITIVE`, `NEUTRAL`, `NEGATIVE`, or `OOO`.
+- **AI Reply Sentiment Analysis & Summary**: Uses Groq LLM (`openai/gpt-oss-120b`) to categorize replies as `POSITIVE`, `NEUTRAL`, `NEGATIVE`, or `OOO` and generate concise email summaries.
 - **Discord Integration & Daily Digest**: Real-time alerts for positive leads, batch status, daily limit warnings, and a 6:30 PM IST Daily Performance Digest card.
 - **⏱️ 1-Click Automated Cron API Setup**: Automatically provision all 4 scheduled jobs (Follow-up, Outreach, Inbox Checker, Daily Digest) on [cron-job.org](https://cron-job.org) in seconds via API using the GitHub Actions workflow **⚡ Provision Cron Jobs (cron-job.org)** or CLI script `node setup-cron.mjs`. Full instructions in [`CRON_SETUP.md`](./CRON_SETUP.md).
 - **🔒 Concurrency & Double-Sending Safety Lock**: Workflow concurrency lock prevents parallel execution and guarantees zero double-sending.
@@ -150,7 +150,8 @@ Before setting up, make sure you have:
 Open the **Settings** tab in your Google Sheet:
 - `groq_api_key`: Paste your free Groq API key (`gsk_...`).
 - `discord_updates_webhook`: Discord channel webhook URL for run alerts and daily digests.
-- `discord_positive_webhook`: Discord channel webhook URL for positive/neutral lead reply alerts.
+- `discord_positive_webhook`: Discord channel webhook URL for new positive/neutral lead reply alerts.
+- `discord_rereply_webhook`: Discord channel webhook URL for re-replies from existing positive/neutral leads.
 - `cutoff_hour_ist`: `18` (6 PM IST sending cutoff).
 - `cutoff_minute_ist`: `30` (6:30 PM IST sending cutoff).
 - `max_emails_per_run`: `1000` (Max batch size per trigger).

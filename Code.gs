@@ -1,8 +1,10 @@
 /**
- * 🚀 1-CLICK OUTREACH SHEET BUILDER
- * Generates all sheets including Setup Guide, Aliases, Inboxes, Templates, Email Analytics & Chart Data.
+ * 🚀 UNIVERSAL OUTREACH BOT - GOOGLE APPS SCRIPT
+ * Non-destructive sheet syncer & builder.
+ * Safely adds new columns/settings without overwriting existing data.
  */
-function createOutreachSystem() {
+
+function createOutreachSystem(forceReset = false) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
   const schema = {
@@ -15,7 +17,7 @@ function createOutreachSystem() {
         ['3. Email Inboxes', 'Add your primary SMTP login in "Inboxes" tab. Use App Passwords for Gmail/Google Workspace.', 'Set daily_limit (e.g. 50). The bot will never exceed this number per inbox per day.'],
         ['4. Cold Templates', 'Edit pitches in "Templates" tab. Use tags: {{full_name}}, {{company_name}}, {{location}}, {{other_locations}}, {{clients}}, {{Date}}.', 'The bot replaces these tags dynamically with randomized cities and portfolio companies.'],
         ['5. Follow-ups', 'Configure intervals and messages in "Followup_Templates" tab.', 'Follow-ups automatically stop the moment a prospect replies or if an email bounces.'],
-        ['6. Automation Schedule', 'Cold Outreach: Mon-Sat 10:00 AM IST\nFollow-ups: Mon-Sat 10:30 AM IST\nInbox Checker: 24/7 every 30 minutes\nDaily Digest: Mon-Sat 6:30 PM IST', 'Configured automatically via GitHub Actions.'],
+        ['6. Automation Schedule', 'Cold Outreach: Mon-Sat 10:00 AM IST\nFollow-ups: Mon-Sat 10:30 AM IST\nInbox Checker: 24/7 every 15 minutes\nDaily Digest: Mon-Sat 6:30 PM IST', 'Configured automatically via GitHub Actions.'],
         ['7. Status Legend', 'SENT = Cold email sent\nreplied = Prospect replied (Sequence paused)\nbounced = Invalid email (Sequence paused)\nDone = Follow-up sequence completed', 'Updated automatically by the bot in real time.']
       ]
     },
@@ -24,10 +26,10 @@ function createOutreachSystem() {
       headers: [
         'full_name', 'email', 'company_name', 'location', 
         'Subject Line', 'Sent From', 'Sent Status', 'Time', 
-        'Date Sent', 'Follow up', 'Follow Up Count', 'Next Follow Up Date'
+        'Date Sent', 'Follow up', 'Follow Up Count', 'Next Follow Up Date', 'Summary'
       ],
       sampleData: [
-        ['John Doe', 'john@example.com', 'Acme Corp', 'Bengaluru', '', '', '', '', '', '', '', '']
+        ['John Doe', 'john@example.com', 'Acme Corp', 'Bengaluru', '', '', '', '', '', '', '', '', '']
       ]
     },
     'Aliases': {
@@ -66,7 +68,8 @@ function createOutreachSystem() {
         ['cutoff_minute_ist', '30', 'Stop sending at this minute in IST (30 = 6:30 PM)'],
         ['max_emails_per_run', '1000', 'Maximum emails to send per single trigger run'],
         ['discord_updates_webhook', 'https://discord.com/api/webhooks/...', 'Channel webhook for Start/End alerts'],
-        ['discord_positive_webhook', 'https://discord.com/api/webhooks/...', 'Channel webhook for Positive/Neutral reply alerts'],
+        ['discord_positive_webhook', 'https://discord.com/api/webhooks/...', 'Channel webhook for New Positive/Neutral lead alerts'],
+        ['discord_rereply_webhook', 'https://discord.com/api/webhooks/...', 'Channel webhook for Re-replies from existing leads'],
         ['groq_api_key', 'gsk_...', 'Groq API Key (Free) for AI Sentiment & Summary']
       ]
     },
@@ -109,27 +112,91 @@ function createOutreachSystem() {
     }
   };
 
+  let updatedSheetsCount = 0;
+  let newSheetsCount = 0;
+  let newColumnsCount = 0;
+  let newSettingsCount = 0;
+
   Object.keys(schema).forEach(sheetName => {
     let sheet = ss.getSheetByName(sheetName);
-    if (!sheet) sheet = ss.insertSheet(sheetName);
-    else sheet.clear();
-
     const { headers, sampleData, color } = schema[sheetName];
 
-    const headerRange = sheet.getRange(1, 1, 1, headers.length);
-    headerRange.setValues([headers]);
-    headerRange.setFontWeight('bold');
-    headerRange.setFontColor('#FFFFFF');
-    headerRange.setBackground(color);
-    headerRange.setHorizontalAlignment('center');
+    if (!sheet) {
+      // 1. Create completely new sheet if missing
+      sheet = ss.insertSheet(sheetName);
+      const headerRange = sheet.getRange(1, 1, 1, headers.length);
+      headerRange.setValues([headers]);
+      headerRange.setFontWeight('bold');
+      headerRange.setFontColor('#FFFFFF');
+      headerRange.setBackground(color);
+      headerRange.setHorizontalAlignment('center');
 
-    if (sampleData.length > 0) {
-      sheet.getRange(2, 1, sampleData.length, sampleData[0].length).setValues(sampleData);
-    }
+      if (sampleData && sampleData.length > 0) {
+        sheet.getRange(2, 1, sampleData.length, sampleData[0].length).setValues(sampleData);
+      }
+      sheet.setFrozenRows(1);
+      for (let c = 1; c <= headers.length; c++) sheet.autoResizeColumn(c);
+      newSheetsCount++;
+    } else if (forceReset) {
+      // 2. Hard reset only if explicitly requested
+      sheet.clear();
+      const headerRange = sheet.getRange(1, 1, 1, headers.length);
+      headerRange.setValues([headers]);
+      headerRange.setFontWeight('bold');
+      headerRange.setFontColor('#FFFFFF');
+      headerRange.setBackground(color);
+      headerRange.setHorizontalAlignment('center');
 
-    sheet.setFrozenRows(1);
-    for (let c = 1; c <= headers.length; c++) {
-      sheet.autoResizeColumn(c);
+      if (sampleData && sampleData.length > 0) {
+        sheet.getRange(2, 1, sampleData.length, sampleData[0].length).setValues(sampleData);
+      }
+      sheet.setFrozenRows(1);
+      for (let c = 1; c <= headers.length; c++) sheet.autoResizeColumn(c);
+      updatedSheetsCount++;
+    } else {
+      // 3. 🛡️ SMART NON-DESTRUCTIVE SYNC: Keep all existing data and append only missing columns/keys!
+      const lastCol = Math.max(sheet.getLastColumn(), 1);
+      const existingHeaders = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => (h || '').toString().trim());
+
+      // A. Check and append any missing header columns
+      headers.forEach(expectedHeader => {
+        if (!existingHeaders.includes(expectedHeader)) {
+          const newColIdx = sheet.getLastColumn() + 1;
+          const cell = sheet.getRange(1, newColIdx);
+          cell.setValue(expectedHeader);
+          cell.setFontWeight('bold');
+          cell.setFontColor('#FFFFFF');
+          cell.setBackground(color);
+          cell.setHorizontalAlignment('center');
+          sheet.autoResizeColumn(newColIdx);
+          newColumnsCount++;
+        }
+      });
+
+      // B. Smart Settings Sync: Add missing setting keys without touching user-configured values
+      if (sheetName === 'Settings') {
+        const lastRow = Math.max(sheet.getLastRow(), 1);
+        let existingKeys = [];
+        if (lastRow > 1) {
+          existingKeys = sheet.getRange(2, 1, lastRow - 1, 1).getValues().map(r => (r[0] || '').toString().trim());
+        }
+
+        sampleData.forEach(([key, defaultValue, description]) => {
+          if (!existingKeys.includes(key)) {
+            sheet.appendRow([key, defaultValue, description]);
+            newSettingsCount++;
+          }
+        });
+      }
+
+      // C. Update Setup Guide content safely
+      if (sheetName === '📖 Setup_Guide') {
+        sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+        sheet.getRange(2, 1, sampleData.length, sampleData[0].length).setValues(sampleData);
+      }
+
+      sheet.setFrozenRows(1);
+      updatedSheetsCount++;
     }
   });
 
@@ -138,7 +205,7 @@ function createOutreachSystem() {
   // ==========================================
   let analyticsSheet = ss.getSheetByName('📊 Email_Analytics');
   if (!analyticsSheet) analyticsSheet = ss.insertSheet('📊 Email_Analytics');
-  else analyticsSheet.clear();
+  else if (forceReset) analyticsSheet.clear();
 
   const analyticsHeaders = ['Sender', 'Sent', 'Replied', 'Bounced', 'Positive', 'Negative', 'Neutral', 'Reply Rate', 'Pos Reply Rate'];
   const analyticsHeaderRange = analyticsSheet.getRange(1, 1, 1, analyticsHeaders.length);
@@ -152,16 +219,14 @@ function createOutreachSystem() {
   analyticsSheet.getRange(2, 1).setValue(analyticsFormula);
   analyticsSheet.setFrozenRows(1);
   analyticsSheet.getRange('H:I').setNumberFormat('0.0%');
-  for (let c = 1; c <= analyticsHeaders.length; c++) {
-    analyticsSheet.autoResizeColumn(c);
-  }
+  for (let c = 1; c <= analyticsHeaders.length; c++) analyticsSheet.autoResizeColumn(c);
 
   // ==========================================
   // 📈 2. CHART DATA SHEET
   // ==========================================
   let chartDataSheet = ss.getSheetByName('📈 ChartData');
   if (!chartDataSheet) chartDataSheet = ss.insertSheet('📈 ChartData');
-  else chartDataSheet.clear();
+  else if (forceReset) chartDataSheet.clear();
 
   // Sentiment Table
   const sentimentHeaders = ['Status', 'Count'];
@@ -201,13 +266,48 @@ function createOutreachSystem() {
   const defaultSheet = ss.getSheetByName('Sheet1');
   if (defaultSheet && ss.getSheets().length > 1) ss.deleteSheet(defaultSheet);
 
-  ss.getSheetByName('📖 Setup_Guide').activate();
-  SpreadsheetApp.getUi().alert('✅ Your Outreach Sheet & Analytics have been built successfully!');
+  ss.getSheetByName('📖 Setup_Guide')?.activate();
+
+  if (forceReset) {
+    SpreadsheetApp.getUi().alert('⚠️ All sheets have been reset and rebuilt to fresh defaults.');
+  } else {
+    const summaryMsg = `✅ Smart Sync Complete!\n\n` +
+      `• Sheets Verified: ${Object.keys(schema).length}\n` +
+      `• New Sheets Added: ${newSheetsCount}\n` +
+      `• New Columns Added: ${newColumnsCount}\n` +
+      `• New Settings Keys Added: ${newSettingsCount}\n\n` +
+      `🛡️ All your existing leads, inboxes, and settings were preserved safely.`;
+    SpreadsheetApp.getUi().alert(summaryMsg);
+  }
+}
+
+/**
+ * 🔄 Safe Sync (Default) - Adds missing columns/settings without overwriting existing data.
+ */
+function syncOutreachSystem() {
+  createOutreachSystem(false);
+}
+
+/**
+ * ⚠️ Hard Reset - Clears and rebuilds all sheets from scratch with confirmation prompt.
+ */
+function resetAllSheetsWithWarning() {
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.alert(
+    '⚠️ Confirmation Required',
+    'Are you sure you want to completely RESET and CLEAR all tabs? This will ERASE all leads, inboxes, and custom settings!',
+    ui.ButtonSet.YES_NO
+  );
+  if (response === ui.Button.YES) {
+    createOutreachSystem(true);
+  }
 }
 
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('⚡ Outreach Bot')
-    .addItem('🛠️ Rebuild / Reset All Sheets', 'createOutreachSystem')
+    .addItem('🔄 Sync & Add Missing Columns/Settings (Safe)', 'syncOutreachSystem')
+    .addSeparator()
+    .addItem('⚠️ Hard Reset / Rebuild All (Wipes Data)', 'resetAllSheetsWithWarning')
     .addToUi();
 }
