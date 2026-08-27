@@ -806,133 +806,145 @@ export async function runInboxChecker() {
       secure: true,
       auth: { user: inbox.smtp_user, pass: inbox.smtp_pass },
       logger: false,
+      socketTimeout: 30000,
+      clientInfo: { name: 'UniversalOutreachBot' }
     });
 
+    // 🛡️ Prevent Unhandled 'error' event crash on socket timeout or disconnection
+    client.on('error', (err) => {
+      console.warn(`⚠️ [IMAP Socket/Connection Warning] ${inbox.email}: ${err.message}`);
+    });
+
+    let lock = null;
     try {
       await client.connect();
-      const lock = await client.getMailboxLock('INBOX');
+      lock = await client.getMailboxLock('INBOX');
 
-      try {
-        const processedUids = new Set();
-        for await (const msg of client.fetch({ seen: false }, { uid: true, source: true })) {
-          if (msg.uid && processedUids.has(msg.uid)) continue;
-          if (msg.uid) processedUids.add(msg.uid);
+      const processedUids = new Set();
+      for await (const msg of client.fetch({ seen: false }, { uid: true, source: true })) {
+        if (msg.uid && processedUids.has(msg.uid)) continue;
+        if (msg.uid) processedUids.add(msg.uid);
 
-          const parsed = await simpleParser(msg.source);
-          const fromAddr = parsed.from?.value[0]?.address?.toLowerCase() || '';
+        const parsed = await simpleParser(msg.source);
+        const fromAddr = parsed.from?.value[0]?.address?.toLowerCase() || '';
 
-          // Always mark email as \Seen so it is never re-fetched on subsequent 15-min runs
-          if (msg.uid) {
-            try {
-              await client.messageFlagsAdd(msg.uid, ['\\Seen'], { uid: true });
-            } catch (flagErr) {
-              console.warn(`Could not set \\Seen flag for msg UID ${msg.uid}:`, flagErr.message);
+        // Always mark email as \Seen so it is never re-fetched on subsequent 15-min runs
+        if (msg.uid) {
+          try {
+            await client.messageFlagsAdd(msg.uid, ['\\Seen'], { uid: true });
+          } catch (flagErr) {
+            console.warn(`Could not set \\Seen flag for msg UID ${msg.uid}:`, flagErr.message);
+          }
+        }
+
+        if (internalEmails.includes(fromAddr)) continue;
+
+        // A. Bounce Detection
+        const isBounce = parsed.from?.text?.includes('mailer-daemon') ||
+                         parsed.from?.text?.includes('postmaster') ||
+                         parsed.headers.get('auto-submitted') === 'auto';
+
+        if (isBounce) {
+          const match = (parsed.text || '').match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g)
+            ?.find(e => !e.includes('mailer') && !e.includes('postmaster'));
+
+          if (match) {
+            const rIdx = rows.findIndex(r => (r[col['email']] || '').toLowerCase() === match.toLowerCase());
+            if (rIdx !== -1) {
+              rows[rIdx][col['Sent Status']] = 'bounced';
+              rows[rIdx][col['Follow up']] = 'Done';
+              rows[rIdx][col['Date Sent']] = new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' });
+              rows[rIdx][col['Time']] = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: true });
+
+              await sheets.spreadsheets.values.update({
+                spreadsheetId: sheets.spreadsheetId || SPREADSHEET_ID,
+                range: `'Details'!A${rIdx + 2}:Z${rIdx + 2}`,
+                valueInputOption: 'USER_ENTERED',
+                requestBody: { values: [rows[rIdx]] },
+              });
+              console.log(`🔒 Marked [${match}] as BOUNCED & Follow-up as DONE`);
             }
           }
+          continue;
+        }
 
-          if (internalEmails.includes(fromAddr)) continue;
+        // B. Prospect Reply Detection
+        const rIdx = rows.findIndex(r => (r[col['email']] || '').toLowerCase() === fromAddr);
+        if (rIdx !== -1) {
+          const existingStatus = (rows[rIdx][col['Sent Status']] || '').trim().toLowerCase();
+          const existingSentiment = (rows[rIdx][col['Next Follow Up Date']] || '').trim().toUpperCase();
 
-          // A. Bounce Detection
-          const isBounce = parsed.from?.text?.includes('mailer-daemon') ||
-                           parsed.from?.text?.includes('postmaster') ||
-                           parsed.headers.get('auto-submitted') === 'auto';
+          // Check if lead was ALREADY positive/neutral or already marked as replied
+          const isExistingLead = existingStatus === 'replied' || existingSentiment === 'POSITIVE' || existingSentiment === 'NEUTRAL';
 
-          if (isBounce) {
-            const match = (parsed.text || '').match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g)
-              ?.find(e => !e.includes('mailer') && !e.includes('postmaster'));
+          const { sentiment, summary } = await classifyEmailWithAi(groq, parsed.text || '');
 
-            if (match) {
-              const rIdx = rows.findIndex(r => (r[col['email']] || '').toLowerCase() === match.toLowerCase());
-              if (rIdx !== -1) {
-                rows[rIdx][col['Sent Status']] = 'bounced';
-                rows[rIdx][col['Follow up']] = 'Done';
-                rows[rIdx][col['Date Sent']] = new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' });
-                rows[rIdx][col['Time']] = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: true });
-
-                await sheets.spreadsheets.values.update({
-                  spreadsheetId: sheets.spreadsheetId || SPREADSHEET_ID,
-                  range: `'Details'!A${rIdx + 2}:Z${rIdx + 2}`,
-                  valueInputOption: 'USER_ENTERED',
-                  requestBody: { values: [rows[rIdx]] },
-                });
-                console.log(`🔒 Marked [${match}] as BOUNCED & Follow-up as DONE`);
-              }
-            }
-            continue;
+          rows[rIdx][col['Sent Status']] = 'replied';
+          rows[rIdx][col['Follow up']] = 'Done';
+          rows[rIdx][col['Date Sent']] = new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' });
+          if (col['Next Follow Up Date'] !== undefined) {
+            rows[rIdx][col['Next Follow Up Date']] = sentiment;
           }
+          if (col['Summary'] !== undefined) {
+            rows[rIdx][col['Summary']] = summary;
+          }
+          rows[rIdx][col['Time']] = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: true });
 
-          // B. Prospect Reply Detection
-          const rIdx = rows.findIndex(r => (r[col['email']] || '').toLowerCase() === fromAddr);
-          if (rIdx !== -1) {
-            const existingStatus = (rows[rIdx][col['Sent Status']] || '').trim().toLowerCase();
-            const existingSentiment = (rows[rIdx][col['Next Follow Up Date']] || '').trim().toUpperCase();
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: sheets.spreadsheetId || SPREADSHEET_ID,
+            range: `'Details'!A${rIdx + 2}:Z${rIdx + 2}`,
+            valueInputOption: 'USER_ENTERED',
+            requestBody: { values: [rows[rIdx]] },
+          });
 
-            // Check if lead was ALREADY positive/neutral or already marked as replied
-            const isExistingLead = existingStatus === 'replied' || existingSentiment === 'POSITIVE' || existingSentiment === 'NEUTRAL';
+          const leadName = rows[rIdx][col['full_name']] || fromAddr;
+          const companyName = rows[rIdx][col['company_name']] || 'Company';
 
-            const { sentiment, summary } = await classifyEmailWithAi(groq, parsed.text || '');
+          if (isExistingLead) {
+            // 💬 Existing Lead Re-reply / Follow-up Notification
+            const rereplyWebhook = config.settings.discord_rereply_webhook || config.settings.discord_positive_webhook || config.settings.discord_updates_webhook;
+            console.log(`🎯 Re-reply from existing lead [${fromAddr}] (${sentiment}). Notifying re-reply channel...`);
 
-            rows[rIdx][col['Sent Status']] = 'replied';
-            rows[rIdx][col['Follow up']] = 'Done';
-            rows[rIdx][col['Date Sent']] = new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' });
-            if (col['Next Follow Up Date'] !== undefined) {
-              rows[rIdx][col['Next Follow Up Date']] = sentiment;
-            }
-            if (col['Summary'] !== undefined) {
-              rows[rIdx][col['Summary']] = summary;
-            }
-            rows[rIdx][col['Time']] = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: true });
-
-            await sheets.spreadsheets.values.update({
-              spreadsheetId: sheets.spreadsheetId || SPREADSHEET_ID,
-              range: `'Details'!A${rIdx + 2}:Z${rIdx + 2}`,
-              valueInputOption: 'USER_ENTERED',
-              requestBody: { values: [rows[rIdx]] },
-            });
-
-            const leadName = rows[rIdx][col['full_name']] || fromAddr;
-            const companyName = rows[rIdx][col['company_name']] || 'Company';
-
-            if (isExistingLead) {
-              // 💬 Existing Lead Re-reply / Follow-up Notification
-              const rereplyWebhook = config.settings.discord_rereply_webhook || config.settings.discord_positive_webhook || config.settings.discord_updates_webhook;
-              console.log(`🎯 Re-reply from existing lead [${fromAddr}] (${sentiment}). Notifying re-reply channel...`);
-
-              if (rereplyWebhook) {
-                const msgContent =
+            if (rereplyWebhook) {
+              const msgContent =
 `💬 **Existing Lead Re-Reply Alert (${sentiment})**
 **From:** ${leadName} (\`${fromAddr}\`)
 **Company:** ${companyName}
 **Subject:** ${parsed.subject || 'No Subject'}
 **Inbox:** ${inbox.email}
 **Summary:** ${summary}`;
-                await notifyDiscord(rereplyWebhook, msgContent);
-              }
-            } else {
-              // 🔥 First-time New Lead Notification
-              console.log(`🎯 New lead reply from [${fromAddr}] (${sentiment}).`);
-              if (sentiment === 'POSITIVE' || sentiment === 'NEUTRAL') {
-                const positiveWebhook = config.settings.discord_positive_webhook || config.settings.discord_updates_webhook;
-                if (positiveWebhook) {
-                  const msgContent =
+              await notifyDiscord(rereplyWebhook, msgContent);
+            }
+          } else {
+            // 🔥 First-time New Lead Notification
+            console.log(`🎯 New lead reply from [${fromAddr}] (${sentiment}).`);
+            if (sentiment === 'POSITIVE' || sentiment === 'NEUTRAL') {
+              const positiveWebhook = config.settings.discord_positive_webhook || config.settings.discord_updates_webhook;
+              if (positiveWebhook) {
+                const msgContent =
 `🔥 **${sentiment} Lead Alert (New Lead)**
 **From:** ${leadName} (\`${fromAddr}\`)
 **Company:** ${companyName}
 **Subject:** ${parsed.subject || 'No Subject'}
 **Inbox:** ${inbox.email}
 **Summary:** ${summary}`;
-                  await notifyDiscord(positiveWebhook, msgContent);
-                }
+                await notifyDiscord(positiveWebhook, msgContent);
               }
             }
           }
         }
-      } finally {
-        lock.release();
-        await client.logout();
       }
     } catch (e) {
       console.error(`IMAP error for ${inbox.email}:`, e.message);
+    } finally {
+      if (lock) {
+        try { lock.release(); } catch (_) {}
+      }
+      try {
+        await client.logout();
+      } catch (_) {
+        try { client.close(); } catch (_) {}
+      }
     }
   }
 }
