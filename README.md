@@ -38,8 +38,8 @@ An automated, serverless cold email outreach engine built with **Node.js**, **Go
 - **Automated Follow-Up Sequence**: Sends scheduled follow-ups and automatically halts when a prospect replies, unsubscribes, or bounces.
 - **AI Reply Sentiment Analysis**: Uses Groq LLM (`llama-3.3-70b-versatile`) to categorize replies as `POSITIVE`, `NEUTRAL`, `NEGATIVE`, or `OOO`.
 - **Discord Integration & Daily Digest**: Real-time alerts for positive leads, batch status, daily limit warnings, and a 6:30 PM IST Daily Performance Digest card.
-- **⏱️ 1-Click Automated Cron API Setup**: Automatically provision all 4 scheduled jobs (Follow-up, Outreach, Inbox Checker, Daily Digest) on [cron-job.org](https://cron-job.org) in seconds via API using `node setup-cron.mjs`. Full instructions in [`CRON_SETUP.md`](./CRON_SETUP.md).
-- **🔒 Concurrency & Double-Sending Safety Lock**: Workflow concurrency lock (`group: outreach-engine`) prevents parallel execution and guarantees zero double-sending.
+- **⏱️ 1-Click Automated Cron API Setup**: Automatically provision all 4 scheduled jobs (Follow-up, Outreach, Inbox Checker, Daily Digest) on [cron-job.org](https://cron-job.org) in seconds via API using the GitHub Actions workflow **⚡ Provision Cron Jobs (cron-job.org)** or CLI script `node setup-cron.mjs`. Full instructions in [`CRON_SETUP.md`](./CRON_SETUP.md).
+- **🔒 Concurrency & Double-Sending Safety Lock**: Workflow concurrency lock prevents parallel execution and guarantees zero double-sending.
 
 ---
 
@@ -257,28 +257,21 @@ If you want to run multiple campaigns simultaneously via separate GitHub Actions
 name: Campaign B Outreach Engine
 
 concurrency:
-  group: outreach-engine-b
+  group: outreach-b-${{ inputs.action || github.event.client_payload.action || github.event_name }}
   cancel-in-progress: false
 
 on:
-  schedule:
-    - cron: '30 4 * * 1-6'   # Cold Outreach: 10:00 AM IST
-    - cron: '0 5 * * 1-6'    # Follow-ups: 10:30 AM IST
-    - cron: '*/30 * * * *'   # Inbox Checker: 24/7
-    - cron: '0 13 * * 1-6'   # Daily Digest: 6:30 PM IST
+  repository_dispatch:
+    types: [send_single_email]
 
   workflow_dispatch:
     inputs:
       action:
         description: 'Choose task to run manually'
         required: true
-        default: 'digest'
+        default: 'inbox'
         type: choice
-        options:
-          - outreach
-          - followup
-          - inbox
-          - digest
+        options: [outreach, followup, inbox, digest, single_lead]
 
 jobs:
   run-engine:
@@ -287,23 +280,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: '22'
       
-      - run: npm install
+      - run: npm ci --no-audit --no-fund
 
       - name: Run Selected Task
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            node engine.mjs ${{ github.event.inputs.action }}
-          elif [ "${{ github.event.schedule }}" = "30 4 * * 1-6" ]; then
-            node engine.mjs outreach
-          elif [ "${{ github.event.schedule }}" = "0 5 * * 1-6" ]; then
-            node engine.mjs followup
-          elif [ "${{ github.event.schedule }}" = "0 13 * * 1-6" ]; then
-            node engine.mjs digest
-          else
-            node engine.mjs inbox
-          fi
+        run: node engine.mjs "${{ inputs.action || github.event.inputs.action || 'inbox' }}"
         env:
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID_CAMPAIGN_B }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
