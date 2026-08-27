@@ -19,7 +19,7 @@ An automated, serverless cold email outreach engine built with **Node.js**, **Go
 7. [Running & Testing the Engine](#-running--testing-the-engine)
    - [Option A: 100% Online Web Dashboard (GitHub Pages)](#option-a-100-online-web-dashboard-github-pages)
    - [Option B: Local Express Dashboard (`npm start`)](#option-b-local-express-dashboard-npm-start)
-   - [Option C: Automatic GitHub Actions Schedule](#option-c-automatic-github-actions-schedule)
+   - [Option C: 1-Click Automated Cron API Setup (setup-cron.mjs) & cron-job.org](#option-c-1-click-automated-cron-api-setup-setup-cronmjs--cron-joborg)
    - [Option D: Native Unit Test Suite (`npm test`)](#option-d-native-unit-test-suite-npm-test)
 8. [How to Create & Manage Multiple Campaigns (Adding Second Sheets)](#-how-to-create--manage-multiple-campaigns-adding-second-sheets)
    - [Method 1: Multi-Campaign Manager in Web Dashboard](#method-1-multi-campaign-manager-in-web-dashboard)
@@ -38,6 +38,7 @@ An automated, serverless cold email outreach engine built with **Node.js**, **Go
 - **Automated Follow-Up Sequence**: Sends scheduled follow-ups and automatically halts when a prospect replies, unsubscribes, or bounces.
 - **AI Reply Sentiment Analysis**: Uses Groq LLM (`llama-3.3-70b-versatile`) to categorize replies as `POSITIVE`, `NEUTRAL`, `NEGATIVE`, or `OOO`.
 - **Discord Integration & Daily Digest**: Real-time alerts for positive leads, batch status, daily limit warnings, and a 6:30 PM IST Daily Performance Digest card.
+- **⏱️ 1-Click Automated Cron API Setup**: Automatically provision all 4 scheduled jobs (Follow-up, Outreach, Inbox Checker, Daily Digest) on [cron-job.org](https://cron-job.org) in seconds via API using `node setup-cron.mjs`. Full instructions in [`CRON_SETUP.md`](./CRON_SETUP.md).
 - **🔒 Concurrency & Double-Sending Safety Lock**: Workflow concurrency lock (`group: outreach-engine`) prevents parallel execution and guarantees zero double-sending.
 
 ---
@@ -192,18 +193,38 @@ If you see `GitHub Dispatch Error: Resource not accessible by personal access to
 - Run `npm start` in your terminal.
 - Open `http://localhost:3000` in your browser.
 
-### Option C: Reliable Cloud Automation & Webhook Scheduling (cron-job.org)
-GitHub Actions native `schedule` triggers often experience queue delays or dropped runs during peak hours. For 100% on-time execution, trigger workflows via **[cron-job.org](https://cron-job.org)** using GitHub's `workflow_dispatch` API:
+### Option C: 1-Click Automated Cron API Setup (`setup-cron.mjs`) & cron-job.org
 
+GitHub Actions native `schedule` triggers often experience queue delays or dropped runs during peak hours. For 100% on-time execution, trigger workflows via **[cron-job.org](https://cron-job.org)** using GitHub's `workflow_dispatch` API.
+
+#### ⚡ 1-Click Automated Setup via API (Recommended)
+You can automatically provision all 4 required cron jobs in seconds without manually typing settings in the dashboard:
+
+```bash
+# Interactive setup:
+node setup-cron.mjs
+
+# Or pass API keys directly:
+CRON_KEY="your_cron_job_api_key" GITHUB_PAT="your_github_pat" node setup-cron.mjs
+```
+
+The script auto-detects your repository name/owner and creates all 4 jobs with exact headers, schedules, and payloads!
+
+#### 🛠️ Manual cron-job.org Setup
+If setting up manually in the dashboard:
 1. **Get a GitHub PAT**: Generate a classic Personal Access Token with `repo` / `workflow` permissions at [github.com/settings/tokens](https://github.com/settings/tokens).
-2. **Setup cron-job.org**: Create free jobs pointing to:
-   `https://api.github.com/repos/<YOUR_USERNAME>/<YOUR_REPO_NAME>/actions/workflows/outreach.yml/dispatches`
-3. **HTTP Headers**: Add `Authorization: Bearer <YOUR_PAT>`, `Accept: application/vnd.github+json`, `User-Agent: cron-job-org`, `Content-Type: application/json`.
-4. **Request Payload**:
+2. **Endpoint URL**: `https://api.github.com/repos/<YOUR_USERNAME>/<YOUR_REPO_NAME>/actions/workflows/outreach.yml/dispatches`
+3. **HTTP Headers**:
+   - `Authorization: Bearer <YOUR_PAT>`
+   - `Accept: application/vnd.github+json`
+   - `User-Agent: cron-job-org`
+   - `Content-Type: application/json`
+4. **Request Payload (Example)**:
    ```json
    { "ref": "main", "inputs": { "action": "followup" } }
    ```
-👉 **For the complete step-by-step visual setup guide and exact cron schedules for all 4 jobs, read [`CRON_SETUP.md`](./CRON_SETUP.md).**
+
+👉 **For complete step-by-step visual instructions, exact timing schedules for all 4 jobs, and troubleshooting, read [`CRON_SETUP.md`](./CRON_SETUP.md).**
 
 ### Option D: Native Unit Test Suite (`npm test`)
 - Run `npm test` to execute the native `node:test` suite verifying MX domain lookups, IST cutoff calculations, template tag replacements, and sentiment logic.
