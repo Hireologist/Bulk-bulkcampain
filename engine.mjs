@@ -736,6 +736,48 @@ export async function runFollowups() {
   }
 }
 
+// Helper for AI Email Sentiment Classification & Summarization
+export async function classifyEmailWithAi(groq, emailText = '') {
+  let sentiment = 'REPLIED';
+  let summary = (emailText || '').trim().replace(/\s+/g, ' ').substring(0, 150);
+  if (summary.length === 150) summary += '...';
+
+  if (!groq || !emailText) {
+    return { sentiment, summary };
+  }
+
+  try {
+    const aiRes = await groq.chat.completions.create({
+      model: 'openai/gpt-oss-120b',
+      messages: [
+        {
+          role: 'system',
+          content: `You are an AI email assistant. Analyze the incoming lead email and respond ONLY with a valid JSON object containing 2 keys:
+"sentiment": ONE of POSITIVE, NEUTRAL, NEGATIVE, or OOO.
+"summary": A concise 1-2 sentence summary of what key points, questions, or details the lead shared in their email.
+Do not output markdown formatting or extra text.`
+        },
+        { role: 'user', content: emailText.substring(0, 3000) }
+      ],
+    });
+
+    const rawText = aiRes.choices[0]?.message?.content?.trim() || '';
+    const cleanJsonText = rawText.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/\s*```$/, '').trim();
+    const parsedObj = JSON.parse(cleanJsonText);
+
+    if (parsedObj.sentiment) {
+      sentiment = String(parsedObj.sentiment).trim().toUpperCase();
+    }
+    if (parsedObj.summary) {
+      summary = String(parsedObj.summary).trim();
+    }
+  } catch (e) {
+    console.warn('Groq AI classification error, falling back to basic summary:', e.message);
+  }
+
+  return { sentiment, summary };
+}
+
 // ============================================================================
 // 📥 3. 24/7 INBOX & BOUNCE CHECKER
 // ============================================================================
@@ -771,9 +813,22 @@ export async function runInboxChecker() {
       const lock = await client.getMailboxLock('INBOX');
 
       try {
-        for await (const msg of client.fetch({ seen: false }, { source: true })) {
+        const processedUids = new Set();
+        for await (const msg of client.fetch({ seen: false }, { uid: true, source: true })) {
+          if (msg.uid && processedUids.has(msg.uid)) continue;
+          if (msg.uid) processedUids.add(msg.uid);
+
           const parsed = await simpleParser(msg.source);
           const fromAddr = parsed.from?.value[0]?.address?.toLowerCase() || '';
+
+          // Always mark email as \Seen so it is never re-fetched on subsequent 15-min runs
+          if (msg.uid) {
+            try {
+              await client.messageFlagsAdd(msg.uid, ['\\Seen'], { uid: true });
+            } catch (flagErr) {
+              console.warn(`Could not set \\Seen flag for msg UID ${msg.uid}:`, flagErr.message);
+            }
+          }
 
           if (internalEmails.includes(fromAddr)) continue;
 
@@ -808,27 +863,21 @@ export async function runInboxChecker() {
           // B. Prospect Reply Detection
           const rIdx = rows.findIndex(r => (r[col['email']] || '').toLowerCase() === fromAddr);
           if (rIdx !== -1) {
-            let sentiment = 'REPLIED';
+            const existingStatus = (rows[rIdx][col['Sent Status']] || '').trim().toLowerCase();
+            const existingSentiment = (rows[rIdx][col['Next Follow Up Date']] || '').trim().toUpperCase();
 
-            if (groq) {
-              try {
-                const aiRes = await groq.chat.completions.create({
-                  model: 'openai/gpt-oss-120b',
-                  messages: [
-                    { role: 'system', content: 'Classify sentiment in ONE word: POSITIVE, NEUTRAL, NEGATIVE, or OOO.' },
-                    { role: 'user', content: parsed.text || '' },
-                  ],
-                });
-                sentiment = aiRes.choices[0].message.content.trim().toUpperCase();
-              } catch (e) {
-                console.error('Groq AI error:', e.message);
-              }
-            }
+            // Check if lead was ALREADY positive/neutral or already marked as replied
+            const isExistingLead = existingStatus === 'replied' || existingSentiment === 'POSITIVE' || existingSentiment === 'NEUTRAL';
+
+            const { sentiment, summary } = await classifyEmailWithAi(groq, parsed.text || '');
 
             rows[rIdx][col['Sent Status']] = 'replied';
             rows[rIdx][col['Follow up']] = 'Done';
             if (col['Next Follow Up Date'] !== undefined) {
               rows[rIdx][col['Next Follow Up Date']] = sentiment;
+            }
+            if (col['Summary'] !== undefined) {
+              rows[rIdx][col['Summary']] = summary;
             }
             rows[rIdx][col['Time']] = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: true });
 
@@ -839,11 +888,40 @@ export async function runInboxChecker() {
               requestBody: { values: [rows[rIdx]] },
             });
 
-            console.log(`🎯 Marked [${fromAddr}] as REPLIED (${sentiment}) & Follow-up as DONE`);
+            const leadName = rows[rIdx][col['full_name']] || fromAddr;
+            const companyName = rows[rIdx][col['company_name']] || 'Company';
 
-            if (sentiment === 'POSITIVE' || sentiment === 'NEUTRAL') {
-              await notifyDiscord(config.settings.discord_positive_webhook,
-                `🔥 **${sentiment} Lead Alert**\n**From:** ${fromAddr}\n**Subject:** ${parsed.subject}\n**Inbox:** ${inbox.email}`);
+            if (isExistingLead) {
+              // 💬 Existing Lead Re-reply / Follow-up Notification
+              const rereplyWebhook = config.settings.discord_rereply_webhook || config.settings.discord_positive_webhook || config.settings.discord_updates_webhook;
+              console.log(`🎯 Re-reply from existing lead [${fromAddr}] (${sentiment}). Notifying re-reply channel...`);
+
+              if (rereplyWebhook) {
+                const msgContent =
+`💬 **Existing Lead Re-Reply Alert (${sentiment})**
+**From:** ${leadName} (\`${fromAddr}\`)
+**Company:** ${companyName}
+**Subject:** ${parsed.subject || 'No Subject'}
+**Inbox:** ${inbox.email}
+**Summary:** ${summary}`;
+                await notifyDiscord(rereplyWebhook, msgContent);
+              }
+            } else {
+              // 🔥 First-time New Lead Notification
+              console.log(`🎯 New lead reply from [${fromAddr}] (${sentiment}).`);
+              if (sentiment === 'POSITIVE' || sentiment === 'NEUTRAL') {
+                const positiveWebhook = config.settings.discord_positive_webhook || config.settings.discord_updates_webhook;
+                if (positiveWebhook) {
+                  const msgContent =
+`🔥 **${sentiment} Lead Alert (New Lead)**
+**From:** ${leadName} (\`${fromAddr}\`)
+**Company:** ${companyName}
+**Subject:** ${parsed.subject || 'No Subject'}
+**Inbox:** ${inbox.email}
+**Summary:** ${summary}`;
+                  await notifyDiscord(positiveWebhook, msgContent);
+                }
+              }
             }
           }
         }
