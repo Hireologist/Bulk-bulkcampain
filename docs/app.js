@@ -3,8 +3,33 @@ let campaigns = JSON.parse(localStorage.getItem('sheet_bot_campaigns') || '[]');
 let activeCampaignId = localStorage.getItem('sheet_bot_active_campaign') || '';
 
 let githubToken = localStorage.getItem('sheet_bot_github_token') || '';
-let repoOwner = 'Rohanpatel16';
-let repoName = 'Sheet-bot';
+
+function detectRepoInfo() {
+  let savedOwner = localStorage.getItem('sheet_bot_repo_owner');
+  let savedRepo = localStorage.getItem('sheet_bot_repo_name');
+
+  if (savedOwner && savedRepo) {
+    return { owner: savedOwner, repo: savedRepo };
+  }
+
+  const hostname = window.location.hostname;
+  const pathParts = window.location.pathname.split('/').filter(Boolean);
+
+  if (hostname.endsWith('.github.io')) {
+    const owner = hostname.replace('.github.io', '');
+    const repo = pathParts[0] || 'Sheet-bot';
+    return { owner, repo };
+  }
+
+  return {
+    owner: savedOwner || (hostname.endsWith('.github.io') ? hostname.replace('.github.io', '') : 'your-github-username'),
+    repo: savedRepo || pathParts[0] || 'your-repo-name'
+  };
+}
+
+const detectedRepo = detectRepoInfo();
+let repoOwner = detectedRepo.owner;
+let repoName = detectedRepo.repo;
 
 let sentimentChartInstance = null;
 let statusChartInstance = null;

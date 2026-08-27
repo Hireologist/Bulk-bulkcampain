@@ -43,8 +43,8 @@ A modern, Manifest V3 Chrome Extension that lets you send **Single** and **Bulk*
 2. Go to the **Settings ⚙️** tab.
 3. Fill in your details:
    - **GitHub PAT**: Your GitHub Personal Access Token (with `repo` scope).
-   - **Repo Owner**: Your GitHub username (e.g. `Rohanpatel16`).
-   - **Repo Name**: `Sheet-bot`
+   - **Repo Owner**: Your GitHub username (e.g. `your-github-username`).
+   - **Repo Name**: Your repository name (e.g. `your-repo-name`).
    - **Default Location**: e.g. `India` (or `Mumbai`)
 4. Click **Save Configuration**. The header status badge will change to **Connected**.
 

@@ -4,6 +4,23 @@ This document contains exact, step-by-step setup instructions for triggering **S
 
 ---
 
+## ⚡ 1-Click Automated Setup via API (Recommended)
+
+You can automatically create all 4 cron jobs in **seconds** without manually typing settings in the dashboard using the included script `setup-cron.mjs`:
+
+1. Get your **cron-job.org API Key**: Log in at [console.cron-job.org](https://console.cron-job.org/) → **Settings** → **API Keys** → **Create API key**.
+2. Run the script:
+   ```bash
+   node setup-cron.mjs
+   ```
+   *(Or pass environment variables directly)*:
+   ```bash
+   CRON_KEY="your_cron_job_api_key" GITHUB_PAT="your_github_pat" node setup-cron.mjs
+   ```
+3. The script will automatically create all 4 jobs with their exact URLs, headers, payloads, and schedules!
+
+---
+
 ## 🔑 Prerequisites & Common Credentials
 
 ### 1. GitHub Personal Access Token (PAT)
@@ -17,7 +34,7 @@ This document contains exact, step-by-step setup instructions for triggering **S
 
 ### 2. Target API Endpoint (URL for all jobs)
 ```text
-https://api.github.com/repos/Rohanpatel16/Sheet-bot/actions/workflows/outreach.yml/dispatches
+https://api.github.com/repos/<YOUR_USERNAME>/<YOUR_REPO_NAME>/actions/workflows/outreach.yml/dispatches
 ```
 
 ### 3. Common HTTP Headers (Configured under "HTTP Headers" in cron-job.org)
@@ -44,7 +61,7 @@ Add these **4 headers** to every cron job:
 
 #### 🔹 General Settings
 * **Title**: `Sheet-Bot - Followup Engine`
-* **Address (URL)**: `https://api.github.com/repos/Rohanpatel16/Sheet-bot/actions/workflows/outreach.yml/dispatches`
+* **Address (URL)**: `https://api.github.com/repos/<YOUR_USERNAME>/<YOUR_REPO_NAME>/actions/workflows/outreach.yml/dispatches`
 * **Request Method**: `POST`
 
 #### 🔹 Request Body (JSON)
@@ -75,7 +92,7 @@ Add these **4 headers** to every cron job:
 
 #### 🔹 General Settings
 * **Title**: `Sheet-Bot - Cold Outreach`
-* **Address (URL)**: `https://api.github.com/repos/Rohanpatel16/Sheet-bot/actions/workflows/outreach.yml/dispatches`
+* **Address (URL)**: `https://api.github.com/repos/<YOUR_USERNAME>/<YOUR_REPO_NAME>/actions/workflows/outreach.yml/dispatches`
 * **Request Method**: `POST`
 
 #### 🔹 Request Body (JSON)
@@ -106,7 +123,7 @@ Add these **4 headers** to every cron job:
 
 #### 🔹 General Settings
 * **Title**: `Sheet-Bot - Inbox Checker`
-* **Address (URL)**: `https://api.github.com/repos/Rohanpatel16/Sheet-bot/actions/workflows/outreach.yml/dispatches`
+* **Address (URL)**: `https://api.github.com/repos/<YOUR_USERNAME>/<YOUR_REPO_NAME>/actions/workflows/outreach.yml/dispatches`
 * **Request Method**: `POST`
 
 #### 🔹 Request Body (JSON)
@@ -135,7 +152,7 @@ Add these **4 headers** to every cron job:
 
 #### 🔹 General Settings
 * **Title**: `Sheet-Bot - Daily Digest`
-* **Address (URL)**: `https://api.github.com/repos/Rohanpatel16/Sheet-bot/actions/workflows/outreach.yml/dispatches`
+* **Address (URL)**: `https://api.github.com/repos/<YOUR_USERNAME>/<YOUR_REPO_NAME>/actions/workflows/outreach.yml/dispatches`
 * **Request Method**: `POST`
 
 #### 🔹 Request Body (JSON)
@@ -172,4 +189,4 @@ Add these **4 headers** to every cron job:
    * Verify that your `Authorization` header format is `Bearer ghp_...` with a space after `Bearer`.
 3. **If HTTP 404 Not Found**:
    * Ensure `outreach.yml` is pushed to the `main` branch.
-   * Verify the URL endpoint matches the exact repository path (`Rohanpatel16/Sheet-bot`).
+   * Verify the URL endpoint matches your exact repository path (`<YOUR_USERNAME>/<YOUR_REPO_NAME>`).
