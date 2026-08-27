@@ -96,6 +96,13 @@ const JOBS_TO_CREATE = [
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function createCronJob(cronApiKey, githubPat, dispatchUrl, jobConfig, repoName, maxRetries = 3) {
+  let cleanPat = githubPat.trim();
+  if (cleanPat.toLowerCase().startsWith('bearer ')) {
+    cleanPat = cleanPat.substring(7).trim();
+  } else if (cleanPat.toLowerCase().startsWith('token ')) {
+    cleanPat = cleanPat.substring(6).trim();
+  }
+
   const payload = {
     job: {
       url: dispatchUrl,
@@ -107,7 +114,7 @@ async function createCronJob(cronApiKey, githubPat, dispatchUrl, jobConfig, repo
       schedule: jobConfig.schedule,
       extendedData: {
         headers: {
-          Authorization: `Bearer ${githubPat}`,
+          Authorization: `Bearer ${cleanPat}`,
           Accept: 'application/vnd.github+json',
           'User-Agent': 'cron-job-org',
           'Content-Type': 'application/json'
