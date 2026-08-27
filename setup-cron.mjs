@@ -93,7 +93,9 @@ const JOBS_TO_CREATE = [
   }
 ];
 
-async function createCronJob(cronApiKey, githubPat, dispatchUrl, jobConfig, repoName) {
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function createCronJob(cronApiKey, githubPat, dispatchUrl, jobConfig, repoName, maxRetries = 3) {
   const payload = {
     job: {
       url: dispatchUrl,
@@ -120,22 +122,37 @@ async function createCronJob(cronApiKey, githubPat, dispatchUrl, jobConfig, repo
     }
   };
 
-  const response = await fetch('https://api.cron-job.org/jobs', {
-    method: 'PUT',
-    headers: {
-      Authorization: `Bearer ${cronApiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(payload)
-  });
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch('https://api.cron-job.org/jobs', {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${cronApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`cron-job.org API Error (${response.status}): ${errText}`);
+      if (response.status === 429) {
+        const backoffMs = attempt * 2500;
+        console.warn(`⚠️ Rate limited (HTTP 429) on attempt ${attempt}/${maxRetries} for "${jobConfig.title}". Retrying in ${backoffMs / 1000}s...`);
+        await sleep(backoffMs);
+        continue;
+      }
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`cron-job.org API Error (${response.status}): ${errText}`);
+      }
+
+      const data = await response.json();
+      return data.jobId;
+    } catch (err) {
+      if (attempt === maxRetries) throw err;
+      console.warn(`⚠️ Warning on attempt ${attempt}/${maxRetries} for "${jobConfig.title}": ${err.message}. Retrying...`);
+      await sleep(attempt * 2000);
+    }
   }
-
-  const data = await response.json();
-  return data.jobId;
 }
 
 async function main() {
@@ -205,13 +222,22 @@ async function main() {
 
   console.log('\n⏳ Provisioning 4 cron jobs on cron-job.org...\n');
 
+  let failedCount = 0;
   for (const jobConfig of JOBS_TO_CREATE) {
     try {
       const jobId = await createCronJob(cronApiKey, githubPat, dispatchUrl, jobConfig, repoName);
       console.log(`✅ Created "${repoName} - ${jobConfig.title}" → Job ID: ${jobId}`);
     } catch (err) {
+      failedCount++;
       console.error(`❌ Failed to create "${jobConfig.title}": ${err.message}`);
     }
+    // Pace API calls to respect cron-job.org rate limits
+    await sleep(1500);
+  }
+
+  if (failedCount > 0) {
+    console.error(`\n❌ Setup completed with ${failedCount} failed job(s). Please verify API keys or check rate limits.`);
+    process.exit(1);
   }
 
   console.log('\n🎉 Setup complete! All 4 cron jobs are active on cron-job.org.');
