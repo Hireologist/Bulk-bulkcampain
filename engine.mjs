@@ -846,6 +846,7 @@ export async function runInboxChecker() {
               if (rIdx !== -1) {
                 rows[rIdx][col['Sent Status']] = 'bounced';
                 rows[rIdx][col['Follow up']] = 'Done';
+                rows[rIdx][col['Date Sent']] = new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' });
                 rows[rIdx][col['Time']] = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: true });
 
                 await sheets.spreadsheets.values.update({
@@ -873,6 +874,7 @@ export async function runInboxChecker() {
 
             rows[rIdx][col['Sent Status']] = 'replied';
             rows[rIdx][col['Follow up']] = 'Done';
+            rows[rIdx][col['Date Sent']] = new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' });
             if (col['Next Follow Up Date'] !== undefined) {
               rows[rIdx][col['Next Follow Up Date']] = sentiment;
             }
@@ -935,6 +937,29 @@ export async function runInboxChecker() {
   }
 }
 
+// Normalize dates to DD/MM/YYYY for strict matching
+export function normalizeDate(dateStr) {
+  if (!dateStr) return '';
+  const clean = String(dateStr).trim().split('T')[0];
+  // Match DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
+  const dmyMatch = clean.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})$/);
+  if (dmyMatch) {
+    const day = String(parseInt(dmyMatch[1], 10)).padStart(2, '0');
+    const month = String(parseInt(dmyMatch[2], 10)).padStart(2, '0');
+    const year = dmyMatch[3];
+    return `${day}/${month}/${year}`;
+  }
+  // Match YYYY-MM-DD
+  const ymdMatch = clean.match(/^(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})$/);
+  if (ymdMatch) {
+    const year = ymdMatch[1];
+    const month = String(parseInt(ymdMatch[2], 10)).padStart(2, '0');
+    const day = String(parseInt(ymdMatch[3], 10)).padStart(2, '0');
+    return `${day}/${month}/${year}`;
+  }
+  return clean;
+}
+
 // ============================================================================
 // 📊 4. DAILY DISCORD ANALYTICS DIGEST
 // ============================================================================
@@ -949,7 +974,7 @@ export async function generateDailyDigest() {
   const [headers, ...rows] = detailsRes.data.values || [];
   const col = Object.fromEntries(headers.map((h, i) => [h.trim(), i]));
 
-  const todayIST = new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' });
+  const todayIST = normalizeDate(new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' }));
   const formattedDateStr = new Date().toLocaleDateString('en-GB', {
     timeZone: 'Asia/Kolkata',
     day: '2-digit',
@@ -966,27 +991,33 @@ export async function generateDailyDigest() {
   let negativeCount = 0;
 
   for (const row of rows) {
-    const sentDate = (row[col['Date Sent']] || '').trim();
+    const rawSentDate = (row[col['Date Sent']] || '').trim();
+    const sentDate = normalizeDate(rawSentDate);
     const sentStatus = (row[col['Sent Status']] || '').trim().toLowerCase();
     const followUpCount = parseInt(row[col['Follow Up Count']] || '0', 10);
     const sentiment = (row[col['Next Follow Up Date']] || '').trim().toUpperCase();
 
+    // STRICT FILTER: Only count leads that have TODAY's date in 'Date Sent' column
+    if (sentDate !== todayIST) {
+      continue;
+    }
+
     // Cold outreach sent today
-    if (sentDate === todayIST && followUpCount === 0 && (sentStatus === 'sent' || sentStatus === 'replied')) {
+    if (followUpCount === 0 && (sentStatus === 'sent' || sentStatus === 'replied')) {
       coldSentToday++;
     }
 
     // Follow-ups sent today
-    if (sentDate === todayIST && followUpCount > 0) {
+    if (followUpCount > 0 && (sentStatus === 'sent' || sentStatus === 'replied')) {
       followupsSentToday++;
     }
 
-    // Bounces
+    // Bounces today
     if (sentStatus === 'bounced') {
       bouncesTotal++;
     }
 
-    // Replies & Sentiment breakdown
+    // Replies received today
     if (sentStatus === 'replied') {
       repliesTotal++;
       if (sentiment.includes('POSITIVE')) positiveCount++;
