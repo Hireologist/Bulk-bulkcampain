@@ -192,12 +192,18 @@ If you see `GitHub Dispatch Error: Resource not accessible by personal access to
 - Run `npm start` in your terminal.
 - Open `http://localhost:3000` in your browser.
 
-### Option C: Automatic GitHub Actions Schedule
-The workflow in `.github/workflows/outreach.yml` runs automatically on a scheduled cron:
-- 📤 **Cold Outreach**: Mon-Sat at 10:00 AM IST (`04:30 UTC`)
-- 🔁 **Follow-Ups**: Mon-Sat at 10:30 AM IST (`05:00 UTC`)
-- 📥 **Inbox Checker**: Every 30 minutes 24/7
-- 📊 **Daily Digest**: Mon-Sat at 6:30 PM IST (`13:00 UTC`)
+### Option C: Reliable Cloud Automation & Webhook Scheduling (cron-job.org)
+GitHub Actions native `schedule` triggers often experience queue delays or dropped runs during peak hours. For 100% on-time execution, trigger workflows via **[cron-job.org](https://cron-job.org)** using GitHub's `workflow_dispatch` API:
+
+1. **Get a GitHub PAT**: Generate a classic Personal Access Token with `repo` / `workflow` permissions at [github.com/settings/tokens](https://github.com/settings/tokens).
+2. **Setup cron-job.org**: Create free jobs pointing to:
+   `https://api.github.com/repos/<YOUR_USERNAME>/<YOUR_REPO_NAME>/actions/workflows/outreach.yml/dispatches`
+3. **HTTP Headers**: Add `Authorization: Bearer <YOUR_PAT>`, `Accept: application/vnd.github+json`, `User-Agent: cron-job-org`, `Content-Type: application/json`.
+4. **Request Payload**:
+   ```json
+   { "ref": "main", "inputs": { "action": "followup" } }
+   ```
+👉 **For the complete step-by-step visual setup guide and exact cron schedules for all 4 jobs, read [`CRON_SETUP.md`](./CRON_SETUP.md).**
 
 ### Option D: Native Unit Test Suite (`npm test`)
 - Run `npm test` to execute the native `node:test` suite verifying MX domain lookups, IST cutoff calculations, template tag replacements, and sentiment logic.
