@@ -806,7 +806,7 @@ export async function runInboxChecker() {
       secure: true,
       auth: { user: inbox.smtp_user, pass: inbox.smtp_pass },
       logger: false,
-      socketTimeout: 30000,
+      socketTimeout: 60000,
       clientInfo: { name: 'UniversalOutreachBot' }
     });
 
@@ -935,13 +935,21 @@ export async function runInboxChecker() {
         }
       }
     } catch (e) {
-      console.error(`IMAP error for ${inbox.email}:`, e.message);
+      if (e.message && (e.message.includes('Connection not available') || e.message.includes('Socket timeout') || e.message.includes('closed'))) {
+        console.warn(`ℹ️ [IMAP Notice] ${inbox.email}: Connection closed (${e.message})`);
+      } else {
+        console.error(`IMAP error for ${inbox.email}:`, e.message);
+      }
     } finally {
       if (lock) {
         try { lock.release(); } catch (_) {}
       }
       try {
-        await client.logout();
+        if (client.usable || client.authenticated) {
+          await client.logout();
+        } else {
+          client.close();
+        }
       } catch (_) {
         try { client.close(); } catch (_) {}
       }
