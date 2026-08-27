@@ -30,6 +30,10 @@ Add these **4 headers** to every cron job:
 | `User-Agent` | `cron-job-org` |
 | `Content-Type` | `application/json` |
 
+### 4. Advanced / Connection Settings
+* **Request Timeout**: Set to **`30 seconds`** (or default `10s–30s`).  
+  *(Note: GitHub API responds instantly with `204 No Content` in under 1 second to acknowledge the trigger. cron-job.org does NOT need to wait for the entire outreach script to complete).*
+
 ---
 
 ## 📋 Job Configurations & Exact Timing Details
