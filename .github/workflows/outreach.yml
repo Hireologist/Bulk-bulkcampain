@@ -1,7 +1,7 @@
 name: Universal Outreach Engine
 
 concurrency:
-  group: outreach-${{ github.event.schedule || github.event.inputs.action || 'manual' }}
+  group: outreach-${{ inputs.action || github.event.client_payload.action || github.event_name }}
   cancel-in-progress: false
 
 permissions:
@@ -47,8 +47,8 @@ jobs:
     env:
       SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
       GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-      SCHEDULED_CRON: ${{ github.event.schedule }}
-      SELECTED_ACTION: ${{ github.event.inputs.action }}
+      SCHEDULED_CRON: ${{ github.event.client_payload.cron || '' }}
+      SELECTED_ACTION: ${{ inputs.action || github.event.inputs.action }}
 
     steps:
       - name: Checkout Code
