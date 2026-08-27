@@ -147,11 +147,29 @@ async function main() {
   let repoOwner = process.env.GITHUB_OWNER || (detectedGit ? detectedGit.owner : '');
   let repoName = process.env.GITHUB_REPO || (detectedGit ? detectedGit.repo : '');
 
+  if (process.env.GITHUB_REPOSITORY) {
+    const parts = process.env.GITHUB_REPOSITORY.split('/');
+    if (parts.length === 2) {
+      if (!repoOwner) repoOwner = parts[0];
+      if (!repoName) repoName = parts[1];
+    }
+  }
+
+  const isNonInteractive = !process.stdin.isTTY || process.env.CI === 'true';
+
   if (!repoOwner) {
+    if (isNonInteractive) {
+      console.error('❌ Error: GITHUB_OWNER or GITHUB_REPOSITORY env variable is required in non-interactive mode.');
+      process.exit(1);
+    }
     repoOwner = await prompt('👤 Enter your GitHub Username/Owner: ');
   }
 
   if (!repoName) {
+    if (isNonInteractive) {
+      console.error('❌ Error: GITHUB_REPO or GITHUB_REPOSITORY env variable is required in non-interactive mode.');
+      process.exit(1);
+    }
     repoName = await prompt('📦 Enter your GitHub Repository Name: ');
   }
 
@@ -165,10 +183,18 @@ async function main() {
   let githubPat = process.env.GITHUB_PAT || process.env.PAT;
 
   if (!cronApiKey) {
+    if (isNonInteractive) {
+      console.error('❌ Error: CRON_KEY or CRON_JOB_API_KEY environment variable / workflow input is required.');
+      process.exit(1);
+    }
     cronApiKey = await prompt('🔑 Enter your cron-job.org API Key (from console.cron-job.org → Settings): ');
   }
 
   if (!githubPat) {
+    if (isNonInteractive) {
+      console.error('❌ Error: GITHUB_PAT or PAT environment variable / workflow input is required.');
+      process.exit(1);
+    }
     githubPat = await prompt('🔑 Enter your GitHub Personal Access Token (PAT ghp_...): ');
   }
 

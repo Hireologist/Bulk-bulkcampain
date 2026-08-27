@@ -1,0 +1,35 @@
+name: ⚡ Provision Cron Jobs (cron-job.org)
+
+on:
+  workflow_dispatch:
+    inputs:
+      cron_api_key:
+        description: 'cron-job.org API Key (or leave blank if repository secret CRON_KEY is set)'
+        required: false
+        type: string
+      github_pat:
+        description: 'GitHub PAT with repo scope (or leave blank if repository secret GITHUB_PAT is set)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  provision-cron-jobs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Run Cron Auto-Setup Script
+        run: node setup-cron.mjs
+        env:
+          CRON_KEY: ${{ inputs.cron_api_key || secrets.CRON_KEY || secrets.CRON_JOB_API_KEY }}
+          GITHUB_PAT: ${{ inputs.github_pat || secrets.GITHUB_PAT || secrets.PAT || secrets.GH_PAT }}
+          GITHUB_REPOSITORY: ${{ github.repository }}

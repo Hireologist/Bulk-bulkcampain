@@ -200,13 +200,16 @@ GitHub Actions native `schedule` triggers often experience queue delays or dropp
 #### ⚡ 1-Click Automated Setup via API (Recommended)
 You can automatically provision all 4 required cron jobs in seconds without manually typing settings in the dashboard:
 
-```bash
-# Interactive setup:
-node setup-cron.mjs
+- **Option 1: Directly via GitHub Actions (Zero Local Setup)**
+  Go to your GitHub repo → **Actions** tab → **⚡ Provision Cron Jobs (cron-job.org)** → **Run workflow** (enter your API key & PAT or use repository secrets `CRON_KEY` and `GITHUB_PAT`).
+- **Option 2: Locally via Terminal**
+  ```bash
+  # Interactive setup:
+  node setup-cron.mjs
 
-# Or pass API keys directly:
-CRON_KEY="your_cron_job_api_key" GITHUB_PAT="your_github_pat" node setup-cron.mjs
-```
+  # Or pass API keys directly:
+  CRON_KEY="your_cron_job_api_key" GITHUB_PAT="your_github_pat" node setup-cron.mjs
+  ```
 
 The script auto-detects your repository name/owner and creates all 4 jobs with exact headers, schedules, and payloads!
 

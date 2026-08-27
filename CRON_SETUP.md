@@ -6,8 +6,15 @@ This document contains exact, step-by-step setup instructions for triggering **S
 
 ## ⚡ 1-Click Automated Setup via API (Recommended)
 
-You can automatically create all 4 cron jobs in **seconds** without manually typing settings in the dashboard using the included script `setup-cron.mjs`:
+You can automatically create all 4 cron jobs in **seconds** without manually typing settings in the dashboard:
 
+### Option A: Trigger via GitHub Actions Workflow (Zero Local Setup)
+1. Go to your GitHub repository → **Actions** tab.
+2. Select **⚡ Provision Cron Jobs (cron-job.org)** from the left sidebar.
+3. Click **Run workflow**, enter your **cron-job.org API Key** and **GitHub PAT** (or use repo secrets `CRON_KEY` and `GITHUB_PAT`), then click **Run workflow**.
+4. GitHub Actions will execute `setup-cron.mjs` and provision all 4 jobs automatically!
+
+### Option B: Run Locally via Node.js
 1. Get your **cron-job.org API Key**: Log in at [console.cron-job.org](https://console.cron-job.org/) → **Settings** → **API Keys** → **Create API key**.
 2. Run the script:
    ```bash
