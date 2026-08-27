@@ -2,9 +2,12 @@
 
 An automated, serverless cold email outreach engine built with **Node.js**, **Google Sheets API**, **IMAP/SMTP**, **GitHub Actions**, **Discord Webhooks**, and a **100% Online GitHub Pages Web Dashboard**.
 
+> ⚡ **In a hurry?** Follow the [**10-Minute Rapid Setup Guide (SETUP_10MIN.md)**](file:///d:/Codinf%20projets/Sheet-bot/SETUP_10MIN.md) to get the whole system live in 6 quick steps.
+
 ---
 
 ## 📋 Table of Contents
+0. [⚡ 10-Minute Rapid Setup Guide](./SETUP_10MIN.md)
 1. [Key Features](#-key-features)
 2. [How to Import & Setup Your Own GitHub Repo](#-how-to-import--setup-your-own-github-repo)
 3. [Online Web Dashboard (GitHub Pages)](#-online-web-dashboard-github-pages)
