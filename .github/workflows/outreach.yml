@@ -8,11 +8,13 @@ permissions:
   contents: read
 
 on:
-  schedule:
-    - cron: '0 4 * * 1-6'     # 1. Follow-up Engine (09:30 AM IST)
-    - cron: '30 4 * * 1-6'    # 2. Cold Outreach (10:00 AM IST)
-    - cron: '0 13 * * 1-6'    # 3. Daily Digest (06:30 PM IST)
-    - cron: '7,22,37,52 * * * *'    # 4. Inbox Checker (Every 15 mins off-peak)
+# Note: Internal GitHub schedule is disabled to avoid queue delays and duplicate execution.
+  # External automation is handled reliably via cron-job.org or API dispatch (see CRON_SETUP.md).
+  # schedule:
+  #   - cron: '0 4 * * 1-6'     # 1. Follow-up Engine (09:30 AM IST)
+  #   - cron: '30 4 * * 1-6'    # 2. Cold Outreach (10:00 AM IST)
+  #   - cron: '0 13 * * 1-6'    # 3. Daily Digest (06:30 PM IST)
+  #   - cron: '7,22,37,52 * * * *'    # 4. Inbox Checker (Every 15 mins off-peak)
 
   repository_dispatch:
     types: [send_single_email]
