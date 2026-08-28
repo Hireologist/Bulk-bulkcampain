@@ -56,7 +56,8 @@ export const COMPLETE_SCHEMA = {
       ['11. Deliverability & DNS Health', 'Check "Domain_Health" for live SPF and DMARC status. Audited automatically every week.', 'Domains are automatically extracted from the "Inboxes" tab.'],
       ['12. Suppression & Unsubscribe', 'Check "Suppressed" tab. Contains all unsubscribed and negative reply leads.', 'Suppressed leads are permanently blocked from all future campaigns.'],
       ['13. Dead-Letter Failed Sends', 'Check "Failed_Sends" tab. Captures any send that failed after 3 exponential backoff attempts with exact error and campaign tag.', 'Helps you troubleshoot mailbox or network issues.'],
-      ['14. Status Legend', 'SENT = Cold email sent\nreplied = Prospect replied (Sequence paused)\nbounced = Invalid email (Sequence paused)\nsuppressed = Unsubscribed / Blocked\nDone = Follow-up sequence completed', 'Updated automatically by the bot in real time.']
+      ['14. Status Legend', 'SENT = Cold email sent\nreplied = Prospect replied (Sequence paused)\nbounced = Invalid email (Sequence paused)\nsuppressed = Unsubscribed / Blocked\nDone = Follow-up sequence completed', 'Updated automatically by the bot in real time.'],
+      ['15. GCC Leadership Radar', 'In "Settings" tab: set gcc_radar_enabled = "TRUE" to run radar, and discord_gcc_radar_webhook to your separate Discord webhook URL.', 'Monitors GCC setups, office space leases, and startup funding daily at 09:00 AM IST via cron-job.org.']
     ]
   },
   'Details': {
