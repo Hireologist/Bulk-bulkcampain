@@ -82,6 +82,8 @@ function createOutreachSystem(forceReset = false) {
         ['cron_followup_time', '09:30', 'Time to trigger Follow-up Engine on cron-job.org (HH:MM in 24hr format)'],
         ['cron_inbox_minutes', '15', 'Interval in minutes for Inbox Checker (e.g. 15 for every 15 mins)'],
         ['cron_digest_time', '18:30', 'Time to trigger Daily Discord Digest (HH:MM in 24hr format)'],
+        ['cron_diagnostic_schedule', 'daily_0900', 'Diagnostic Schedule: "manual" (on-demand), "daily_0900" (Daily at 09:00 AM before outreach), or "weekly_monday_0830" (Mondays at 08:30 AM)'],
+        ['cron_diagnostic_time', '09:00', 'Time to trigger Campaign Pre-Flight Diagnostic (HH:MM in 24hr format)'],
         ['cron_days', 'Mon-Sat', 'Days to run automation on cron-job.org (Mon-Sat, Mon-Fri, or All)'],
         ['cron_api_key', '', 'Optional: your cron-job.org API Key (auto-read by setup-cron script)'],
         ['github_pat', '', 'Optional: your GitHub Personal Access Token (auto-read by setup-cron script)'],
