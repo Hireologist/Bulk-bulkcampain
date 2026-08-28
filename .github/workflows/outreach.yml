@@ -26,7 +26,7 @@ on:
         required: true
         default: 'inbox'
         type: choice
-        options: [outreach, followup, inbox, digest, single_lead]
+        options: [outreach, followup, inbox, digest, warmup, single_lead]
       email:
         description: 'Recipient Email (for single_lead)'
         required: false

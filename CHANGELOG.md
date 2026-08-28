@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-08-28
+
+### Added
+- **1-Click Auto-Provisioning Engine**:
+  - `scripts/auto-setup.mjs` & `.github/workflows/setup_engine.yml`: Automatically provisions all 11 Google Sheet tabs, headers, sample leads, default settings, and syncs cron jobs with zero manual spreadsheet editing.
+- **Spintax (Spin Syntax) Engine**:
+  - `src/spintax.mjs`: Standalone Spintax parser supporting `{{Hi|Hey|Hello}}` and `{{option 1 | option 2}}` across subject lines and email bodies.
+  - Comprehensive unit and 200-iteration simulation tests (`test/spintax.test.mjs`).
+- **Campaign Active / Pause Control**:
+  - Added master `campaign_active = TRUE/FALSE` switch and granular `outreach_active` / `followup_active` settings.
+- **High-Speed Bulk Campaign Mode**:
+  - Added `throttle_mode = 'bulk'` to bypass adaptive slowdown penalties for 1500+ blasts.
+- **Intelligent Inbox-Alias Routing**:
+  - Explicit mailbox assignment via `inbox_email` in `Aliases` tab and automatic domain isolation.
+- **Dynamic Cron Timezones & Schedules**:
+  - Non-destructive diffing against `cron-job.org` with dynamic timezone (`cron_timezone`) and custom send times (`cron_outreach_time`, `cron_followup_time`).
+- **Discord Notification Toggles**:
+  - Added `discord_alerts_enabled` and `discord_domain_alerts_enabled` in `Settings`.
+
 ## [1.0.0] - 2026-08-28
 
 ### Added
