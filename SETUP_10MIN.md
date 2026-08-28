@@ -114,6 +114,9 @@ Compose your cold email pitch using dynamic template tags and **Spintax rotation
 | **`discord_domain_alerts_enabled`**| `TRUE` | Set to `TRUE` to receive Discord alerts for domain DNS failures, or `FALSE` to mute them. |
 | **`discord_updates_webhook`**| `https://...` | Webhook URL for run start/stop alerts and daily digests. |
 | **`discord_positive_webhook`**| `https://...` | Webhook URL for instant alerts when a positive lead replies. |
+| **`gcc_radar_enabled`**| `TRUE` | Master switch for GCC Leadership Radar (`TRUE` = Enabled, `FALSE` = Muted). |
+| **`discord_gcc_radar_webhook`**| `https://...` | Dedicated Discord channel Webhook URL for GCC Leadership Radar alerts. |
+| **`cron_gcc_radar_time`**| `09:00` | Time to trigger GCC Leadership Radar on cron-job.org (`HH:MM`). |
 
 ---
 

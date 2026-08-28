@@ -49,6 +49,7 @@ describe('🚀 New User Onboarding & Auto-Provisioning Simulation Test', () => {
     assert.strictEqual(settingsMap.cron_diagnostic_schedule, 'daily_0900');
     assert.strictEqual(settingsMap.discord_alerts_enabled, 'TRUE');
     assert.strictEqual(settingsMap.discord_domain_alerts_enabled, 'TRUE');
+    assert.strictEqual(settingsMap.gcc_radar_enabled, 'TRUE');
   });
 
   test('Templates schema sample data contains valid spintax syntax', () => {
@@ -69,7 +70,7 @@ describe('🚀 New User Onboarding & Auto-Provisioning Simulation Test', () => {
     const settingsMap = Object.fromEntries(COMPLETE_SCHEMA['Settings'].sampleData.map(r => [r[0], r[1]]));
     const jobs = parseScheduleFromSettings(settingsMap);
 
-    assert.strictEqual(jobs.length, 6);
+    assert.strictEqual(jobs.length, 7);
 
     for (const job of jobs) {
       const payload = buildJobPayload('Outreach-Bot', simulatedDispatchUrl, simulatedPat, job);
