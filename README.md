@@ -10,14 +10,15 @@ An automated, 100% free, serverless cold email outreach engine built with **Node
 
 ## 📋 Table of Contents
 0. [⚡ 1-Click Rapid Setup Guide](./SETUP_10MIN.md)
-1. [Key Features](#-key-features)
-2. [How to Import & Setup Your Own GitHub Repo](#-how-to-import--setup-your-own-github-repo)
-3. [Online Web Dashboard (GitHub Pages)](#-online-web-dashboard-github-pages)
-4. [Prerequisites & Requirements](#-prerequisites--requirements)
-5. [Step-by-Step Initial Setup (Only 2 Secrets)](#-step-by-step-initial-setup)
-6. [Dynamic Cron Schedules & Timezones in Google Sheets](#-dynamic-cron-schedules)
-7. [Running & Testing the Engine](#-running--testing-the-engine)
-8. [Google Sheets Architecture & Color-Coded Tabs](#-google-sheets-architecture--color-coded-tabs)
+1. [🧪 Step-by-Step Manual Testing Guide](./docs/MANUAL_TESTING.md)
+2. [Key Features](#-key-features)
+3. [How to Import & Setup Your Own GitHub Repo](#-how-to-import--setup-your-own-github-repo)
+4. [Online Web Dashboard (GitHub Pages)](#-online-web-dashboard-github-pages)
+5. [Prerequisites & Requirements](#-prerequisites--requirements)
+6. [Step-by-Step Initial Setup (Only 2 Secrets)](#-step-by-step-initial-setup)
+7. [Dynamic Cron Schedules & Timezones in Google Sheets](#-dynamic-cron-schedules)
+8. [Running & Testing the Engine](#-running--testing-the-engine)
+9. [Google Sheets Architecture & Color-Coded Tabs](#-google-sheets-architecture--color-coded-tabs)
 
 ---
 
