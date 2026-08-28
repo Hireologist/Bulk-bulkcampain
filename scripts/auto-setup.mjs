@@ -43,13 +43,19 @@ const COMPLETE_SCHEMA = {
     headers: ['Section / Step', 'Instructions & Rules', 'Important Notes'],
     sampleData: [
       ['1. Adding Leads', 'Go to "Details" tab. Add full_name, email, company_name, location. Leave "Sent Status", "Follow up", and "Time" BLANK.', 'The bot only sends emails to rows where Sent Status is completely empty.'],
-      ['2. Aliases & Senders', 'Add or remove aliases in "Aliases" tab (e.g. Pooja, Neha, Urvashi). Toggle is_active to TRUE/FALSE.', 'The bot randomly rotates active aliases for the "From" header while using your authenticated SMTP inbox.'],
-      ['3. Email Inboxes & Warmup', 'Add your primary SMTP/IMAP login in "Inboxes" tab. Set warmup_enabled to TRUE for automatic peer warmup.', 'Set daily_limit (e.g. 50). The bot will never exceed this number per inbox per day.'],
-      ['4. Cold Templates & Footer', 'Edit pitches in "Templates" tab. Use tags: {{full_name}}, {{company_name}}, {{location}}, {{other_locations}}, {{clients}}, {{Date}}.', 'The bot automatically injects legal business details and one-click unsubscribe links.'],
-      ['5. Follow-ups', 'Configure intervals and messages in "Followup_Templates" tab.', 'Follow-ups automatically stop the moment a prospect replies or if an email bounces.'],
-      ['6. Send Mode (Live vs Draft)', 'In "Settings" tab: send_mode = "auto" (sends live) or "review" (saves to IMAP Drafts).', 'Draft mode allows you to review personalized emails in your inbox Drafts before sending.'],
-      ['7. Deliverability & Suppression', 'Check "Domain_Health" for SPF/DMARC status, "Suppressed" for unsubscribed emails, and "Inbox_Stats" for reputation.', 'Audited automatically by GitHub Actions.'],
-      ['8. Status Legend', 'SENT = Cold email sent\nreplied = Prospect replied (Sequence paused)\nbounced = Invalid email (Sequence paused)\nsuppressed = Unsubscribed / Blocked\nDone = Follow-up sequence completed', 'Updated automatically by the bot in real time.']
+      ['2. Aliases & Senders', 'Add or remove aliases in "Aliases" tab. Assign to specific inboxes via "inbox_email" or leave blank for auto-domain matching. Toggle is_active to TRUE/FALSE.', 'The bot rotates active aliases for the "From" and "Reply-To" headers while authenticating through your mailbox.'],
+      ['3. Email Inboxes & Warmup', 'Add your primary SMTP/IMAP credentials in "Inboxes" tab. Set warmup_enabled to TRUE for automatic peer warmup.', 'Set daily_limit (e.g. 50). The bot will never exceed this number per inbox per day.'],
+      ['4. Cold Templates & Spintax', 'Edit pitches and subject lines in "Templates" tab. Use tags: {{full_name}}, {{company_name}}, {{location}}, {{other_locations}}, {{clients}}, {{Date}}, {{business_name}}, {{business_address}}.\n\nUse Spintax: {{Hi|Hey|Hello}} or {{option 1 | option 2}} for high open rates.', 'The bot automatically injects legal business details and one-click unsubscribe links.'],
+      ['5. Multi-Touch Follow-ups', 'Configure intervals and messages in "Followup_Templates" tab (e.g. Touch 1, 2, 3 with Days_Until_Next).', 'Guaranteed to send from the exact same alias and thread. Follow-ups stop the moment a reply or bounce occurs.'],
+      ['6. Campaign Active Toggle', 'In "Settings" tab: set campaign_active = "TRUE" to run outreach, or "FALSE" to pause all campaigns safely.', 'You can also pause specifically with outreach_active = "FALSE" or followup_active = "FALSE".'],
+      ['7. High-Speed Bulk Mode', 'In "Settings" tab: set throttle_mode = "adaptive" (safe deliverability shield) or "bulk" (high-speed fixed delay for 1500+ blasts).', 'Adaptive mode slows down on bounces/complaints. Bulk mode ignores penalties for maximum velocity.'],
+      ['8. Send Mode (Live vs Draft)', 'In "Settings" tab: send_mode = "auto" (sends live) or "review" (saves to IMAP Drafts).', 'Draft mode allows you to review personalized emails in your inbox Drafts before sending.'],
+      ['9. Dynamic Schedules & Timezones', 'Set your timezone in "Settings" tab (cron_timezone = "Asia/Kolkata", "America/New_York", etc.) and custom send times (cron_outreach_time = "10:00").', 'Cron-job.org syncs automatically with zero duplicate timers.'],
+      ['10. Discord Alerts & Muting', 'In "Settings" tab: set discord_alerts_enabled = "TRUE" / "FALSE" or discord_domain_alerts_enabled = "TRUE" / "FALSE".', 'Easily mute Discord notifications whenever you want.'],
+      ['11. Deliverability & DNS Health', 'Check "Domain_Health" for live SPF and DMARC status. Audited automatically every week.', 'Domains are automatically extracted from the "Inboxes" tab.'],
+      ['12. Suppression & Unsubscribe', 'Check "Suppressed" tab. Contains all unsubscribed and negative reply leads.', 'Suppressed leads are permanently blocked from all future campaigns.'],
+      ['13. Dead-Letter Failed Sends', 'Check "Failed_Sends" tab. Captures any send that failed after 3 exponential backoff attempts with exact error and campaign tag.', 'Helps you troubleshoot mailbox or network issues.'],
+      ['14. Status Legend', 'SENT = Cold email sent\nreplied = Prospect replied (Sequence paused)\nbounced = Invalid email (Sequence paused)\nsuppressed = Unsubscribed / Blocked\nDone = Follow-up sequence completed', 'Updated automatically by the bot in real time.']
     ]
   },
   'Details': {
