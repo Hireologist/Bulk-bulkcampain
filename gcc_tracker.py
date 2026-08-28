@@ -135,6 +135,21 @@ def fetch_url_text(url):
         print(f"⚠️ urllib error fetching {url}: {e}")
         return ""
 
+def is_url_date_recent(url):
+    # Check if URL contains explicit date path like /2026/08/28/ or /2026-08-28/
+    m = re.search(r'/(202[4-9])[-/](0[1-9]|1[0-2])[-/](0[1-9]|[12][0-9]|3[01])/', url)
+    if m:
+        try:
+            year, month, day = int(m.group(1)), int(m.group(2)), int(m.group(3))
+            pub_date = datetime(year, month, day, tzinfo=timezone.utc)
+            now = datetime.now(timezone.utc)
+            diff_days = (now - pub_date).total_seconds() / 86400
+            if diff_days > 1.5:  # older than ~36 hours
+                return False
+        except Exception:
+            pass
+    return True
+
 def scrape_direct_webpage(site_info):
     url = site_info["url"]
     domain = site_info["domain"]
@@ -153,7 +168,8 @@ def scrape_direct_webpage(site_info):
             if re.search(pattern, href) and len(title) > 25:
                 if not href.startswith("http"):
                     href = f"https://{domain}" + href
-                articles.append({"title": title, "summary": "", "link": href})
+                if is_url_date_recent(href):
+                    articles.append({"title": title, "summary": "", "link": href})
     else:
         # Regex fallback for link and title extraction
         matches = re.findall(r'<a\s+(?:[^>]*?\s+)?href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', html, re.DOTALL | re.IGNORECASE)
@@ -162,7 +178,8 @@ def scrape_direct_webpage(site_info):
             if re.search(pattern, href) and len(title) > 25:
                 if not href.startswith("http"):
                     href = f"https://{domain}" + href
-                articles.append({"title": title, "summary": "", "link": href})
+                if is_url_date_recent(href):
+                    articles.append({"title": title, "summary": "", "link": href})
 
     unique_articles = []
     seen = set()
@@ -171,7 +188,7 @@ def scrape_direct_webpage(site_info):
             seen.add(art["link"])
             unique_articles.append(art)
             
-    print(f"📰 Scraped {len(unique_articles)} live stories directly from {domain}")
+    print(f"📰 Scraped {len(unique_articles)} fresh (24h) live stories directly from {domain}")
     return unique_articles[:15]
 
 def search_google_news_rss(query):
@@ -440,6 +457,9 @@ def analyze_story_with_ai(title, summary, link):
     prompt = f"""Extract structured GCC or tech company expansion/funding details from this news story:
 Title: {title}
 Summary: {summary}
+
+CRITICAL FRESHNESS RULE:
+Set "is_relevant": false if the article refers to past old funding rounds, old press releases, or historical news older than 24 hours. Only set "is_relevant": true if it is fresh tech funding or new GCC expansion news from the last 24 hours.
 
 Respond ONLY with raw JSON in this format:
 {{
