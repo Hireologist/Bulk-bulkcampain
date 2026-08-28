@@ -1,172 +1,126 @@
-# ⚡ 10-Minute Rapid Setup Guide for Sheet-Bot
+# ⚡ Complete Zero-Effort Setup & Operational Guide for Sheet-Bot
 
-> **Target:** Go from zero to a 100% automated, serverless cold outreach engine with live web dashboard and cron scheduling in **under 10 minutes**.
-
----
-
-## ⏱️ Timeline Overview
-
-```
-[00:00 - 02:00] ── Step 1: Google Sheet 1-Click Generator
-[02:00 - 04:00] ── Step 2: Google Cloud Service Account
-[04:00 - 06:00] ── Step 3: Inbox Credentials & Settings
-[06:00 - 07:30] ── Step 4: GitHub Secrets & Permissions
-[07:30 - 08:30] ── Step 5: Enable Web Dashboard (GitHub Pages)
-[08:30 - 10:00] ── Step 6: 1-Click Cron Provisioning & First Test Run
-```
+> **Target:** Go from a blank Google Sheet to a 100% automated, production-grade, serverless cold email infrastructure with automated crons, deliverability safeguards, and AI reply analysis in **under 3 minutes**.
 
 ---
 
-## 🛠️ Prerequisites (Have These Open in Your Browser Tabs)
-1. 🌐 [Google Sheets](https://sheets.new)
-2. ☁️ [Google Cloud Console](https://console.cloud.google.com/)
-3. 🐙 [GitHub.com](https://github.com/)
-4. 🤖 [Groq Console](https://console.groq.com/keys) *(Optional for AI replies — Free)*
-5. ⏱️ [Cron-Job.org](https://cron-job.org) *(Free account for reliable timers)*
+## 🚀 3-Minute 1-Click Setup Walkthrough
+
+### Step 1: Create a Blank Google Sheet (30 Seconds)
+1. Open **[sheets.new](https://sheets.new)** in your browser. Name it `Outreach Master`.
+2. Copy your **Spreadsheet ID** from the browser URL bar:
+   `https://docs.google.com/spreadsheets/d/`**`1a2b3c4d5e...`**`/edit`
+   *(Save this string).*
 
 ---
 
-## 🚀 Step 1: Google Sheet 1-Click Generator (2 Mins)
-
-1. Open **[sheets.new](https://sheets.new)** to create a blank spreadsheet. Name it `Outreach Engine Master`.
-2. In the top menu, click **Extensions** > **Apps Script**.
-3. Delete any default code in the editor, copy the entire code from [`Code.gs`](./Code.gs), and paste it.
-4. Click **Save** (💾) and close the Apps Script tab.
-5. **Reload your Google Sheet** in the browser.
-6. A new menu **`⚡ Outreach Bot`** will appear in the top bar. Click **`⚡ Outreach Bot`** > **`🛠️ Rebuild / Reset All Sheets`**.
-7. Authorize the script when prompted by Google.
-   > *The script will instantly build all 11 color-coded tabs with headers, sample leads, and formulas.*
-8. **Make Sheet Readable by Web Dashboard:**
-   - Click the green **Share** button (top right).
-   - Under *General access*, change to **"Anyone with the link can view"**.
-9. **Copy your Spreadsheet ID:**
-   - From your browser URL: `https://docs.google.com/spreadsheets/d/`**`1a2b3c4d5e...`**`/edit`
-   - Copy the string between `/d/` and `/edit`. Save this string for later.
-
----
-
-## ☁️ Step 2: Google Cloud Service Account (2 Mins)
-
-1. Go to **[Google Cloud Console](https://console.cloud.google.com/)** and create a new project (e.g., `Sheet-Outreach-Bot`).
+### Step 2: Download Google Service Account Key (60 Seconds)
+1. Go to **[Google Cloud Console](https://console.cloud.google.com/)** and create a project (e.g. `sheet-outreach-bot`).
 2. Go to **APIs & Services** > **Library**, search for **Google Sheets API**, and click **Enable**.
-3. Go to **APIs & Services** > **Credentials** > click **+ CREATE CREDENTIALS** > **Service Account**.
-   - Name: `sheet-bot`
-   - Click **Create and Continue** > **Done**.
-4. Click on your newly created Service Account email:
-   - Go to the **Keys** tab > **Add Key** > **Create new key** > Choose **JSON** > Click **Create**.
-   - A `.json` file will automatically download to your computer.
-5. **Grant Editor Access to Sheet:**
-   - Open the downloaded JSON file in Notepad or VS Code.
-   - Copy the `client_email` value (e.g., `sheet-bot@project.iam.gserviceaccount.com`).
-   - Go back to your Google Sheet, click **Share**, paste this email address, set role to **Editor**, and click **Send**.
+3. Go to **APIs & Services** > **Credentials** > **+ CREATE CREDENTIALS** > **Service Account** (Name: `sheet-bot`, click **Create & Continue** > **Done**).
+4. Click on the created service account email:
+   - Go to the **Keys** tab > **Add Key** > **Create new key** > **JSON** > **Create**.
+   - A `.json` key file will download.
+5. **Share Sheet with Service Account**:
+   - Open the downloaded JSON file, copy the `client_email` (e.g. `sheet-bot@project.iam.gserviceaccount.com`).
+   - Open your Google Sheet, click the green **Share** button, paste the email, and give it **Editor** permissions.
 
 ---
 
-## 📧 Step 3: Inbox Credentials & Settings (2 Mins)
+### Step 3: Add the 2 Secrets & Run 1-Click Auto-Setup (60 Seconds)
+1. In your GitHub repository, navigate to **Settings** > **Secrets and variables** > **Actions** > click **New repository secret**:
+   - **`SPREADSHEET_ID`**: Paste your Spreadsheet ID from Step 1.
+   - **`GOOGLE_SERVICE_ACCOUNT_JSON`**: Paste the entire content of the downloaded JSON file.
+2. Go to the **Actions** tab in GitHub:
+   - Select **`🚀 1-Click Complete Auto-Setup & Provisioning`** on the left.
+   - Click **Run workflow**.
 
-### A. Generate Gmail / Google Workspace App Password
-1. Go to your **[Google Account Security](https://myaccount.google.com/security)**.
-2. Ensure **2-Step Verification** is turned **ON**.
-3. Search for **App Passwords** in the top search bar.
-4. Create an App Password with name `SheetBot` and copy the 16-character code (e.g., `abcd efgh ijkl mnop`).
-
-### B. Fill in `Inboxes` Tab in Google Sheet
-Open the **`Inboxes`** tab and fill row 2:
-- `email`: `your_outreach_email@domain.com`
-- `display_name`: `Your Name | Company`
-- `smtp_host`: `smtp.gmail.com`
-- `smtp_user`: `your_outreach_email@domain.com`
-- `smtp_pass`: `abcdefghijklmnop` *(16-character app password with no spaces)*
-- `imap_host`: `imap.gmail.com`
-- `daily_limit`: `50`
-- `is_active`: `TRUE`
-
-### C. Configure Settings & Discord (Optional)
-Open the **`Settings`** tab:
-- `groq_api_key`: Paste key from [console.groq.com/keys](https://console.groq.com/keys) *(for instant AI sentiment classification)*
-- `discord_updates_webhook`: Discord webhook URL for batch alerts & 6:30 PM IST digests.
-- `discord_positive_webhook`: Discord webhook URL for positive lead alerts.
-- `cutoff_hour_ist`: `18` | `cutoff_minute_ist`: `30` | `max_emails_per_run`: `1000`
+> 🪄 **What happens automatically?**
+> The workflow connects to your sheet, creates **all 11 tabs**, injects all headers, sample data, formulas, and configurations, checks DNS records for your inboxes, and provisions all `cron-job.org` automation schedules!
 
 ---
 
-## 🐙 Step 4: GitHub Secrets & Permissions (1.5 Mins)
+## 📖 Comprehensive Operational Guide: How to Use Every Feature
 
-### A. Fork or Import the Repository
-- If not already done, Fork this repository to your GitHub account.
-
-### B. Enable Action Workflow Permissions
-1. Go to your repo on GitHub > **Settings** ⚙️ > **Actions** > **General**.
-2. Under **Workflow permissions**, select:
-   - ✅ **Read and write permissions**
-   - ✅ **Allow GitHub Actions to create and approve pull requests**
-3. Click **Save** 💾.
-
-### C. Add Repository Secrets
-1. In your repo, go to **Settings** > **Secrets and variables** > **Actions** > click **New repository secret**.
-2. Add these **2 secrets**:
-
-| Secret Name | Value |
-| :--- | :--- |
-| **`SPREADSHEET_ID`** | The Google Sheet ID from Step 1 (`1a2b3c4d5e...`). |
-| **`GOOGLE_SERVICE_ACCOUNT_JSON`** | The entire raw text content of the downloaded `.json` key file from Step 2. |
+### 1. 👥 Adding Leads (`Details` Tab)
+- Fill in: `full_name`, `email`, `company_name`, `location`.
+- Leave `Sent Status`, `Sent From`, `Date Sent`, `Time`, and `Follow up` **EMPTY**.
+- The engine automatically processes rows where `Sent Status` is empty.
+- When an email is sent, the status updates to `SENT`, then automatically to `replied` (if prospect replies) or `bounced` (if dead email).
 
 ---
 
-## 🌐 Step 5: Enable Web Dashboard (GitHub Pages) (1 Min)
-
-1. In your GitHub repo, go to **Settings** ⚙️ > **Pages**.
-2. Under **Build and deployment**:
-   - **Source**: `Deploy from a branch`
-   - **Branch**: `main`
-   - **Folder**: `/docs` (or `/ (root)`)
-3. Click **Save** 💾.
-4. Your live dashboard is now available at:
-   👉 **`https://<YOUR_GITHUB_USERNAME>.github.io/<YOUR_REPO_NAME>/`**
-5. Open your live dashboard URL:
-   - Click **Campaigns & Connect** (or Settings icon).
-   - Enter your **Spreadsheet ID** and a **GitHub Personal Access Token (PAT)** with `repo` / `workflow` permissions to allow 1-click cloud triggers directly from your browser!
+### 2. 📬 Inboxes & Peer-to-Peer Warmup (`Inboxes` Tab)
+Add your sending mailboxes with their credentials:
+- **`email`**: The mailbox address (e.g. `alex@yourdomain.com`).
+- **`smtp_host` / `smtp_port`**: `smtp.gmail.com` / `465` (SSL) or `587` (TLS).
+- **`smtp_user` / `smtp_pass`**: Email and App Password.
+- **`imap_host` / `imap_port`**: `imap.gmail.com` / `993` (for reply detection & draft mode).
+- **`daily_limit`**: Max sends per day for this inbox (e.g. `50`).
+- **`is_active`**: `TRUE` to enable sending.
+- **`warmup_enabled`**: Set to `TRUE` to enable automated peer warmup with other inboxes.
+- **`warmup_day`**: Current warmup day (ramps up +3 emails/day).
+- **`warmup_target_volume`**: Maximum daily warmup emails (e.g. `40`).
 
 ---
 
-## ⚡ Step 6: 1-Click Cron Setup & Live Test (1.5 Mins)
-
-### Option A: Automatic 1-Click Provisioning (Zero-CLI)
-1. Go to **[cron-job.org](https://console.cron-job.org/)** > **Settings** > **API Keys** > create and copy an API key.
-2. Go to your GitHub repo > **Actions** tab > click **⚡ Provision Cron Jobs (cron-job.org)**.
-3. Click **Run workflow**, enter your **Cron-Job API Key** and **GitHub PAT**, and click **Run workflow**.
-4. ✅ All 4 cron jobs (Follow-up 9:30 AM IST, Outreach 11:30 AM IST, Inbox Checker every 30m, Daily Digest 6:30 PM IST) are provisioned automatically!
-
-### Option B: Local Provisioning
-```bash
-CRON_KEY="your_cron_api_key" GITHUB_PAT="your_github_pat" node setup-cron.mjs
-```
+### 3. 🎭 Sender Aliases (`Aliases` Tab)
+Rotate realistic human sender names while using the same authenticated SMTP mailbox:
+- Set `alias_email` and `display_name` (e.g. `pooja@company.com`, `Pooja`).
+- Set `is_active` to `TRUE`. The bot randomly rotates active aliases on every cold outreach touch.
 
 ---
 
-## 🧪 Quick Test: Run Your First Task
-
-1. Go to the **Actions** tab in your GitHub repository.
-2. Click **Universal Cold Outreach Engine** in the left sidebar.
-3. Click **Run workflow** > Select task **`inbox`** or **`outreach`** > Click **Run workflow**.
-4. Open the running job to view real-time logs:
-   - ✅ Google Sheet connected
-   - ✅ DNS MX validation verified
-   - ✅ SMTP & IMAP handshake confirmed
-   - ✅ Lead statuses updated in your Google Sheet!
+### 4. 📝 Pitch Templates (`Templates` Tab)
+Compose your cold email pitch using dynamic template tags and **Spintax rotation**:
+- `{{full_name}}`: Prospect's first name
+- `{{company_name}}`: Prospect's company
+- `{{location}}`: Prospect's city
+- `{{other_locations}}`: Randomized other cities you operate in
+- `{{clients}}`: Randomized portfolio client references from `Clients` tab
+- `{{Date}}`: Today's localized date format
+- `{{Hi|Hey|Hello}}`: Random Spintax variations for high open rates
+- `{{option 1 | option 2 | option 3}}`: Random phrase/sentence choices
 
 ---
 
-## 🚨 Troubleshooting Cheat Sheet
+### 5. 🔁 Multi-Touch Follow-up Sequence (`Followup_Templates` Tab)
+- Configure follow-up touches with `Follow_Up_Number` (1, 2, 3...) and `Days_Until_Next` (e.g. wait 3 days, 5 days, 7 days).
+- Supports Spintax and personalized tags.
+- The engine automatically matches the exact initial sender alias and email thread, and automatically halts the moment a reply or bounce is detected.
 
-| Symptom | Cause | Solution |
+---
+
+### 6. ⚙️ System Settings & Control (`Settings` Tab)
+
+| Setting Key | Default | Description |
 | :--- | :--- | :--- |
-| `Cannot find spreadsheet` / `404` | Service account not invited | Share Google Sheet with `client_email` as **Editor**. |
-| `Invalid credentials / 535-5.7.8` | Regular password used instead of App Password | Create a 16-char **App Password** in Google Account Security. |
-| `Dashboard shows empty tables` | Sheet not public for view | In Google Sheet Share settings, select **"Anyone with link can view"**. |
-| `GitHub Dispatch Error` | Missing PAT permissions | Generate PAT at [github.com/settings/tokens](https://github.com/settings/tokens) with `repo` & `workflow` scopes. |
-| `Domain MX lookup failed` | Prospect email domain invalid | Engine auto-marks invalid domains as `bounced` to protect sender reputation. |
+| **`campaign_active`** | `TRUE` | **Master Switch**: Set to `TRUE` to run outreach, or `FALSE` to pause all automated campaigns instantly. |
+| **`throttle_mode`** | `adaptive` | Set to `adaptive` (safe reputation shield) or `bulk` (high-speed fixed delay for 1500+ blasts). |
+| **`send_mode`** | `auto` | Set to `auto` for live sending or `review` to save Touch-1 emails directly into your mailbox **Drafts** folder for human inspection. |
+| **`cron_timezone`** | `Asia/Kolkata` | Timezone for cron schedules (`Asia/Kolkata`, `America/New_York`, `UTC`, `Europe/London`). |
+| **`cron_outreach_time`** | `10:00` | Cold outreach send time (`HH:MM`). |
+| **`cron_followup_time`** | `09:30` | Follow-up sequence send time (`HH:MM`). |
+| **`cron_inbox_minutes`** | `15` | How often to scan inboxes for replies (`15` = every 15 mins). |
+| **`cron_digest_time`** | `18:30` | Time to send Daily Discord summary (`HH:MM`). |
+| **`cron_days`** | `Mon-Sat` | Active automation days (`Mon-Sat`, `Mon-Fri`, or `All`). |
+| **`business_name`** | `Outreach Team` | Injected into legal CAN-SPAM email footer. |
+| **`business_address`** | `123 Tech St` | Registered company address for CAN-SPAM compliance. |
+| **`unsubscribe_url`** | `""` | Optional web unsubscribe link (or leave blank for automatic mailto unsubscribe). |
+| **`groq_api_key`** | `gsk_...` | Groq API Key for AI positive/negative sentiment analysis. |
+| **`discord_updates_webhook`**| `https://...` | Webhook URL for run start/stop alerts and daily digests. |
+| **`discord_positive_webhook`**| `https://...` | Webhook URL for instant alerts when a positive lead replies. |
 
 ---
 
-🎉 **You're all set! Your outreach engine will now autonomously send cold emails, follow up with leads, classify replies with AI, and report to Discord daily.**
+### 7. 🛡️ Deliverability, Compliance & Health Monitoring
+- **`Domain_Health` Tab**: Displays SPF (`v=spf1`) and DMARC (`v=DMARC1`) verification status. Audited automatically every Monday.
+- **`Suppressed` Tab**: Global opt-out list. Any email added here is permanently excluded from all future outreach campaigns.
+- **`Inbox_Stats` Tab**: Dynamically tracks `sent`, `bounced`, `complaints`, and `sentToday` to adjust send velocity.
+- **`Failed_Sends` Tab**: Dead-letter queue capturing any send that failed after 3 exponential backoff attempts.
+
+---
+
+### 8. 📊 In-Sheet Analytics & Dashboards
+- **`📊 Email_Analytics` Tab**: Automated real-time formulas calculating total emails sent, positive reply rates, and bounce rates per sender.
+- **`📈 ChartData` Tab**: Aggregated sentiment breakdowns (`POSITIVE`, `NEUTRAL`, `NEGATIVE`, `OOO`).

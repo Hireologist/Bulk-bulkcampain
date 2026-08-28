@@ -1,0 +1,41 @@
+name: 🚀 1-Click Complete Auto-Setup & Provisioning
+
+on:
+  workflow_dispatch:
+    inputs:
+      cron_api_key:
+        description: 'cron-job.org API Key (Optional: or keep blank if in Sheet Settings / Secrets)'
+        required: false
+        type: string
+      github_pat:
+        description: 'GitHub Personal Access Token (Optional: or keep blank if in Sheet Settings / Secrets)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  auto-setup:
+    name: Provision All Sheet Tabs & Crons
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run Auto-Setup & Provisioning
+        run: node scripts/auto-setup.mjs
+        env:
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID || secrets.SHEET_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          CRON_KEY: ${{ inputs.cron_api_key || secrets.CRON_KEY || secrets.CRON_JOB_API_KEY }}
+          GITHUB_PAT: ${{ inputs.github_pat || secrets.GITHUB_PAT || secrets.PAT || secrets.GH_PAT }}
+          GITHUB_REPOSITORY: ${{ github.repository }}

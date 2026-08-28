@@ -1,0 +1,94 @@
+import crypto from 'node:crypto';
+
+let suppressionCache = null;
+let lastCacheTime = 0;
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Generate a signed HMAC token for 1-click unsubscribe
+ */
+export function generateUnsubscribeToken(email, campaignId = 'global', secret = 'default-secret') {
+  const payload = `${email.toLowerCase()}:${campaignId}`;
+  return crypto.createHmac('sha256', secret).update(payload).digest('hex');
+}
+
+/**
+ * Verify a signed HMAC unsubscribe token
+ */
+export function verifyUnsubscribeToken(email, campaignId = 'global', token, secret = 'default-secret') {
+  if (!email || !token) return false;
+  const expected = generateUnsubscribeToken(email, campaignId, secret);
+  try {
+    return crypto.timingSafeEqual(Buffer.from(token, 'hex'), Buffer.from(expected, 'hex'));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check if an email is present in the suppression list
+ */
+export async function isSuppressed(email, readSuppressionFn) {
+  if (!email) return false;
+  const normalizedEmail = email.trim().toLowerCase();
+
+  const now = Date.now();
+  if (!suppressionCache || now - lastCacheTime > CACHE_TTL_MS) {
+    if (typeof readSuppressionFn === 'function') {
+      const list = await readSuppressionFn();
+      suppressionCache = new Set((list || []).map((e) => String(e).trim().toLowerCase()));
+      lastCacheTime = now;
+    } else {
+      suppressionCache = suppressionCache || new Set();
+    }
+  }
+
+  return suppressionCache.has(normalizedEmail);
+}
+
+/**
+ * Add an email to the suppression list and update the cache
+ */
+export async function addToSuppression(email, reason, appendSuppressionFn) {
+  if (!email) return;
+  const normalizedEmail = email.trim().toLowerCase();
+
+  if (typeof appendSuppressionFn === 'function') {
+    await appendSuppressionFn(normalizedEmail, reason || 'Unsubscribed', new Date().toISOString());
+  }
+
+  if (!suppressionCache) {
+    suppressionCache = new Set();
+  }
+  suppressionCache.add(normalizedEmail);
+}
+
+/**
+ * Invalidate in-memory suppression cache (useful for testing or forced sync)
+ */
+export function clearSuppressionCache() {
+  suppressionCache = null;
+  lastCacheTime = 0;
+}
+
+/**
+ * Build CAN-SPAM compliant footer with business details & unsubscribe link
+ */
+export function buildSenderFooter(settings = {}, lead = {}, secret = 'default-secret') {
+  const businessName = settings.business_name || settings.company_name || 'Outreach Team';
+  const businessAddress = settings.business_address || '';
+  const email = lead.email || '';
+  const campaignId = lead.campaign || 'default';
+  const token = generateUnsubscribeToken(email, campaignId, secret);
+
+  const unsubscribeUrl = settings.unsubscribe_url
+    ? `${settings.unsubscribe_url}?email=${encodeURIComponent(email)}&token=${token}&campaign=${encodeURIComponent(campaignId)}`
+    : `mailto:${settings.support_email || 'unsubscribe@domain.com'}?subject=Unsubscribe%20${encodeURIComponent(email)}`;
+
+  const addressLine = businessAddress ? `<br>${businessAddress}` : '';
+
+  return `<br><br><div style="font-size:12px;color:#888;border-top:1px solid #eee;padding-top:10px;margin-top:20px;">`
+    + `Sent by <strong>${businessName}</strong>${addressLine}`
+    + `<br><a href="${unsubscribeUrl}" style="color:#666;text-decoration:underline;">Unsubscribe</a> from these emails.`
+    + `</div>`;
+}
