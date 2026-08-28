@@ -11,11 +11,10 @@
 # Dependencies
 node_modules/
 
-# Local AI Agent Customizations & Tests
+# Local AI Agent Customizations
 .agents/
 .ecc/
 AGENTS.md
-test/
 
 # Logs & Temporary files
 *.log

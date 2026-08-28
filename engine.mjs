@@ -8,19 +8,43 @@ import dns from 'node:dns/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
+// 🛡️ Production Hardening Modules
+import { getSendDelay, trackOutcome, checkAndResetDailyStats } from './src/throttle.mjs';
+import { sendWithRetry } from './src/retry.mjs';
+import { isSuppressed, addToSuppression, buildSenderFooter } from './src/suppression.mjs';
+import { alertIfUnhealthy, sendRunSummaryAlert, postToDiscord } from './src/alerts.mjs';
+import { runWarmupCycle } from './src/warmup.mjs';
+import { parseSpintax } from './src/spintax.mjs';
+export { parseSpintax };
 
-// Google Sheets Authentication
+const SPREADSHEET_ID = process.env.SPREADSHEET_ID || process.env.SHEET_ID;
+
+// Google Sheets Authentication (Supports JSON string or separate Email + Key)
 async function getSheets(customSheetId) {
-  const targetSheetId = customSheetId || process.env.SINGLE_SHEET_ID || SPREADSHEET_ID;
-  if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON || !targetSheetId) {
-    throw new Error('Spreadsheet credentials not set. Set SPREADSHEET_ID and GOOGLE_SERVICE_ACCOUNT_JSON.');
+  const targetSheetId = customSheetId || process.env.SINGLE_SHEET_ID || process.env.SHEET_ID || SPREADSHEET_ID;
+  if (!targetSheetId) {
+    throw new Error('Spreadsheet credentials not set. Set SPREADSHEET_ID or SHEET_ID.');
   }
-  const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-  const auth = new google.auth.GoogleAuth({
-    credentials,
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-  });
+
+  let auth;
+  if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+    const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+    auth = new google.auth.GoogleAuth({
+      credentials,
+      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    });
+  } else if (process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && process.env.GOOGLE_PRIVATE_KEY) {
+    auth = new google.auth.GoogleAuth({
+      credentials: {
+        client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+        private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+      },
+      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    });
+  } else {
+    throw new Error('Google Service Account credentials not provided. Set GOOGLE_SERVICE_ACCOUNT_JSON or (GOOGLE_SERVICE_ACCOUNT_EMAIL + GOOGLE_PRIVATE_KEY).');
+  }
+
   const client = google.sheets({ version: 'v4', auth });
   return { 
     sheets: client, 
@@ -29,21 +53,154 @@ async function getSheets(customSheetId) {
   };
 }
 
+// Ensure specific tab exists with headers
+async function ensureTabExists(sheetsObj, tabName, defaultHeaders = []) {
+  const sheets = sheetsObj?.sheets || sheetsObj;
+  const spreadsheetId = sheetsObj?.spreadsheetId || SPREADSHEET_ID;
+  try {
+    const meta = await sheets.spreadsheets.get({ spreadsheetId });
+    const exists = meta.data.sheets.some(s => s.properties.title === tabName);
+    if (!exists) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+          requests: [{ addSheet: { properties: { title: tabName } } }],
+        },
+      });
+      if (defaultHeaders.length > 0) {
+        await sheets.spreadsheets.values.update({
+          spreadsheetId,
+          range: `'${tabName}'!A1:${String.fromCharCode(64 + defaultHeaders.length)}1`,
+          valueInputOption: 'USER_ENTERED',
+          requestBody: { values: [defaultHeaders] },
+        });
+      }
+    }
+  } catch (err) {
+    console.warn(`[Tab Check] ${tabName}: ${err.message}`);
+  }
+}
+
 // Load a specific tab
 async function loadTab(sheetsObj, tabName) {
   const sheets = sheetsObj?.sheets || sheetsObj;
   const spreadsheetId = sheetsObj?.spreadsheetId || process.env.SINGLE_SHEET_ID || SPREADSHEET_ID;
   try {
-    const res = await sheets.spreadsheets.values.get({
+    const res = await sendWithRetry(() => sheets.spreadsheets.values.get({
       spreadsheetId,
       range: `'${tabName}'!A:Z`,
-    });
+    }), { retries: 2, baseDelay: 1000 });
     const [headers, ...rows] = res.data.values || [];
     if (!headers) return [];
     return rows.map(r => Object.fromEntries(headers.map((h, i) => [(h || '').trim(), (r[i] || '').trim()])));
   } catch (e) {
     console.warn(`Could not load tab [${tabName}]: ${e.message}`);
     return [];
+  }
+}
+
+// Record a send failure into Failed_Sends dead letter tab
+async function recordFailedSend(sheetsObj, leadEmail, campaign, errorMessage) {
+  try {
+    const sheets = sheetsObj?.sheets || sheetsObj;
+    const spreadsheetId = sheetsObj?.spreadsheetId || SPREADSHEET_ID;
+    await ensureTabExists(sheetsObj, 'Failed_Sends', ['lead_email', 'campaign', 'error', 'attempted_at']);
+    await sendWithRetry(() => sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: "'Failed_Sends'!A:Z",
+      valueInputOption: 'USER_ENTERED',
+      requestBody: {
+        values: [[leadEmail, campaign || 'default', errorMessage, new Date().toISOString()]],
+      },
+    }), { retries: 2 });
+  } catch (err) {
+    console.warn(`Could not log to Failed_Sends: ${err.message}`);
+  }
+}
+
+// Load Inbox Stats from Inbox_Stats tab
+async function loadInboxStatsMap(sheetsObj) {
+  const rows = await loadTab(sheetsObj, 'Inbox_Stats');
+  const map = new Map();
+  for (const r of rows) {
+    const email = (r.inbox_email || r.email || '').toLowerCase().trim();
+    if (email) {
+      map.set(email, checkAndResetDailyStats({
+        sent: Number(r.sent) || 0,
+        bounced: Number(r.bounced) || 0,
+        complaints: Number(r.complaints) || 0,
+        sentToday: Number(r.sentToday) || 0,
+        lastReset: r.lastReset || '',
+      }));
+    }
+  }
+  return map;
+}
+
+// Save updated Inbox Stats to Inbox_Stats tab
+async function saveInboxStatsMap(sheetsObj, statsMap) {
+  try {
+    const sheets = sheetsObj?.sheets || sheetsObj;
+    const spreadsheetId = sheetsObj?.spreadsheetId || SPREADSHEET_ID;
+    await ensureTabExists(sheetsObj, 'Inbox_Stats', ['inbox_email', 'sent', 'bounced', 'complaints', 'sentToday', 'lastReset']);
+    const rows = [
+      ['inbox_email', 'sent', 'bounced', 'complaints', 'sentToday', 'lastReset'],
+      ...Array.from(statsMap.entries()).map(([email, s]) => [
+        email,
+        s.sent || 0,
+        s.bounced || 0,
+        s.complaints || 0,
+        s.sentToday || 0,
+        s.lastReset || new Date().toISOString().split('T')[0],
+      ]),
+    ];
+    await sendWithRetry(() => sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `'Inbox_Stats'!A1:F${rows.length}`,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values: rows },
+    }), { retries: 2 });
+  } catch (err) {
+    console.warn(`Could not save Inbox_Stats: ${err.message}`);
+  }
+}
+
+// Save draft via IMAP append
+export async function saveDraftViaImap(inbox, toEmail, subject, htmlBody) {
+  const client = new ImapFlow({
+    host: inbox.imap_host,
+    port: parseInt(inbox.imap_port || '993', 10),
+    secure: true,
+    auth: { user: inbox.smtp_user, pass: inbox.smtp_pass },
+    logger: false,
+    socketTimeout: 30000,
+    clientInfo: { name: 'SheetBotDraftClient' }
+  });
+
+  client.on('error', (err) => console.warn(`IMAP draft error for ${inbox.email}: ${err.message}`));
+
+  try {
+    await client.connect();
+    const rawMessage = [
+      `From: "${inbox.display_name || inbox.email}" <${inbox.email}>`,
+      `To: ${toEmail}`,
+      `Subject: ${subject}`,
+      'MIME-Version: 1.0',
+      'Content-Type: text/html; charset=utf-8',
+      '',
+      htmlBody,
+    ].join('\r\n');
+
+    let targetMailbox = 'Drafts';
+    const mailboxes = await client.list();
+    const found = mailboxes.find((m) => m.specialUse === '\\Drafts' || m.path.toLowerCase().includes('draft'));
+    if (found) targetMailbox = found.path;
+
+    await client.append(targetMailbox, Buffer.from(rawMessage), ['\\Draft', '\\Seen']);
+    console.log(`📝 [Draft Saved] To: ${toEmail} in ${inbox.email} -> ${targetMailbox}`);
+    return true;
+  } finally {
+    try { await client.logout(); } catch (_) { client.close(); }
   }
 }
 
@@ -128,6 +285,28 @@ export function getRandomFormattedDate(date = new Date()) {
   return formats[Math.floor(Math.random() * formats.length)];
 }
 
+// Check if campaign is active or paused via Google Sheet Settings
+export function isCampaignActive(settings = {}, type = 'general') {
+  const masterVal = String(settings.campaign_active ?? settings.is_active ?? settings.campaign_status ?? 'TRUE').trim().toLowerCase();
+  if (masterVal === 'false' || masterVal === 'paused' || masterVal === 'off' || masterVal === '0' || masterVal === 'no') {
+    return false;
+  }
+
+  if (type === 'outreach') {
+    const outreachVal = String(settings.outreach_active ?? 'TRUE').trim().toLowerCase();
+    if (outreachVal === 'false' || outreachVal === 'paused' || outreachVal === 'off' || outreachVal === '0') {
+      return false;
+    }
+  } else if (type === 'followup') {
+    const followupVal = String(settings.followup_active ?? 'TRUE').trim().toLowerCase();
+    if (followupVal === 'false' || followupVal === 'paused' || followupVal === 'off' || followupVal === '0') {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 // ============================================================================
 // 🚀 1. COLD OUTREACH SENDER
 // ============================================================================
@@ -135,20 +314,35 @@ export async function runColdOutreach() {
   const sheets = await getSheets();
   const config = await loadConfig(sheets);
 
+  // ⏸️ Master Campaign Toggle Check
+  if (!isCampaignActive(config.settings, 'outreach')) {
+    const pauseMsg = '⏸️ **Campaign Paused Notice:** Cold outreach is turned OFF/PAUSED in Google Sheet Settings (`campaign_active = FALSE`). Skipping run safely.';
+    console.log(pauseMsg);
+    await notifyDiscord(config.settings.discord_updates_webhook, pauseMsg);
+    return;
+  }
+
   if (!config.inboxes.length) throw new Error('No active Inboxes configured in "Inboxes" tab.');
   if (!config.coldTemplates.length) throw new Error('No Templates found in "Templates" tab.');
 
   await notifyDiscord(config.settings.discord_updates_webhook, '🚀 Auto bulk cold outreach started');
 
-  const detailsRes = await sheets.spreadsheets.values.get({ spreadsheetId: sheets.spreadsheetId || SPREADSHEET_ID, range: "'Details'!A:Z" });
+  const detailsRes = await sendWithRetry(() => sheets.spreadsheets.values.get({
+    spreadsheetId: sheets.spreadsheetId || SPREADSHEET_ID,
+    range: "'Details'!A:Z",
+  }), { retries: 2 });
+
   const [headers, ...rows] = detailsRes.data.values || [];
   const col = Object.fromEntries(headers.map((h, i) => [h.trim(), i]));
 
+  const inboxStatsMap = await loadInboxStatsMap(sheets);
   const inboxUsage = Object.fromEntries(config.inboxes.map(i => [i.email, 0]));
   const limitExceededInboxes = new Set();
   let inboxIdx = 0;
   let emailsSentThisRun = 0;
+  let draftsSavedThisRun = 0;
   const MAX_PER_RUN = parseInt(config.settings.max_emails_per_run || '1000', 10);
+  const isReviewMode = (config.settings.send_mode || '').trim().toLowerCase() === 'review';
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
@@ -156,7 +350,30 @@ export async function runColdOutreach() {
     const status = (row[col['Sent Status']] || '').trim().toLowerCase();
 
     // Skip if already sent, replied, bounced, or empty email
-    if (!email || status === 'sent' || status === 'replied' || status === 'bounced') {
+    if (!email || status === 'sent' || status === 'replied' || status === 'bounced' || status === 'suppressed' || status === 'draft — pending review') {
+      continue;
+    }
+
+    // 🛡️ Global Suppression Check
+    const suppressed = await isSuppressed(email, async () => {
+      const suppRows = await loadTab(sheets, 'Suppressed');
+      return suppRows.map(r => r.email || r.Email);
+    });
+
+    if (suppressed) {
+      console.log(`⛔ Suppressed email skipped: ${email}`);
+      const rowNum = i + 2;
+      row[col['Sent Status']] = 'suppressed';
+      row[col['Follow up']] = 'Done';
+      row[col['Next Follow Up Date']] = 'SUPPRESSED';
+      row[col['Time']] = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: true });
+
+      await sendWithRetry(() => sheets.spreadsheets.values.update({
+        spreadsheetId: sheets.spreadsheetId || SPREADSHEET_ID,
+        range: `'Details'!A${rowNum}:Z${rowNum}`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: [row] },
+      }));
       continue;
     }
 
@@ -171,12 +388,12 @@ export async function runColdOutreach() {
       row[col['Next Follow Up Date']] = 'INVALID DOMAIN';
       row[col['Time']] = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: true });
 
-      await sheets.spreadsheets.values.update({
+      await sendWithRetry(() => sheets.spreadsheets.values.update({
         spreadsheetId: sheets.spreadsheetId || SPREADSHEET_ID,
         range: `'Details'!A${rowNum}:Z${rowNum}`,
         valueInputOption: 'USER_ENTERED',
         requestBody: { values: [row] },
-      });
+      }));
 
       continue;
     }
@@ -232,17 +449,54 @@ export async function runColdOutreach() {
     const clientStr = config.clients.sort(() => 0.5 - Math.random()).slice(0, 5)
       .map(c => c.client_name || c.name).join(', ');
 
-    const replaceTags = (txt = '') => txt
-      .replace(/{{full_name}}/gi, fullName)
-      .replace(/{{company_name}}/gi, companyName)
-      .replace(/{{location}}/gi, location)
-      .replace(/{{other_locations}}/gi, randomLocs)
-      .replace(/{{clients}}/gi, clientStr)
-      .replace(/{{Date}}/gi, getRandomFormattedDate());
+    const replaceTags = (txt = '') => {
+      const parsedSpintax = parseSpintax(txt);
+      return parsedSpintax
+        .replace(/{{full_name}}/gi, fullName)
+        .replace(/{{company_name}}/gi, companyName)
+        .replace(/{{location}}/gi, location)
+        .replace(/{{other_locations}}/gi, randomLocs)
+        .replace(/{{clients}}/gi, clientStr)
+        .replace(/{{Date}}/gi, getRandomFormattedDate())
+        .replace(/{{business_name}}/gi, config.settings.business_name || 'Outreach Team')
+        .replace(/{{business_address}}/gi, config.settings.business_address || '');
+    };
 
     const subject = replaceTags(template.Subject || template['Subject line']);
-    const body = replaceTags(template.Body || template.body);
+    let body = replaceTags(template.Body || template.body);
 
+    // Auto-inject CAN-SPAM legal footer with signed unsubscribe token
+    const footer = buildSenderFooter(config.settings, { email, campaign: 'cold' }, process.env.UNSUBSCRIBE_SECRET);
+    body = `${body}${footer}`;
+
+    let currentInboxStats = inboxStatsMap.get(inbox.email.toLowerCase()) || { sent: 0, bounced: 0, complaints: 0, sentToday: 0 };
+
+    if (isReviewMode) {
+      // 📝 DRAFT-REVIEW MODE (Save touch 1 directly into IMAP Drafts)
+      try {
+        await saveDraftViaImap(inbox, email, subject, body);
+        draftsSavedThisRun++;
+        const rowNum = i + 2;
+        row[col['Subject Line']] = subject;
+        row[col['Sent From']] = senderEmail;
+        row[col['Sent Status']] = 'Draft — Pending Review';
+        row[col['Time']] = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: true });
+        row[col['Date Sent']] = new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' });
+
+        await sendWithRetry(() => sheets.spreadsheets.values.update({
+          spreadsheetId: sheets.spreadsheetId || SPREADSHEET_ID,
+          range: `'Details'!A${rowNum}:Z${rowNum}`,
+          valueInputOption: 'USER_ENTERED',
+          requestBody: { values: [row] },
+        }));
+      } catch (draftErr) {
+        console.error(`Failed to save draft for ${email}:`, draftErr.message);
+        await recordFailedSend(sheets, email, 'cold', `Draft error: ${draftErr.message}`);
+      }
+      continue;
+    }
+
+    // 🚀 LIVE SEND WITH EXPONENTIAL RETRY WRAPPER
     const transporter = nodemailer.createTransport({
       host: inbox.smtp_host,
       port: parseInt(inbox.smtp_port, 10),
@@ -251,15 +505,18 @@ export async function runColdOutreach() {
     });
 
     try {
-      await transporter.sendMail({
+      await sendWithRetry(() => transporter.sendMail({
         from: `"${senderName}" <${senderEmail}>`,
         to: email,
         subject,
         html: body,
-      });
+      }), { retries: 3, baseDelay: 2000 });
 
       inboxUsage[inbox.email]++;
       emailsSentThisRun++;
+      currentInboxStats = trackOutcome(currentInboxStats, 'sent');
+      inboxStatsMap.set(inbox.email.toLowerCase(), currentInboxStats);
+
       console.log(`[Sent] "${senderName}" <${senderEmail}> -> ${email}`);
 
       // Update row in sheet
@@ -272,14 +529,16 @@ export async function runColdOutreach() {
       row[col['Follow Up Count']] = 0;
       row[col['Follow up']] = '';
 
-      await sheets.spreadsheets.values.update({
+      await sendWithRetry(() => sheets.spreadsheets.values.update({
         spreadsheetId: sheets.spreadsheetId || SPREADSHEET_ID,
         range: `'Details'!A${rowNum}:Z${rowNum}`,
         valueInputOption: 'USER_ENTERED',
         requestBody: { values: [row] },
-      });
+      }));
     } catch (err) {
       console.error(`Failed to send to ${email}:`, err.message);
+      await recordFailedSend(sheets, email, 'cold', err.message);
+
       if (isDailyLimitError(err)) {
         console.warn(`⚠️ Daily sending limit hit for inbox [${inbox.email}]. Disabling inbox for this run.`);
         limitExceededInboxes.add(inbox.email);
@@ -305,14 +564,29 @@ export async function runColdOutreach() {
       }
     }
 
-    // Delay between sends
-    const minD = parseInt(config.settings.min_delay_seconds || '15', 10) * 1000;
-    const maxD = parseInt(config.settings.max_delay_seconds || '45', 10) * 1000;
-    const delay = Math.floor(Math.random() * (maxD - minD + 1)) + minD;
+    // Check deliverability alert for inbox
+    await alertIfUnhealthy(currentInboxStats, config.settings.discord_updates_webhook);
+
+    // Calculate delay between sends (supports 'adaptive' safe mode vs 'bulk' / 'fixed' high-speed mode)
+    const throttleMode = String(config.settings.throttle_mode || 'adaptive').toLowerCase();
+    const isBulkMode = throttleMode === 'bulk' || throttleMode === 'fixed' || throttleMode === 'turbo';
+
+    const minD = Math.max(0, parseInt(config.settings.min_delay_seconds || (isBulkMode ? '1' : '15'), 10) * 1000);
+    const maxD = Math.max(minD, parseInt(config.settings.max_delay_seconds || (isBulkMode ? '3' : '45'), 10) * 1000);
+    const configDelay = Math.floor(Math.random() * (maxD - minD + 1)) + minD;
+    const adaptiveDelay = isBulkMode ? 0 : getSendDelay(currentInboxStats);
+    const delay = isBulkMode ? configDelay : Math.max(configDelay, adaptiveDelay);
+
     await new Promise(r => setTimeout(r, delay));
   }
 
-  await notifyDiscord(config.settings.discord_updates_webhook, '🏁 Cold outreach run completed.');
+  // Persist updated stats
+  await saveInboxStatsMap(sheets, inboxStatsMap);
+
+  const completionMsg = isReviewMode
+    ? `🏁 Cold outreach review run completed (${draftsSavedThisRun} draft(s) saved).`
+    : `🏁 Cold outreach run completed (${emailsSentThisRun} email(s) sent).`;
+  await notifyDiscord(config.settings.discord_updates_webhook, completionMsg);
 }
 
 // ============================================================================
@@ -428,13 +702,18 @@ export async function runSingleLeadOutreach(singleLeadPayload = {}) {
     const clientStr = config.clients.sort(() => 0.5 - Math.random()).slice(0, 5)
       .map(c => c.client_name || c.name).join(', ');
 
-    const replaceTags = (txt = '') => txt
-      .replace(/{{full_name}}/gi, fullName)
-      .replace(/{{company_name}}/gi, companyName)
-      .replace(/{{location}}/gi, location)
-      .replace(/{{other_locations}}/gi, randomLocs)
-      .replace(/{{clients}}/gi, clientStr)
-      .replace(/{{Date}}/gi, getRandomFormattedDate());
+    const replaceTags = (txt = '') => {
+      const parsedSpintax = parseSpintax(txt);
+      return parsedSpintax
+        .replace(/{{full_name}}/gi, fullName)
+        .replace(/{{company_name}}/gi, companyName)
+        .replace(/{{location}}/gi, location)
+        .replace(/{{other_locations}}/gi, randomLocs)
+        .replace(/{{clients}}/gi, clientStr)
+        .replace(/{{Date}}/gi, getRandomFormattedDate())
+        .replace(/{{business_name}}/gi, config.settings.business_name || 'Outreach Team')
+        .replace(/{{business_address}}/gi, config.settings.business_address || '');
+    };
 
     const subject = replaceTags(template.Subject || template['Subject line']);
     const body = replaceTags(template.Body || template.body);
@@ -570,6 +849,14 @@ export async function runFollowups() {
   const sheets = await getSheets();
   const config = await loadConfig(sheets);
 
+  // ⏸️ Master Campaign Toggle Check
+  if (!isCampaignActive(config.settings, 'followup')) {
+    const pauseMsg = '⏸️ **Campaign Paused Notice:** Follow-up engine is turned OFF/PAUSED in Google Sheet Settings (`campaign_active = FALSE`). Skipping run safely.';
+    console.log(pauseMsg);
+    await notifyDiscord(config.settings.discord_updates_webhook, pauseMsg);
+    return;
+  }
+
   if (!config.inboxes.length) throw new Error('No active Inboxes found.');
   if (!config.followupTemplates.length) throw new Error('No Follow-up Templates found.');
 
@@ -657,14 +944,19 @@ export async function runFollowups() {
     const clientStr = config.clients.sort(() => 0.5 - Math.random()).slice(0, 5)
       .map(c => c.client_name || c.name).join(', ');
 
-    const replaceTags = (txt = '') => txt
-      .replace(/{{full_name}}/g, fullName)
-      .replace(/{{company_name}}/g, companyName)
-      .replace(/{{Date}}/gi, getRandomFormattedDate())
-      .replace(/{{location}}/g, location)
-      .replace(/{{other_locations}}/g, randomLocs)
-      .replace(/{{clients}}/g, clientStr)
-      .replace(/{{follow_up_number}}/g, String(nextCount));
+    const replaceTags = (txt = '') => {
+      const parsedSpintax = parseSpintax(txt);
+      return parsedSpintax
+        .replace(/{{full_name}}/g, fullName)
+        .replace(/{{company_name}}/g, companyName)
+        .replace(/{{Date}}/gi, getRandomFormattedDate())
+        .replace(/{{location}}/g, location)
+        .replace(/{{other_locations}}/g, randomLocs)
+        .replace(/{{clients}}/g, clientStr)
+        .replace(/{{follow_up_number}}/g, String(nextCount))
+        .replace(/{{business_name}}/gi, config.settings.business_name || 'Outreach Team')
+        .replace(/{{business_address}}/gi, config.settings.business_address || '');
+    };
 
     const finalSubj = `${replaceTags(template.Subject || 'Re:')} ${subjectLine}`.trim();
     const finalBody = replaceTags(template.Body || template.body);
@@ -736,7 +1028,7 @@ export async function runFollowups() {
   }
 }
 
-// Helper for AI Email Sentiment Classification & Summarization
+// Helper for AI Email Sentiment Classification & Summarization (Resilient Fallback)
 export async function classifyEmailWithAi(groq, emailText = '') {
   let sentiment = 'REPLIED';
   let summary = (emailText || '').trim().replace(/\s+/g, ' ').substring(0, 150);
@@ -747,19 +1039,28 @@ export async function classifyEmailWithAi(groq, emailText = '') {
   }
 
   try {
-    const aiRes = await groq.chat.completions.create({
+    const aiRes = await sendWithRetry(() => groq.chat.completions.create({
       model: 'openai/gpt-oss-120b',
       messages: [
         {
           role: 'system',
-          content: `You are an AI email assistant. Analyze the incoming lead email and respond ONLY with a valid JSON object containing 2 keys:
-"sentiment": ONE of POSITIVE, NEUTRAL, NEGATIVE, or OOO.
-"summary": A concise 1-2 sentence summary of what key points, questions, or details the lead shared in their email.
-Do not output markdown formatting or extra text.`
+          content: `You are an expert sales email assistant. Analyze the incoming lead reply and respond ONLY with a raw, valid JSON object containing exactly 2 keys:
+{
+  "sentiment": "POSITIVE" | "NEUTRAL" | "NEGATIVE" | "OOO",
+  "summary": "1-2 sentence summary of the lead's message, questions, or objections"
+}
+
+Definitions:
+- "POSITIVE": Interested, asking for pricing/call/demo, sharing calendar link, requesting info.
+- "NEUTRAL": Forwarded to another person, ask to reach back in a few months, generic reply.
+- "NEGATIVE": Not interested, asking to unsubscribe/remove, angry, not relevant.
+- "OOO": Automated Out of Office / Vacation auto-responder.
+
+Do NOT include markdown backticks or any conversational text. Return only the JSON.`
         },
         { role: 'user', content: emailText.substring(0, 3000) }
       ],
-    });
+    }), { retries: 2, baseDelay: 1000 });
 
     const rawText = aiRes.choices[0]?.message?.content?.trim() || '';
     const cleanJsonText = rawText.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/\s*```$/, '').trim();
@@ -772,7 +1073,8 @@ Do not output markdown formatting or extra text.`
       summary = String(parsedObj.summary).trim();
     }
   } catch (e) {
-    console.warn('Groq AI classification error, falling back to basic summary:', e.message);
+    console.warn('Groq AI classification error, falling back to unknown sentiment:', e.message);
+    sentiment = 'unknown';
   }
 
   return { sentiment, summary };
@@ -787,7 +1089,11 @@ export async function runInboxChecker() {
   const groq = config.settings.groq_api_key && config.settings.groq_api_key.startsWith('gsk_') 
     ? new Groq({ apiKey: config.settings.groq_api_key }) : null;
 
-  const detailsRes = await sheets.spreadsheets.values.get({ spreadsheetId: sheets.spreadsheetId || SPREADSHEET_ID, range: "'Details'!A:Z" });
+  const detailsRes = await sendWithRetry(() => sheets.spreadsheets.values.get({
+    spreadsheetId: sheets.spreadsheetId || SPREADSHEET_ID,
+    range: "'Details'!A:Z",
+  }), { retries: 2 });
+
   const [headers, ...rows] = detailsRes.data.values || [];
   const col = Object.fromEntries(headers.map((h, i) => [h.trim(), i]));
 
@@ -862,12 +1168,12 @@ export async function runInboxChecker() {
               rows[rIdx][col['Date Sent']] = new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' });
               rows[rIdx][col['Time']] = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: true });
 
-              await sheets.spreadsheets.values.update({
+              await sendWithRetry(() => sheets.spreadsheets.values.update({
                 spreadsheetId: sheets.spreadsheetId || SPREADSHEET_ID,
                 range: `'Details'!A${rIdx + 2}:Z${rIdx + 2}`,
                 valueInputOption: 'USER_ENTERED',
                 requestBody: { values: [rows[rIdx]] },
-              });
+              }));
               console.log(`🔒 Marked [${match}] as BOUNCED & Follow-up as DONE`);
             }
           }
@@ -896,12 +1202,30 @@ export async function runInboxChecker() {
           }
           rows[rIdx][col['Time']] = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: true });
 
-          await sheets.spreadsheets.values.update({
+          // ⛔ Automatically add to Suppression List if lead opted out or expressed negative sentiment
+          const rawReplyText = (parsed.text || '').toLowerCase();
+          const isOptOut = sentiment === 'NEGATIVE' || 
+                           rawReplyText.includes('unsubscribe') || 
+                           rawReplyText.includes('opt out') || 
+                           rawReplyText.includes('remove me') || 
+                           rawReplyText.includes('stop emailing');
+
+          if (isOptOut) {
+            rows[rIdx][col['Sent Status']] = 'suppressed';
+            try {
+              await addToSuppression(sheets, sheets.spreadsheetId || SPREADSHEET_ID, fromAddr, 'Unsubscribed via reply');
+              console.log(`⛔ Auto-suppressed lead [${fromAddr}] in Suppressed tab.`);
+            } catch (supErr) {
+              console.warn(`Could not add ${fromAddr} to Suppressed tab:`, supErr.message);
+            }
+          }
+
+          await sendWithRetry(() => sheets.spreadsheets.values.update({
             spreadsheetId: sheets.spreadsheetId || SPREADSHEET_ID,
             range: `'Details'!A${rIdx + 2}:Z${rIdx + 2}`,
             valueInputOption: 'USER_ENTERED',
             requestBody: { values: [rows[rIdx]] },
-          });
+          }));
 
           const leadName = rows[rIdx][col['full_name']] || fromAddr;
           const companyName = rows[rIdx][col['company_name']] || 'Company';
@@ -1071,12 +1395,38 @@ export async function generateDailyDigest() {
 async function main() {
   const task = process.argv[2];
   try {
-    if (task === 'outreach') await runColdOutreach();
-    else if (task === 'single_lead') await runSingleLeadOutreach();
-    else if (task === 'followup') await runFollowups();
-    else if (task === 'inbox') await runInboxChecker();
-    else if (task === 'digest') await generateDailyDigest();
-    else if (task) console.warn(`Unknown task: ${task}`);
+    if (task === 'outreach') {
+      await runColdOutreach();
+    } else if (task === 'single_lead') {
+      await runSingleLeadOutreach();
+    } else if (task === 'followup') {
+      await runFollowups();
+    } else if (task === 'inbox') {
+      await runInboxChecker();
+    } else if (task === 'digest') {
+      await generateDailyDigest();
+    } else if (task === 'warmup') {
+      const sheets = await getSheets();
+      const config = await loadConfig(sheets);
+      console.log('🔥 Running Peer-to-Peer Warmup Routine...');
+      const warmupRes = await runWarmupCycle(config.inboxes, async (sender, recipientEmail, subject, body) => {
+        const transporter = nodemailer.createTransport({
+          host: sender.smtp_host,
+          port: parseInt(sender.smtp_port, 10),
+          secure: parseInt(sender.smtp_port, 10) === 465,
+          auth: { user: sender.smtp_user, pass: sender.smtp_pass },
+        });
+        await transporter.sendMail({
+          from: `"${sender.display_name || sender.email}" <${sender.email}>`,
+          to: recipientEmail,
+          subject,
+          text: body,
+        });
+      });
+      console.log(`✅ Warmup cycle status: ${warmupRes.status} (${warmupRes.count || 0} sent)`);
+    } else if (task) {
+      console.warn(`Unknown task: ${task}`);
+    }
   } catch (err) {
     console.error(`Fatal error during task [${task}]:`, err);
     try {

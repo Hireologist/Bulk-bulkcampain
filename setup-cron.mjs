@@ -1,25 +1,26 @@
 import readline from 'readline';
 import { execSync } from 'child_process';
+import { google } from 'googleapis';
 
 /**
- * 1-Click Auto-Setup Script for cron-job.org API v2
- * Dynamically auto-detects repository owner & repo name from `git remote`.
- * Automatically provisions all 4 outreach engine cron jobs on cron-job.org.
+ * ⚡ Smart Non-Destructive Cron-Job.org Synchronizer
  * 
- * Usage:
- *   node setup-cron.mjs
- *   OR with env vars:
- *   CRON_KEY="your_cronjob_api_key" GITHUB_PAT="your_github_pat" node setup-cron.mjs
+ * Dynamic Features:
+ * 1. Reads schedules, timings, and timezones directly from Google Sheet "Settings" tab.
+ * 2. Checks existing cron jobs on cron-job.org.
+ * 3. If schedule or timezone is modified in Google Sheet -> Automatically updates via PATCH.
+ * 4. If already matching -> Skips without touching.
+ * 5. If missing -> Creates via PUT.
  */
 
-function autoDetectGitRepo() {
+export function autoDetectGitRepo() {
   try {
     const remoteUrl = execSync('git config --get remote.origin.url', { encoding: 'utf8' }).trim();
     const match = remoteUrl.match(/github\.com[:/]([^/]+)\/([^/.]+)(?:\.git)?$/);
     if (match) {
       return { owner: match[1], repo: match[2] };
     }
-  } catch (err) {
+  } catch {
     // fallback if git is not initialized or remote not set
   }
   return null;
@@ -28,7 +29,7 @@ function autoDetectGitRepo() {
 function prompt(query) {
   const rl = readline.createInterface({
     input: process.stdin,
-    output: process.stdout
+    output: process.stdout,
   });
   return new Promise((resolve) => {
     rl.question(query, (ans) => {
@@ -38,72 +39,120 @@ function prompt(query) {
   });
 }
 
-const JOBS_TO_CREATE = [
-  {
-    title: 'Followup Engine',
-    action: 'followup',
-    schedule: {
-      timezone: 'Asia/Kolkata',
-      expiresAt: 0,
-      hours: [9],
-      minutes: [30],
-      mdays: [-1],
-      wdays: [1, 2, 3, 4, 5, 6], // Mon - Sat
-      months: [-1]
-    }
-  },
-  {
-    title: 'Cold Outreach',
-    action: 'outreach',
-    schedule: {
-      timezone: 'Asia/Kolkata',
-      expiresAt: 0,
-      hours: [10],
-      minutes: [0],
-      mdays: [-1],
-      wdays: [1, 2, 3, 4, 5, 6], // Mon - Sat
-      months: [-1]
-    }
-  },
-  {
-    title: 'Inbox Checker',
-    action: 'inbox',
-    schedule: {
-      timezone: 'Asia/Kolkata',
-      expiresAt: 0,
-      hours: [-1], // Every hour
-      minutes: [0, 15, 30, 45], // Every 15 minutes
-      mdays: [-1],
-      wdays: [1, 2, 3, 4, 5, 6], // Mon - Sat
-      months: [-1]
-    }
-  },
-  {
-    title: 'Daily Digest',
-    action: 'digest',
-    schedule: {
-      timezone: 'Asia/Kolkata',
-      expiresAt: 0,
-      hours: [18], // 6 PM IST
-      minutes: [30], // 6:30 PM IST
-      mdays: [-1],
-      wdays: [1, 2, 3, 4, 5, 6], // Mon - Sat
-      months: [-1]
+export function parseTime(timeStr, defaultHour = 10, defaultMinute = 0) {
+  if (!timeStr || typeof timeStr !== 'string') {
+    return { hour: defaultHour, minute: defaultMinute };
+  }
+  const clean = timeStr.trim();
+  const match = clean.match(/^(\d{1,2}):(\d{1,2})$/);
+  if (match) {
+    const hour = parseInt(match[1], 10);
+    const minute = parseInt(match[2], 10);
+    if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
+      return { hour, minute };
     }
   }
-];
+  return { hour: defaultHour, minute: defaultMinute };
+}
+
+export function parseMinutesList(val = '15') {
+  const clean = String(val).trim();
+  if (clean.includes(',')) {
+    return clean.split(',').map((n) => parseInt(n.trim(), 10)).filter((n) => !isNaN(n) && n >= 0 && n <= 59);
+  }
+  const interval = parseInt(clean, 10);
+  if (!isNaN(interval) && interval > 0 && interval <= 60) {
+    const list = [];
+    for (let m = 0; m < 60; m += interval) {
+      list.push(m);
+    }
+    return list;
+  }
+  return [0, 15, 30, 45];
+}
+
+export function parseWeekdays(val = 'Mon-Sat') {
+  const clean = String(val).trim().toLowerCase();
+  if (clean === 'mon-fri') return [1, 2, 3, 4, 5];
+  if (clean === 'mon-sat') return [1, 2, 3, 4, 5, 6];
+  if (clean === 'all' || clean === 'everyday' || clean === 'daily') return [-1];
+  if (clean.includes(',')) {
+    return clean.split(',').map((n) => parseInt(n.trim(), 10)).filter((n) => !isNaN(n));
+  }
+  return [1, 2, 3, 4, 5, 6];
+}
+
+export function parseScheduleFromSettings(settings = {}) {
+  const timezone = settings.cron_timezone || 'Asia/Kolkata';
+  const wdays = parseWeekdays(settings.cron_days || 'Mon-Sat');
+
+  const followupTime = parseTime(settings.cron_followup_time || '09:30', 9, 30);
+  const outreachTime = parseTime(settings.cron_outreach_time || '10:00', 10, 0);
+  const digestTime = parseTime(settings.cron_digest_time || '18:30', 18, 30);
+  const inboxMinutes = parseMinutesList(settings.cron_inbox_minutes || '15');
+
+  return [
+    {
+      title: 'Followup Engine',
+      action: 'followup',
+      schedule: {
+        timezone,
+        expiresAt: 0,
+        hours: [followupTime.hour],
+        minutes: [followupTime.minute],
+        mdays: [-1],
+        wdays,
+        months: [-1],
+      },
+    },
+    {
+      title: 'Cold Outreach',
+      action: 'outreach',
+      schedule: {
+        timezone,
+        expiresAt: 0,
+        hours: [outreachTime.hour],
+        minutes: [outreachTime.minute],
+        mdays: [-1],
+        wdays,
+        months: [-1],
+      },
+    },
+    {
+      title: 'Inbox Checker',
+      action: 'inbox',
+      schedule: {
+        timezone,
+        expiresAt: 0,
+        hours: [-1], // Every hour
+        minutes: inboxMinutes,
+        mdays: [-1],
+        wdays,
+        months: [-1],
+      },
+    },
+    {
+      title: 'Daily Digest',
+      action: 'digest',
+      schedule: {
+        timezone,
+        expiresAt: 0,
+        hours: [digestTime.hour],
+        minutes: [digestTime.minute],
+        mdays: [-1],
+        wdays,
+        months: [-1],
+      },
+    },
+  ];
+}
+
+export const JOBS_TO_CREATE = parseScheduleFromSettings({});
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function createCronJob(cronApiKey, githubPat, dispatchUrl, jobConfig, repoName, maxRetries = 3) {
-  let cleanPat = githubPat.trim();
-  if (cleanPat.toLowerCase().startsWith('bearer ')) {
-    cleanPat = cleanPat.substring(7).trim();
-  } else if (cleanPat.toLowerCase().startsWith('token ')) {
-    cleanPat = cleanPat.substring(6).trim();
-  }
-
-  const payload = {
+export function buildJobPayload(repoName, dispatchUrl, cleanPat, jobConfig) {
+  return {
     job: {
       url: dispatchUrl,
       title: `${repoName} - ${jobConfig.title}`,
@@ -117,56 +166,208 @@ async function createCronJob(cronApiKey, githubPat, dispatchUrl, jobConfig, repo
           Authorization: `Bearer ${cleanPat}`,
           Accept: 'application/vnd.github+json',
           'User-Agent': 'cron-job-org',
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           ref: 'main',
           inputs: {
-            action: jobConfig.action
-          }
-        })
-      }
-    }
+            action: jobConfig.action,
+          },
+        }),
+      },
+    },
   };
+}
 
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+export function isJobUpToDate(existingJobDetails, desiredPayload) {
+  if (!existingJobDetails) return false;
+  const existing = existingJobDetails.jobDetails || existingJobDetails.job || existingJobDetails;
+  const desired = desiredPayload.job;
+
+  if (existing.url !== desired.url) return false;
+  if (existing.enabled !== desired.enabled) return false;
+  if (existing.requestMethod !== desired.requestMethod) return false;
+
+  // Compare schedules (timezone, hours, minutes, wdays)
+  if (existing.schedule && desired.schedule) {
+    const eSched = existing.schedule;
+    const dSched = desired.schedule;
+    if (eSched.timezone !== dSched.timezone) return false;
+    if (JSON.stringify(eSched.hours || []) !== JSON.stringify(dSched.hours || [])) return false;
+    if (JSON.stringify(eSched.minutes || []) !== JSON.stringify(dSched.minutes || [])) return false;
+    if (JSON.stringify(eSched.wdays || []) !== JSON.stringify(dSched.wdays || [])) return false;
+  }
+
+  // Compare body
+  const existingBody = existing.extendedData?.body || '';
+  const desiredBody = desired.extendedData?.body || '';
+  try {
+    const parsedE = typeof existingBody === 'string' ? JSON.parse(existingBody) : existingBody;
+    const parsedD = typeof desiredBody === 'string' ? JSON.parse(desiredBody) : desiredBody;
+    if (parsedE.inputs?.action !== parsedD.inputs?.action) return false;
+  } catch {
+    if (existingBody !== desiredBody) return false;
+  }
+
+  return true;
+}
+
+export async function fetchExistingJobs(cronApiKey) {
+  const res = await fetch('https://api.cron-job.org/jobs', {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${cronApiKey}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Failed to list cron-job.org jobs (${res.status}): ${errText}`);
+  }
+
+  const data = await res.json();
+  return data.jobs || [];
+}
+
+export async function fetchJobDetails(cronApiKey, jobId) {
+  const res = await fetch(`https://api.cron-job.org/jobs/${jobId}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${cronApiKey}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!res.ok) return null;
+  return await res.json();
+}
+
+export async function updateCronJob(cronApiKey, jobId, payload) {
+  const res = await fetch(`https://api.cron-job.org/jobs/${jobId}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${cronApiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Failed to update cron job ${jobId} (${res.status}): ${errText}`);
+  }
+  return true;
+}
+
+export async function createCronJob(cronApiKey, payload) {
+  const res = await fetch('https://api.cron-job.org/jobs', {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${cronApiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Failed to create cron job (${res.status}): ${errText}`);
+  }
+
+  const data = await res.json();
+  return data.jobId;
+}
+
+/**
+ * Smart synchronizer for all outreach jobs
+ */
+export async function syncCronJobs(cronApiKey, githubPat, dispatchUrl, repoName, jobsToSync = JOBS_TO_CREATE) {
+  let cleanPat = githubPat.trim();
+  if (cleanPat.toLowerCase().startsWith('bearer ')) {
+    cleanPat = cleanPat.substring(7).trim();
+  } else if (cleanPat.toLowerCase().startsWith('token ')) {
+    cleanPat = cleanPat.substring(6).trim();
+  }
+
+  console.log('🔍 Fetching existing jobs from cron-job.org...');
+  const existingJobs = await fetchExistingJobs(cronApiKey);
+  console.log(`Found ${existingJobs.length} existing job(s) in your cron-job.org account.\n`);
+
+  const summary = { unchanged: 0, updated: 0, created: 0, failed: 0 };
+
+  for (const jobConfig of jobsToSync) {
+    const expectedTitle = `${repoName} - ${jobConfig.title}`;
+    const payload = buildJobPayload(repoName, dispatchUrl, cleanPat, jobConfig);
+
+    // Check if job already exists by matching title or URL
+    const existing = existingJobs.find(
+      (j) => j.title === expectedTitle || (j.url === dispatchUrl && j.title.toLowerCase().includes(jobConfig.title.toLowerCase()))
+    );
+
     try {
-      const response = await fetch('https://api.cron-job.org/jobs', {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${cronApiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
+      if (existing) {
+        // Fetch detailed config to compare
+        const detailed = await fetchJobDetails(cronApiKey, existing.jobId);
+        const upToDate = isJobUpToDate(detailed, payload);
 
-      if (response.status === 429) {
-        const backoffMs = attempt * 2500;
-        console.warn(`⚠️ Rate limited (HTTP 429) on attempt ${attempt}/${maxRetries} for "${jobConfig.title}". Retrying in ${backoffMs / 1000}s...`);
-        await sleep(backoffMs);
-        continue;
+        if (upToDate) {
+          console.log(`🛡️ [Already Up-to-Date] "${expectedTitle}" (${jobConfig.schedule.timezone} @ ${JSON.stringify(jobConfig.schedule.hours)}:${JSON.stringify(jobConfig.schedule.minutes)}) -> Skipped.`);
+          summary.unchanged++;
+        } else {
+          console.log(`🔄 [Updating Schedule/Config] "${expectedTitle}" (Job ID: ${existing.jobId})...`);
+          await updateCronJob(cronApiKey, existing.jobId, payload);
+          console.log(`✅ [Updated Successfully] "${expectedTitle}" -> New Schedule: ${jobConfig.schedule.timezone} @ ${JSON.stringify(jobConfig.schedule.hours)}:${JSON.stringify(jobConfig.schedule.minutes)}`);
+          summary.updated++;
+        }
+      } else {
+        console.log(`✨ [Creating New Job] "${expectedTitle}" (${jobConfig.schedule.timezone})...`);
+        const newJobId = await createCronJob(cronApiKey, payload);
+        console.log(`✅ [Created Successfully] "${expectedTitle}" -> Job ID: ${newJobId}`);
+        summary.created++;
       }
-
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`cron-job.org API Error (${response.status}): ${errText}`);
-      }
-
-      const data = await response.json();
-      return data.jobId;
     } catch (err) {
-      if (attempt === maxRetries) throw err;
-      console.warn(`⚠️ Warning on attempt ${attempt}/${maxRetries} for "${jobConfig.title}": ${err.message}. Retrying...`);
-      await sleep(attempt * 2000);
+      console.error(`❌ [Error] Failed on "${expectedTitle}": ${err.message}`);
+      summary.failed++;
     }
+
+    await sleep(1000); // Rate limit pacing
+  }
+
+  return summary;
+}
+
+/**
+ * Load settings from Google Sheet Settings tab
+ */
+async function tryLoadSheetSettings() {
+  const sheetId = process.env.SPREADSHEET_ID || process.env.SHEET_ID;
+  const saJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+  if (!sheetId || !saJson) return {};
+
+  try {
+    const credentials = JSON.parse(saJson);
+    const auth = new google.auth.GoogleAuth({
+      credentials,
+      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    });
+    const sheets = google.sheets({ version: 'v4', auth });
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: sheetId,
+      range: `'Settings'!A:Z`,
+    });
+    const [headers, ...rows] = res.data.values || [];
+    if (!rows) return {};
+    return Object.fromEntries(rows.map((r) => [r[0], r[1]]));
+  } catch {
+    return {};
   }
 }
 
 async function main() {
-  console.log('\n🚀 cron-job.org 1-Click Automated Setup Utility');
-  console.log('--------------------------------------------------\n');
+  console.log('\n🚀 cron-job.org Smart Non-Destructive Cron Synchronizer');
+  console.log('------------------------------------------------------------\n');
 
-  // Auto-detect owner and repo
   const detectedGit = autoDetectGitRepo();
   let repoOwner = process.env.GITHUB_OWNER || (detectedGit ? detectedGit.owner : '');
   let repoName = process.env.GITHUB_REPO || (detectedGit ? detectedGit.repo : '');
@@ -183,7 +384,7 @@ async function main() {
 
   if (!repoOwner) {
     if (isNonInteractive) {
-      console.error('❌ Error: GITHUB_OWNER or GITHUB_REPOSITORY env variable is required in non-interactive mode.');
+      console.error('❌ Error: GITHUB_OWNER or GITHUB_REPOSITORY env variable is required.');
       process.exit(1);
     }
     repoOwner = await prompt('👤 Enter your GitHub Username/Owner: ');
@@ -191,7 +392,7 @@ async function main() {
 
   if (!repoName) {
     if (isNonInteractive) {
-      console.error('❌ Error: GITHUB_REPO or GITHUB_REPOSITORY env variable is required in non-interactive mode.');
+      console.error('❌ Error: GITHUB_REPO or GITHUB_REPOSITORY env variable is required.');
       process.exit(1);
     }
     repoName = await prompt('📦 Enter your GitHub Repository Name: ');
@@ -203,12 +404,14 @@ async function main() {
   console.log(`📌 Target Repository: ${repoOwner}/${repoName}`);
   console.log(`🔗 Dispatch URL: ${dispatchUrl}\n`);
 
-  let cronApiKey = process.env.CRON_KEY || process.env.CRON_JOB_API_KEY;
-  let githubPat = process.env.GITHUB_PAT || process.env.PAT;
+  const sheetSettings = await tryLoadSheetSettings();
+
+  let cronApiKey = process.env.CRON_KEY || process.env.CRON_JOB_API_KEY || sheetSettings.cron_api_key || sheetSettings.cron_job_api_key;
+  let githubPat = process.env.GITHUB_PAT || process.env.PAT || process.env.GH_PAT || sheetSettings.github_pat;
 
   if (!cronApiKey) {
     if (isNonInteractive) {
-      console.error('❌ Error: CRON_KEY or CRON_JOB_API_KEY environment variable / workflow input is required.');
+      console.error('❌ Error: cron-job.org API Key is required (CRON_KEY env or in Sheet Settings).');
       process.exit(1);
     }
     cronApiKey = await prompt('🔑 Enter your cron-job.org API Key (from console.cron-job.org → Settings): ');
@@ -216,39 +419,31 @@ async function main() {
 
   if (!githubPat) {
     if (isNonInteractive) {
-      console.error('❌ Error: GITHUB_PAT or PAT environment variable / workflow input is required.');
+      console.error('❌ Error: GitHub PAT is required (GITHUB_PAT env or in Sheet Settings).');
       process.exit(1);
     }
     githubPat = await prompt('🔑 Enter your GitHub Personal Access Token (PAT ghp_...): ');
   }
 
-  if (!cronApiKey || !githubPat) {
-    console.error('❌ Error: Both cron-job.org API Key and GitHub PAT are required.');
+  // Parse custom schedules & timezone from Google Sheet settings
+  const dynamicJobs = parseScheduleFromSettings(sheetSettings);
+  console.log(`🌐 Configured Timezone: ${dynamicJobs[0]?.schedule?.timezone || 'Asia/Kolkata'}`);
+  console.log(`⏰ Cold Outreach Time: ${JSON.stringify(dynamicJobs.find(j => j.action === 'outreach')?.schedule?.hours[0])}:${String(dynamicJobs.find(j => j.action === 'outreach')?.schedule?.minutes[0]).padStart(2, '0')}`);
+  console.log(`⏰ Follow-up Time:    ${JSON.stringify(dynamicJobs.find(j => j.action === 'followup')?.schedule?.hours[0])}:${String(dynamicJobs.find(j => j.action === 'followup')?.schedule?.minutes[0]).padStart(2, '0')}\n`);
+
+  const summary = await syncCronJobs(cronApiKey, githubPat, dispatchUrl, repoName, dynamicJobs);
+
+  console.log('\n📊 Synchronization Summary:');
+  console.log(`• 🛡️ Up-to-Date (Skipped): ${summary.unchanged}`);
+  console.log(`• 🔄 Updated:            ${summary.updated}`);
+  console.log(`• ✨ Newly Created:       ${summary.created}`);
+  console.log(`• ❌ Failures:            ${summary.failed}\n`);
+
+  if (summary.failed > 0) {
     process.exit(1);
   }
-
-  console.log('\n⏳ Provisioning 4 cron jobs on cron-job.org...\n');
-
-  let failedCount = 0;
-  for (const jobConfig of JOBS_TO_CREATE) {
-    try {
-      const jobId = await createCronJob(cronApiKey, githubPat, dispatchUrl, jobConfig, repoName);
-      console.log(`✅ Created "${repoName} - ${jobConfig.title}" → Job ID: ${jobId}`);
-    } catch (err) {
-      failedCount++;
-      console.error(`❌ Failed to create "${jobConfig.title}": ${err.message}`);
-    }
-    // Pace API calls to respect cron-job.org rate limits
-    await sleep(1500);
-  }
-
-  if (failedCount > 0) {
-    console.error(`\n❌ Setup completed with ${failedCount} failed job(s). Please verify API keys or check rate limits.`);
-    process.exit(1);
-  }
-
-  console.log('\n🎉 Setup complete! All 4 cron jobs are active on cron-job.org.');
-  console.log('Check your dashboard at https://console.cron-job.org/\n');
 }
 
-main();
+if (process.argv[1] && process.argv[1].endsWith('setup-cron.mjs')) {
+  main();
+}

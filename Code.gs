@@ -1,7 +1,7 @@
 /**
  * 🚀 UNIVERSAL OUTREACH BOT - GOOGLE APPS SCRIPT
  * Non-destructive sheet syncer & builder.
- * Safely adds new columns/settings without overwriting existing data.
+ * Safely adds new columns/settings/tabs without overwriting existing data.
  */
 
 function createOutreachSystem(forceReset = false) {
@@ -14,11 +14,12 @@ function createOutreachSystem(forceReset = false) {
       sampleData: [
         ['1. Adding Leads', 'Go to "Details" tab. Add full_name, email, company_name, location. Leave "Sent Status", "Follow up", and "Time" BLANK.', 'The bot only sends emails to rows where Sent Status is completely empty.'],
         ['2. Aliases & Senders', 'Add or remove aliases in "Aliases" tab (e.g. Pooja, Neha, Urvashi). Toggle is_active to TRUE/FALSE.', 'The bot randomly rotates active aliases for the "From" header while using your authenticated SMTP inbox.'],
-        ['3. Email Inboxes', 'Add your primary SMTP login in "Inboxes" tab. Use App Passwords for Gmail/Google Workspace.', 'Set daily_limit (e.g. 50). The bot will never exceed this number per inbox per day.'],
-        ['4. Cold Templates', 'Edit pitches in "Templates" tab. Use tags: {{full_name}}, {{company_name}}, {{location}}, {{other_locations}}, {{clients}}, {{Date}}.', 'The bot replaces these tags dynamically with randomized cities and portfolio companies.'],
+        ['3. Email Inboxes & Warmup', 'Add your primary SMTP/IMAP login in "Inboxes" tab. Set warmup_enabled to TRUE for automatic peer warmup.', 'Set daily_limit (e.g. 50). The bot will never exceed this number per inbox per day.'],
+        ['4. Cold Templates & Footer', 'Edit pitches in "Templates" tab. Use tags: {{full_name}}, {{company_name}}, {{location}}, {{other_locations}}, {{clients}}, {{Date}}.', 'The bot automatically injects legal business details and one-click unsubscribe links.'],
         ['5. Follow-ups', 'Configure intervals and messages in "Followup_Templates" tab.', 'Follow-ups automatically stop the moment a prospect replies or if an email bounces.'],
-        ['6. Automation Schedule', 'Cold Outreach: Mon-Sat 10:00 AM IST\nFollow-ups: Mon-Sat 10:30 AM IST\nInbox Checker: 24/7 every 15 minutes\nDaily Digest: Mon-Sat 6:30 PM IST', 'Configured automatically via GitHub Actions.'],
-        ['7. Status Legend', 'SENT = Cold email sent\nreplied = Prospect replied (Sequence paused)\nbounced = Invalid email (Sequence paused)\nDone = Follow-up sequence completed', 'Updated automatically by the bot in real time.']
+        ['6. Send Mode (Live vs Draft)', 'In "Settings" tab: send_mode = "auto" (sends live) or "review" (saves to IMAP Drafts).', 'Draft mode allows you to review personalized emails in your inbox Drafts before sending.'],
+        ['7. Deliverability & Suppression', 'Check "Domain_Health" for SPF/DMARC status, "Suppressed" for unsubscribed emails, and "Inbox_Stats" for reputation.', 'Audited automatically by GitHub Actions.'],
+        ['8. Status Legend', 'SENT = Cold email sent\nreplied = Prospect replied (Sequence paused)\nbounced = Invalid email (Sequence paused)\nsuppressed = Unsubscribed / Blocked\nDone = Follow-up sequence completed', 'Updated automatically by the bot in real time.']
       ]
     },
     'Details': {
@@ -48,13 +49,13 @@ function createOutreachSystem(forceReset = false) {
       headers: [
         'email', 'display_name', 'smtp_host', 'smtp_port', 
         'smtp_user', 'smtp_pass', 'imap_host', 'imap_port', 
-        'daily_limit', 'is_active'
+        'daily_limit', 'is_active', 'warmup_enabled', 'warmup_day', 'warmup_target_volume'
       ],
       sampleData: [
         [
           'outreach@companydomain.com', 'Outreach Team', 'smtp.gmail.com', '465', 
           'outreach@companydomain.com', 'your-gmail-app-password', 'imap.gmail.com', '993', 
-          '50', 'TRUE'
+          '50', 'TRUE', 'FALSE', '1', '40'
         ]
       ]
     },
@@ -67,7 +68,21 @@ function createOutreachSystem(forceReset = false) {
         ['cutoff_hour_ist', '18', 'Stop sending at this hour in IST (18 = 6 PM)'],
         ['cutoff_minute_ist', '30', 'Stop sending at this minute in IST (30 = 6:30 PM)'],
         ['max_emails_per_run', '1000', 'Maximum emails to send per single trigger run'],
-        ['discord_updates_webhook', 'https://discord.com/api/webhooks/...', 'Channel webhook for Start/End alerts'],
+        ['campaign_active', 'TRUE', 'Master switch to turn campaigns ON or OFF (TRUE = Running, FALSE = Paused)'],
+        ['send_mode', 'auto', 'Set to "auto" for live sending or "review" to save touch-1 to IMAP Drafts'],
+        ['throttle_mode', 'adaptive', 'Set to "adaptive" (safe reputation shield) or "bulk" (high-speed fixed delay, ignores bounce penalties)'],
+        ['cron_timezone', 'Asia/Kolkata', 'Timezone for cron-job.org schedules (e.g. Asia/Kolkata, America/New_York, UTC)'],
+        ['cron_outreach_time', '10:00', 'Time to trigger Cold Outreach on cron-job.org (HH:MM in 24hr format)'],
+        ['cron_followup_time', '09:30', 'Time to trigger Follow-up Engine on cron-job.org (HH:MM in 24hr format)'],
+        ['cron_inbox_minutes', '15', 'Interval in minutes for Inbox Checker (e.g. 15 for every 15 mins)'],
+        ['cron_digest_time', '18:30', 'Time to trigger Daily Discord Digest (HH:MM in 24hr format)'],
+        ['cron_days', 'Mon-Sat', 'Days to run automation on cron-job.org (Mon-Sat, Mon-Fri, or All)'],
+        ['cron_api_key', '', 'Optional: your cron-job.org API Key (auto-read by setup-cron script)'],
+        ['github_pat', '', 'Optional: your GitHub Personal Access Token (auto-read by setup-cron script)'],
+        ['business_name', 'Outreach Team', 'Company or brand name injected into legal footer'],
+        ['business_address', '123 Business St, Tech Hub', 'Physical or registered business address for CAN-SPAM compliance'],
+        ['unsubscribe_url', '', 'Custom unsubscribe page URL (leave blank for automatic mailto link)'],
+        ['discord_updates_webhook', 'https://discord.com/api/webhooks/...', 'Channel webhook for Start/End/Digest alerts'],
         ['discord_positive_webhook', 'https://discord.com/api/webhooks/...', 'Channel webhook for New Positive/Neutral lead alerts'],
         ['discord_rereply_webhook', 'https://discord.com/api/webhooks/...', 'Channel webhook for Re-replies from existing leads'],
         ['groq_api_key', 'gsk_...', 'Groq API Key (Free) for AI Sentiment & Summary']
@@ -93,6 +108,34 @@ function createOutreachSystem(forceReset = false) {
         ['3', '7', 'Re:', 'Hi {{full_name}},\n\nChecking in one last time to see if {{company_name}} is looking for hiring support this quarter.\n\nBest,\nTeam']
       ]
     },
+    'Suppressed': {
+      color: '#DC2626',
+      headers: ['email', 'reason', 'added_at'],
+      sampleData: [
+        ['sample-optout@example.com', 'Unsubscribed via Link', '2026-08-28T10:00:00.000Z']
+      ]
+    },
+    'Inbox_Stats': {
+      color: '#0891B2',
+      headers: ['inbox_email', 'sent', 'bounced', 'complaints', 'sentToday', 'lastReset'],
+      sampleData: [
+        ['outreach@companydomain.com', '0', '0', '0', '0', '2026-08-28']
+      ]
+    },
+    'Domain_Health': {
+      color: '#4F46E5',
+      headers: ['Domain', 'SPF Status', 'DMARC Status', 'SPF Record', 'DMARC Record', 'Last Checked', 'Overall Health'],
+      sampleData: [
+        ['companydomain.com', 'PASS', 'PASS', 'v=spf1 include:_spf.google.com ~all', 'v=DMARC1; p=quarantine', '2026-08-28T06:00:00.000Z', 'Pass']
+      ]
+    },
+    'Failed_Sends': {
+      color: '#B91C1C',
+      headers: ['lead_email', 'campaign', 'error', 'attempted_at'],
+      sampleData: [
+        ['deadlead@nonexistentdomain.com', 'cold', 'Invalid recipient', '2026-08-28T10:00:00.000Z']
+      ]
+    },
     'Locations': {
       color: '#2563EB',
       headers: ['location_name'],
@@ -102,7 +145,7 @@ function createOutreachSystem(forceReset = false) {
       ]
     },
     'Clients': {
-      color: '#DC2626',
+      color: '#EA580C',
       headers: ['client_name', 'industry'],
       sampleData: [
         ['Bajaj', 'Global'], ['ICICI', 'Global'], ['Mobile Programming', 'IT'],
@@ -282,7 +325,7 @@ function createOutreachSystem(forceReset = false) {
 }
 
 /**
- * 🔄 Safe Sync (Default) - Adds missing columns/settings without overwriting existing data.
+ * 🔄 Safe Sync (Default) - Adds missing columns/settings/tabs without overwriting existing data.
  */
 function syncOutreachSystem() {
   createOutreachSystem(false);

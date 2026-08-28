@@ -1,48 +1,40 @@
 # 🚀 Universal Cold Outreach Engine & Sheet Bot
 
-An automated, serverless cold email outreach engine built with **Node.js**, **Google Sheets API**, **IMAP/SMTP**, **GitHub Actions**, **Discord Webhooks**, and a **100% Online GitHub Pages Web Dashboard**.
+An automated, 100% free, serverless cold email outreach engine built with **Node.js**, **Google Sheets API**, **IMAP/SMTP**, **GitHub Actions**, **Discord Webhooks**, and a **100% Online GitHub Pages Web Dashboard**.
 
-> ⚡ **In a hurry?** Follow the [**10-Minute Rapid Setup Guide (SETUP_10MIN.md)**](file:///d:/Codinf%20projets/Sheet-bot/SETUP_10MIN.md) to get the whole system live in 6 quick steps.
+> ⚡ **Quick Start in 3 Minutes:** Follow the [**Complete Setup Guide (SETUP_10MIN.md)**](file:///d:/Codinf%20projets/Sheet-bot/SETUP_10MIN.md) to initialize the entire infrastructure automatically using the **1-Click Auto-Setup Workflow**.
+>
+> 🔑 **Only 2 GitHub Secrets Required:** `SPREADSHEET_ID` and `GOOGLE_SERVICE_ACCOUNT_JSON`. Everything else is managed dynamically in your Google Sheet!
 
 ---
 
 ## 📋 Table of Contents
-0. [⚡ 10-Minute Rapid Setup Guide](./SETUP_10MIN.md)
+0. [⚡ 1-Click Rapid Setup Guide](./SETUP_10MIN.md)
 1. [Key Features](#-key-features)
 2. [How to Import & Setup Your Own GitHub Repo](#-how-to-import--setup-your-own-github-repo)
 3. [Online Web Dashboard (GitHub Pages)](#-online-web-dashboard-github-pages)
 4. [Prerequisites & Requirements](#-prerequisites--requirements)
-5. [Step-by-Step Initial Setup](#-step-by-step-initial-setup)
-   - [Step 1: Google Sheet Setup (1-Click Apps Script)](#step-1-google-sheet-setup-1-click-apps-script)
-   - [Step 2: Google Cloud Service Account Setup](#step-2-google-cloud-service-account-setup)
-   - [Step 3: Email Inboxes & App Passwords](#step-3-email-inboxes--app-passwords)
-   - [Step 4: Groq AI & Discord Webhooks](#step-4-groq-ai--discord-webhooks)
-   - [Step 5: GitHub Repository Secrets Configuration](#step-5-github-repository-secrets-configuration)
-6. [GitHub Personal Access Token (PAT) Setup (For 1-Click Triggers)](#-github-personal-access-token-pat-setup-for-1-click-triggers)
+5. [Step-by-Step Initial Setup (Only 2 Secrets)](#-step-by-step-initial-setup)
+6. [Dynamic Cron Schedules & Timezones in Google Sheets](#-dynamic-cron-schedules)
 7. [Running & Testing the Engine](#-running--testing-the-engine)
-   - [Option A: 100% Online Web Dashboard (GitHub Pages)](#option-a-100-online-web-dashboard-github-pages)
-   - [Option B: Local Express Dashboard (`npm start`)](#option-b-local-express-dashboard-npm-start)
-   - [Option C: 1-Click Automated Cron API Setup (setup-cron.mjs) & cron-job.org](#option-c-1-click-automated-cron-api-setup-setup-cronmjs--cron-joborg)
-   - [Option D: Native Unit Test Suite (`npm test`)](#option-d-native-unit-test-suite-npm-test)
-8. [How to Create & Manage Multiple Campaigns (Adding Second Sheets)](#-how-to-create--manage-multiple-campaigns-adding-second-sheets)
-   - [Method 1: Multi-Campaign Manager in Web Dashboard](#method-1-multi-campaign-manager-in-web-dashboard)
-   - [Method 2: Multi-Campaign GitHub Workflows](#method-2-multi-campaign-github-workflows)
-9. [Google Sheets Architecture & 11 Color-Coded Tabs](#-google-sheets-architecture--11-color-coded-tabs)
+8. [Google Sheets Architecture & Color-Coded Tabs](#-google-sheets-architecture--color-coded-tabs)
 
 ---
 
 ## ⚡ Key Features
 
-- **🌐 100% Online GitHub Pages Web Dashboard**: Live browser view (`https://<YOUR_USERNAME>.github.io/<YOUR_REPO_NAME>/`) for 24/7 visual analytics, lead search, inbox health, and 1-click cloud triggers without running anything offline.
-- **🎯 Multi-Campaign & Multi-Sheet Switcher**: Manage unlimited separate campaigns and Google Sheets in 1 click right from the top header.
-- **🛡️ 100% Free Pre-Send MX & Domain Validation**: Uses Node's built-in `node:dns/promises` to perform real-time `dns.resolveMx(domain)` lookups. Automatically flags invalid/dead email domains as `bounced` before sending, protecting your sender IP reputation without any paid APIs.
-- **1-Click Google Sheet Generator**: Apps Script (`Code.gs`) automatically builds all 11 color-coded tabs with headers, sample data, and dynamic `=LET(...)` formulas.
-- **Smart Rotation & Alias Matcher**: Rotates through active email inboxes and matches original sender aliases on follow-ups.
-- **Automated Follow-Up Sequence**: Sends scheduled follow-ups and automatically halts when a prospect replies, unsubscribes, or bounces.
-- **AI Reply Sentiment Analysis & Summary**: Uses Groq LLM (`openai/gpt-oss-120b`) to categorize replies as `POSITIVE`, `NEUTRAL`, `NEGATIVE`, or `OOO` and generate concise email summaries.
-- **Discord Integration & Daily Digest**: Real-time alerts for positive leads, batch status, daily limit warnings, and a 6:30 PM IST Daily Performance Digest card.
-- **⏱️ 1-Click Automated Cron API Setup**: Automatically provision all 4 scheduled jobs (Follow-up, Outreach, Inbox Checker, Daily Digest) on [cron-job.org](https://cron-job.org) in seconds via API using the GitHub Actions workflow **⚡ Provision Cron Jobs (cron-job.org)** or CLI script `node setup-cron.mjs`. Full instructions in [`CRON_SETUP.md`](./CRON_SETUP.md).
-- **🔒 Concurrency & Double-Sending Safety Lock**: Workflow concurrency lock prevents parallel execution and guarantees zero double-sending.
+- **🚀 1-Click Automated Setup & Provisioning**: Single workflow (`setup_engine.yml`) that automatically generates all 11 Google Sheet tabs, headers, formulas, sample leads, and provisions all `cron-job.org` timers.
+- **🌐 100% Online GitHub Pages Web Dashboard**: Live browser view (`https://<YOUR_USERNAME>.github.io/<YOUR_REPO_NAME>/`) for 24/7 visual analytics, lead search, inbox health, and 1-click cloud triggers.
+- **🎲 Spintax (Spin Syntax) Randomization**: High-entropy email variations using `{{Hi|Hey|Hello}}` and `{{option 1 | option 2}}` across subject lines and email bodies to eliminate repetitive pattern matching and skyrocket deliverability.
+- **⏯️ Master Campaign ON/OFF Toggle**: Start, pause, or resume all outreach and follow-ups dynamically in 1 second by setting `campaign_active = TRUE/FALSE` in Google Sheet `Settings`.
+- **⚡ High-Speed Bulk Campaign Mode**: Switch `throttle_mode = bulk` in Google Sheet `Settings` to send large volume blasts (1500+ emails) at fixed high speed (1s–2s delay), ignoring bounce/complaint slowdown penalties.
+- **🛡️ Adaptive Deliverability Shield**: In default mode (`throttle_mode = adaptive`), protects sender reputation by dynamically adjusting delay (60s on spam complaints, 15s on high bounces, 8s ramp-up, 3s steady state).
+- **📝 IMAP Draft-Review Mode**: Toggle `send_mode = review` in your sheet to automatically generate and save personalized Touch-1 emails directly into your inbox **Drafts** folder for inspection before sending.
+- **🔍 SPF & DMARC DNS Auditing**: Automated weekly audits verifying domain authentication records and logging results to `Domain_Health`.
+- **🔥 Peer-to-Peer Free Warmup**: Built-in synthetic inbox warmup engine between enabled inboxes with progressive daily volume ramp-up.
+- **⛔ Global Suppression & 1-Click Unsubscribe**: Fast in-memory cached suppression list with HMAC signed unsubscribe tokens and CAN-SPAM legal footers.
+- **🤖 AI Sentiment & Summary Analysis**: Uses Groq LLM to categorize prospect replies (`POSITIVE`, `NEUTRAL`, `NEGATIVE`, `OOO`) with resilient fallback.
+- **⏱️ Dynamic Timezones & Schedules**: Customize cron execution hours and timezones (`Asia/Kolkata`, `America/New_York`, `UTC`) directly in your Google Sheet `Settings` tab.
 
 ---
 
