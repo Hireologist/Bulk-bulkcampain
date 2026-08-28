@@ -1,4 +1,5 @@
 import { google } from 'googleapis';
+import { fileURLToPath } from 'url';
 import { checkDomainAuth } from '../src/dns-check.mjs';
 import { syncCronJobs, parseScheduleFromSettings, autoDetectGitRepo } from '../setup-cron.mjs';
 import { postToDiscord } from '../src/alerts.mjs';
@@ -38,7 +39,7 @@ function getGoogleAuth() {
   return { sheets, sheetId };
 }
 
-const COMPLETE_SCHEMA = {
+export const COMPLETE_SCHEMA = {
   '📖 Setup_Guide': {
     headers: ['Section / Step', 'Instructions & Rules', 'Important Notes'],
     sampleData: [
@@ -178,6 +179,25 @@ const COMPLETE_SCHEMA = {
       ['Bajaj', 'Global'], ['ICICI', 'Global'], ['Mobile Programming', 'IT'],
       ['Turing', 'IT'], ['NP Digital', 'Digital Marketing'], ['KENT RO', 'Manufacturing'],
       ['Physics Wallah', 'Edtech'], ['Ditto', 'Insurance'], ['Mapro Foods', 'Foods']
+    ]
+  },
+  '📊 Email_Analytics': {
+    headers: ['Metric', 'Value', 'Calculation / Formula'],
+    sampleData: [
+      ['Total Leads Ingested', '=COUNTA(Details!B2:B)', 'Calculated automatically'],
+      ['Total Emails Sent', '=COUNTIF(Details!G2:G, "SENT")', 'Calculated automatically'],
+      ['Total Replies Received', '=COUNTIF(Details!G2:G, "replied")', 'Calculated automatically'],
+      ['Positive Responses', '=COUNTIF(Details!L2:L, "POSITIVE")', 'Calculated automatically'],
+      ['Bounces Detected', '=COUNTIF(Details!G2:G, "bounced")', 'Calculated automatically']
+    ]
+  },
+  '📈 ChartData': {
+    headers: ['Sentiment Category', 'Lead Count'],
+    sampleData: [
+      ['POSITIVE', '=COUNTIF(Details!L2:L, "POSITIVE")'],
+      ['NEUTRAL', '=COUNTIF(Details!L2:L, "NEUTRAL")'],
+      ['NEGATIVE', '=COUNTIF(Details!L2:L, "NEGATIVE")'],
+      ['OOO (Out of Office)', '=COUNTIF(Details!L2:L, "OOO")']
     ]
   }
 };
@@ -353,7 +373,9 @@ async function runAutoSetup() {
   console.log('================================================================\n');
 }
 
-runAutoSetup().catch((err) => {
-  console.error('❌ Auto-setup failed:', err);
-  process.exit(1);
-});
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  runAutoSetup().catch((err) => {
+    console.error('❌ Auto-setup failed:', err);
+    process.exit(1);
+  });
+}
