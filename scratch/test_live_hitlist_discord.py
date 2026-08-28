@@ -3,7 +3,7 @@ sys.path.append(os.path.abspath('.'))
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
-from gcc_tracker import post_bdm_daily_hitlist_digest
+from gcc_tracker import send_consolidated_discord_hitlist
 
 sample_items = [
     {
@@ -12,7 +12,8 @@ sample_items = [
         "amount_scale": "$12M",
         "city": "India",
         "vc_lead": "Singularity AMC",
-        "link": "https://economictimes.indiatimes.com/tech/funding/faithtech-startup-instaastro-raises-12-million-in-round-led-by-singularity-amc/articleshow/133557338.cms"
+        "is_gcc": False,
+        "url": "https://economictimes.indiatimes.com/tech/funding/faithtech-startup-instaastro-raises-12-million-in-round-led-by-singularity-amc/articleshow/133557338.cms"
     },
     {
         "company": "HCLTech",
@@ -20,7 +21,8 @@ sample_items = [
         "amount_scale": "Undisclosed",
         "city": "Pune",
         "vc_lead": "Undisclosed",
-        "link": "https://news.google.com/rss/articles/sample_hcl"
+        "is_gcc": True,
+        "url": "https://news.google.com/rss/articles/sample_hcl"
     },
     {
         "company": "OORJAA",
@@ -28,7 +30,8 @@ sample_items = [
         "amount_scale": "Undisclosed",
         "city": "India",
         "vc_lead": "Equentis Angel Fund",
-        "link": "https://news.google.com/rss/articles/sample_oorjaa"
+        "is_gcc": False,
+        "url": "https://news.google.com/rss/articles/sample_oorjaa"
     },
     {
         "company": "Ringg",
@@ -36,7 +39,8 @@ sample_items = [
         "amount_scale": "Undisclosed",
         "city": "Bangalore",
         "vc_lead": "Peak XV",
-        "link": "https://news.google.com/rss/articles/sample_ringg"
+        "is_gcc": False,
+        "url": "https://news.google.com/rss/articles/sample_ringg"
     },
     {
         "company": "Kolors Health",
@@ -44,11 +48,11 @@ sample_items = [
         "amount_scale": "Undisclosed",
         "city": "India",
         "vc_lead": "Piramal Alts",
-        "link": "https://news.google.com/rss/articles/sample_kolors"
+        "is_gcc": False,
+        "url": "https://news.google.com/rss/articles/sample_kolors"
     }
 ]
 
 print("🧪 Testing BDM Daily Hitlist digest layout generation...")
-# Test formatting without webhook
-post_bdm_daily_hitlist_digest("", sample_items)
+send_consolidated_discord_hitlist(sample_items)
 print("✅ Format test finished successfully.")
