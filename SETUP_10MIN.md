@@ -103,6 +103,8 @@ Compose your cold email pitch using dynamic template tags and **Spintax rotation
 | **`cron_followup_time`** | `09:30` | Follow-up sequence send time (`HH:MM`). |
 | **`cron_inbox_minutes`** | `15` | How often to scan inboxes for replies (`15` = every 15 mins). |
 | **`cron_digest_time`** | `18:30` | Time to send Daily Discord summary (`HH:MM`). |
+| **`cron_diagnostic_schedule`**| `daily_0900` | Pre-flight diagnostic timing (`manual` = on-demand, `daily_0900` = daily at 09:00 AM, `weekly_monday_0830` = Mondays at 08:30 AM). |
+| **`cron_diagnostic_time`**| `09:00` | Custom time for Campaign Pre-Flight Diagnostic (`HH:MM`). |
 | **`cron_days`** | `Mon-Sat` | Active automation days (`Mon-Sat`, `Mon-Fri`, or `All`). |
 | **`business_name`** | `Outreach Team` | Injected into legal CAN-SPAM email footer. |
 | **`business_address`** | `123 Tech St` | Registered company address for CAN-SPAM compliance. |

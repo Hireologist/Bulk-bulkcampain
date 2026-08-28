@@ -43,10 +43,11 @@ describe('Smart Cron-Job.org Synchronizer Unit Tests', () => {
       cron_inbox_minutes: '20',
       cron_digest_time: '19:00',
       cron_days: 'Mon-Fri',
+      cron_diagnostic_schedule: 'daily_0900',
     };
 
     const jobs = parseScheduleFromSettings(customSettings);
-    assert.strictEqual(jobs.length, 5);
+    assert.strictEqual(jobs.length, 6);
 
     const outreach = jobs.find((j) => j.action === 'outreach');
     assert.strictEqual(outreach.schedule.timezone, 'America/New_York');
@@ -58,8 +59,25 @@ describe('Smart Cron-Job.org Synchronizer Unit Tests', () => {
     assert.strictEqual(domainHealth.workflow, 'domain-health.yml');
     assert.deepStrictEqual(domainHealth.schedule.wdays, [1]);
 
+    const diagnostic = jobs.find((j) => j.title === 'Campaign Pre-Flight Diagnostic');
+    assert.strictEqual(diagnostic.workflow, 'test_campaign.yml');
+    assert.deepStrictEqual(diagnostic.schedule.hours, [9]);
+    assert.deepStrictEqual(diagnostic.schedule.minutes, [0]);
+
     const inbox = jobs.find((j) => j.action === 'inbox');
     assert.deepStrictEqual(inbox.schedule.minutes, [0, 20, 40]);
+
+    // Test "manual" mode (diagnostic job omitted)
+    const manualJobs = parseScheduleFromSettings({ cron_diagnostic_schedule: 'manual' });
+    assert.strictEqual(manualJobs.length, 5);
+    assert.strictEqual(manualJobs.find(j => j.title === 'Campaign Pre-Flight Diagnostic'), undefined);
+
+    // Test "weekly_monday_0830" mode
+    const weeklyJobs = parseScheduleFromSettings({ cron_diagnostic_schedule: 'weekly_monday_0830' });
+    const weeklyDiag = weeklyJobs.find(j => j.title === 'Campaign Pre-Flight Diagnostic');
+    assert.deepStrictEqual(weeklyDiag.schedule.wdays, [1]);
+    assert.deepStrictEqual(weeklyDiag.schedule.hours, [8]);
+    assert.deepStrictEqual(weeklyDiag.schedule.minutes, [30]);
   });
 
   test('buildJobPayload constructs valid cron-job.org payload', () => {

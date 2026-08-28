@@ -661,6 +661,14 @@ export async function runSingleLeadOutreach(singleLeadPayload = {}) {
   const config = await loadConfig(sheetsObj);
   const activeWebhookUrl = customWebhookUrl || config.settings.discord_updates_webhook || process.env.DISCORD_WEBHOOK_URL;
 
+  // ⏸️ Master Campaign Toggle Check
+  if (!isCampaignActive(config.settings, 'single_lead')) {
+    const pauseMsg = '⏸️ **Campaign Paused Notice:** Single lead outreach is turned OFF/PAUSED in Google Sheet Settings (`campaign_active = FALSE`). Skipping dispatch safely.';
+    console.log(pauseMsg);
+    await notifyDiscord(activeWebhookUrl, pauseMsg);
+    return [{ success: false, error: 'Campaign is paused in Google Sheet Settings' }];
+  }
+
   if (!config.inboxes.length) {
     const err = new Error('No active Inboxes configured in "Inboxes" tab.');
     await notifyDiscord(activeWebhookUrl, `❌ **Email Dispatch Error**\n**Error:** \`${err.message}\``);

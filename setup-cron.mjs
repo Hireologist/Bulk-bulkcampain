@@ -92,7 +92,7 @@ export function parseScheduleFromSettings(settings = {}) {
   const inboxMinutes = parseMinutesList(settings.cron_inbox_minutes || '15');
   const domainHealthTime = parseTime(settings.cron_domain_health_time || '06:00', 6, 0);
 
-  return [
+  const jobs = [
     {
       title: 'Followup Engine',
       action: 'followup',
@@ -164,6 +164,29 @@ export function parseScheduleFromSettings(settings = {}) {
       },
     },
   ];
+
+  const diagScheduleType = String(settings.cron_diagnostic_schedule || 'daily_0900').trim().toLowerCase();
+  const diagTime = parseTime(settings.cron_diagnostic_time || (diagScheduleType.includes('0830') ? '08:30' : '09:00'), 9, 0);
+
+  if (!['manual', 'off', 'none', 'disabled'].includes(diagScheduleType)) {
+    const diagWdays = (diagScheduleType === 'weekly_monday_0830' || diagScheduleType === 'weekly') ? [1] : wdays;
+    jobs.push({
+      title: 'Campaign Pre-Flight Diagnostic',
+      workflow: 'test_campaign.yml',
+      body: { ref: 'main' },
+      schedule: {
+        timezone,
+        expiresAt: 0,
+        hours: [diagTime.hour],
+        minutes: [diagTime.minute],
+        mdays: [-1],
+        wdays: diagWdays,
+        months: [-1],
+      },
+    });
+  }
+
+  return jobs;
 }
 
 export const JOBS_TO_CREATE = parseScheduleFromSettings({});
