@@ -25,7 +25,8 @@ function createOutreachSystem(forceReset = false) {
         ['11. Deliverability & DNS Health', 'Check "Domain_Health" for live SPF and DMARC status. Audited automatically every week.', 'Domains are automatically extracted from the "Inboxes" tab.'],
         ['12. Suppression & Unsubscribe', 'Check "Suppressed" tab. Contains all unsubscribed and negative reply leads.', 'Suppressed leads are permanently blocked from all future campaigns.'],
         ['13. Dead-Letter Failed Sends', 'Check "Failed_Sends" tab. Captures any send that failed after 3 exponential backoff attempts with exact error and campaign tag.', 'Helps you troubleshoot mailbox or network issues.'],
-        ['14. Status Legend', 'SENT = Cold email sent\nreplied = Prospect replied (Sequence paused)\nbounced = Invalid email (Sequence paused)\nsuppressed = Unsubscribed / Blocked\nDone = Follow-up sequence completed', 'Updated automatically by the bot in real time.']
+        ['14. Status Legend', 'SENT = Cold email sent\nreplied = Prospect replied (Sequence paused)\nbounced = Invalid email (Sequence paused)\nsuppressed = Unsubscribed / Blocked\nDone = Follow-up sequence completed', 'Updated automatically by the bot in real time.'],
+        ['15. GCC Leadership Radar', 'In "Settings" tab: set gcc_radar_enabled = "TRUE" to run radar, and discord_gcc_radar_webhook to your separate Discord webhook URL.', 'Monitors GCC setups, office space leases, and startup funding daily at 09:00 AM IST via cron-job.org.']
       ]
     },
     'Details': {
@@ -94,6 +95,9 @@ function createOutreachSystem(forceReset = false) {
         ['discord_updates_webhook', 'https://discord.com/api/webhooks/...', 'Channel webhook for Start/End/Digest alerts'],
         ['discord_positive_webhook', 'https://discord.com/api/webhooks/...', 'Channel webhook for New Positive/Neutral lead alerts'],
         ['discord_rereply_webhook', 'https://discord.com/api/webhooks/...', 'Channel webhook for Re-replies from existing leads'],
+        ['discord_gcc_radar_webhook', 'https://discord.com/api/webhooks/...', 'Channel webhook for GCC Leadership Radar alerts'],
+        ['gcc_radar_enabled', 'TRUE', 'Set to TRUE to run GCC Leadership Radar daily, or FALSE/OFF to mute'],
+        ['cron_gcc_radar_time', '09:00', 'Time to trigger GCC Leadership Radar on cron-job.org (HH:MM in 24hr IST format)'],
         ['groq_api_key', 'gsk_...', 'Groq API Key (Free) for AI Sentiment & Summary']
       ]
     },
