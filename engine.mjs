@@ -429,13 +429,27 @@ export async function runColdOutreach() {
       break;
     }
 
-    // Pick alias
+    // 🎯 Pick alias mapped to this inbox or matching domain
     let senderEmail = inbox.email;
     let senderName = inbox.display_name || 'Team';
     if (config.aliases.length > 0) {
-      const chosenAlias = config.aliases[Math.floor(Math.random() * config.aliases.length)];
-      senderEmail = chosenAlias.alias_email;
-      senderName = chosenAlias.display_name || chosenAlias.alias_email.split('@')[0];
+      const inboxDomain = (inbox.email.split('@')[1] || '').toLowerCase();
+      
+      // Filter aliases assigned to this inbox or matching domain
+      const eligibleAliases = config.aliases.filter(a => {
+        const assignedInbox = (a.inbox_email || '').trim().toLowerCase();
+        if (assignedInbox) {
+          return assignedInbox === inbox.email.toLowerCase();
+        }
+        const aliasDomain = (a.alias_email.split('@')[1] || '').toLowerCase();
+        return aliasDomain && aliasDomain === inboxDomain;
+      });
+
+      if (eligibleAliases.length > 0) {
+        const chosenAlias = eligibleAliases[Math.floor(Math.random() * eligibleAliases.length)];
+        senderEmail = chosenAlias.alias_email;
+        senderName = chosenAlias.display_name || chosenAlias.alias_email.split('@')[0];
+      }
     }
 
     // Personalization
@@ -689,9 +703,19 @@ export async function runSingleLeadOutreach(singleLeadPayload = {}) {
     let senderEmail = inbox.email;
     let senderName = inbox.display_name || 'Team';
     if (config.aliases.length > 0) {
-      const chosenAlias = config.aliases[Math.floor(Math.random() * config.aliases.length)];
-      senderEmail = chosenAlias.alias_email;
-      senderName = chosenAlias.display_name || chosenAlias.alias_email.split('@')[0];
+      const inboxDomain = (inbox.email.split('@')[1] || '').toLowerCase();
+      const eligibleAliases = config.aliases.filter(a => {
+        const assignedInbox = (a.inbox_email || '').trim().toLowerCase();
+        if (assignedInbox) return assignedInbox === inbox.email.toLowerCase();
+        const aliasDomain = (a.alias_email.split('@')[1] || '').toLowerCase();
+        return aliasDomain && aliasDomain === inboxDomain;
+      });
+
+      if (eligibleAliases.length > 0) {
+        const chosenAlias = eligibleAliases[Math.floor(Math.random() * eligibleAliases.length)];
+        senderEmail = chosenAlias.alias_email;
+        senderName = chosenAlias.display_name || chosenAlias.alias_email.split('@')[0];
+      }
     }
 
     const template = config.coldTemplates[Math.floor(Math.random() * config.coldTemplates.length)];
@@ -916,11 +940,14 @@ export async function runFollowups() {
     const senderName = matchedAlias ? matchedAlias.display_name : (originalSenderEmail.split('@')[0] || 'Team');
     const senderEmail = originalSenderEmail || config.inboxes[0].email;
 
-    // 🎯 2. MATCH INBOX CREDENTIALS FOR THIS SENDER DOMAIN
+    // 🎯 2. MATCH INBOX CREDENTIALS FOR THIS SENDER (Exact Mailbox, Assigned Inbox, or Same Domain)
     let inboxToUse = config.inboxes.find(i => i.email.toLowerCase() === originalSenderEmail.toLowerCase());
+    if (!inboxToUse && matchedAlias && matchedAlias.inbox_email) {
+      inboxToUse = config.inboxes.find(i => i.email.toLowerCase() === matchedAlias.inbox_email.trim().toLowerCase());
+    }
     if (!inboxToUse && originalSenderEmail.includes('@')) {
       const senderDomain = originalSenderEmail.split('@')[1].toLowerCase();
-      inboxToUse = config.inboxes.find(i => i.email.toLowerCase().endsWith(`@${senderDomain}`));
+      inboxToUse = config.inboxes.find(i => (i.email.split('@')[1] || '').toLowerCase() === senderDomain);
     }
     if (!inboxToUse) inboxToUse = config.inboxes[0];
 

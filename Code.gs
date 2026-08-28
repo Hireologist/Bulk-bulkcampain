@@ -35,13 +35,13 @@ function createOutreachSystem(forceReset = false) {
     },
     'Aliases': {
       color: '#EC4899',
-      headers: ['alias_email', 'display_name', 'is_active'],
+      headers: ['alias_email', 'display_name', 'is_active', 'inbox_email'],
       sampleData: [
-        ['pooja@companydomain.com', 'Pooja', 'TRUE'],
-        ['neha@companydomain.com', 'Neha', 'TRUE'],
-        ['urvashi@companydomain.com', 'Urvashi', 'TRUE'],
-        ['shraddha@companydomain.com', 'Shraddha', 'TRUE'],
-        ['roshni@companydomain.com', 'Roshni', 'TRUE']
+        ['pooja@companydomain.com', 'Pooja', 'TRUE', 'outreach@companydomain.com'],
+        ['neha@companydomain.com', 'Neha', 'TRUE', 'outreach@companydomain.com'],
+        ['urvashi@companydomain.com', 'Urvashi', 'TRUE', 'outreach@companydomain.com'],
+        ['shraddha@companydomain.com', 'Shraddha', 'TRUE', 'outreach@companydomain.com'],
+        ['roshni@companydomain.com', 'Roshni', 'TRUE', 'outreach@companydomain.com']
       ]
     },
     'Inboxes': {
