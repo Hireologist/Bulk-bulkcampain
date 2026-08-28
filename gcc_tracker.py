@@ -226,6 +226,109 @@ def build_google_search_url(query):
     encoded = urllib.parse.quote(query)
     return f"https://www.google.com/search?q={encoded}"
 
+def post_bdm_daily_hitlist_digest(webhook_url, items):
+    if not webhook_url or not webhook_url.startswith("http") or not items:
+        print("⚠️ No valid Discord Webhook URL provided or empty hitlist items.")
+        return False
+
+    now_ist = datetime.now(IST)
+    date_str = now_ist.strftime("%d-%b-%Y").upper()
+
+    header = f"📊 **BDM DAILY HITLIST | {date_str}**"
+
+    lines = []
+    lines.append(f"{'COMPANY':<16} | {'STAGE/TYPE':<12} | {'AMOUNT/SCALE':<12} | {'CITY':<10} | {'VC / LEAD'}")
+    lines.append("-" * 74)
+
+    quick_links = ["\n**QUICK ACTION LINKS:**"]
+
+    for item in items:
+        full_comp = item.get("company", "Company")
+        full_stage = item.get("stage_type", "GCC Launch")
+        full_amount = item.get("amount_scale", "Undisclosed")
+        full_city = item.get("city", "India")
+        full_vc = item.get("vc_lead", "Undisclosed")
+        news_link = item.get("link", "")
+
+        comp = full_comp[:15]
+        stage = full_stage[:12]
+        amount = full_amount[:12]
+        city = full_city[:10]
+        vc = full_vc[:16]
+
+        lines.append(f"{comp:<16} | {stage:<12} | {amount:<12} | {city:<10} | {vc}")
+
+        is_gcc = "gcc" in full_stage.lower()
+
+        if is_gcc:
+            lead_q = '"Managing Director" OR "Site Leader" OR "Head of India" OR "Director of Engineering"'
+            lead_label = "Site Lead"
+            lead_url = build_google_search_url(f'site:linkedin.com/in "{full_comp}" ({lead_q}) "{full_city}"')
+        else:
+            lead_q = '"Founder" OR "CEO" OR "Chief People Officer" OR "Head of Talent"'
+            lead_label = "Founder"
+            lead_url = build_google_search_url(f'site:linkedin.com/in "{full_comp}" ({lead_q})')
+
+        link_parts = [f"• **{full_comp}**: [{lead_label}]({lead_url})"]
+
+        if full_vc and full_vc.lower() not in ["undisclosed", "n/a", "none"]:
+            vc_url = build_google_search_url(f'site:linkedin.com/in "{full_vc}" ("Talent Partner" OR "Operating Partner" OR "Head of Talent")')
+            link_parts.append(f"[VC]({vc_url})")
+
+        if news_link:
+            link_parts.append(f"[News]({news_link})")
+
+        quick_links.append(" • ".join(link_parts))
+
+    table_block = "```text\n" + "\n".join(lines) + "\n```"
+    full_content = f"{header}\n\n{table_block}\n" + "\n".join(quick_links)
+
+    # Split into chunks if hitlist exceeds 1900 chars
+    chunks = []
+    if len(full_content) <= 1900:
+        chunks = [full_content]
+    else:
+        chunks.append(f"{header}\n\n{table_block}")
+        current_chunk = "**QUICK ACTION LINKS:**\n"
+        for ql in quick_links[1:]:
+            if len(current_chunk) + len(ql) + 1 > 1800:
+                chunks.append(current_chunk)
+                current_chunk = ql + "\n"
+            else:
+                current_chunk += ql + "\n"
+        if current_chunk.strip():
+            chunks.append(current_chunk)
+
+    headers = {"Content-Type": "application/json"}
+    success = True
+
+    for chunk in chunks:
+        payload = json.dumps({"content": chunk}).encode('utf-8')
+        posted = False
+        if requests:
+            try:
+                res = requests.post(webhook_url, data=payload, headers=headers, timeout=10)
+                if res.status_code in [200, 204]:
+                    posted = True
+            except Exception as e:
+                print(f"❌ requests error posting digest to Discord: {e}")
+
+        if not posted:
+            try:
+                import urllib.request
+                req = urllib.request.Request(webhook_url, data=payload, headers=headers)
+                with urllib.request.urlopen(req, timeout=10) as res:
+                    posted = True
+            except Exception as e:
+                print(f"❌ urllib error posting digest to Discord: {e}")
+
+        if posted:
+            print(f"✅ Posted BDM Daily Hitlist digest chunk to Discord!")
+        else:
+            success = False
+
+    return success
+
 def post_to_discord(webhook_url, title, summary, link, company_name, city, lead_type, company_website="", key_people=None):
     if not webhook_url or not webhook_url.startswith("http"):
         print("⚠️ No valid Discord Webhook URL provided. Skipping Discord alert.")
@@ -310,8 +413,12 @@ def analyze_story_with_ai(title, summary, link):
             "company": brand_hint[:30],
             "brand_key": clean_brand,
             "city": "India",
-            "type": "GCC Expansion / Tech Funding",
-            "relevant": True
+            "stage_type": "GCC Expansion",
+            "amount_scale": "Undisclosed",
+            "vc_lead": "Undisclosed",
+            "summary": title,
+            "relevant": True,
+            "link": link
         }
 
     prompt = f"""Extract structured GCC or tech company expansion/funding details from this news story:
@@ -322,11 +429,12 @@ Respond ONLY with raw JSON in this format:
 {{
   "is_relevant": true,
   "company_name": "Company Name",
-  "company_website": "official website domain e.g. wacker.com, or leave empty if unknown",
-  "city": "City or Region",
-  "lead_type": "GCC Launch | GCC Expansion | Tech Funding | Office Lease",
-  "brief_summary": "1-2 sentence executive summary of the signal",
-  "key_people": ["Executive or Founder Name 1 (Role)", "Executive Name 2 (Role)"]
+  "company_website": "official website domain or leave empty",
+  "city": "City or Region e.g. Pune, Bangalore, Hyderabad, India",
+  "stage_type": "Series A | Series B | Seed | Debt | New GCC | GCC Expansion | Office Lease",
+  "amount_scale": "$12M or ₹100 Cr or 50,000 sq ft or Undisclosed",
+  "vc_lead": "VC Fund / Lead Investor / Partner Name or Undisclosed",
+  "brief_summary": "1 sentence executive summary of the signal"
 }}"""
 
     models_to_try = [
@@ -356,10 +464,12 @@ Respond ONLY with raw JSON in this format:
                     "company_website": parsed.get("company_website", ""),
                     "brand_key": brand_key,
                     "city": parsed.get("city", "India"),
-                    "type": parsed.get("lead_type", "GCC Expansion"),
+                    "stage_type": parsed.get("stage_type", "GCC Expansion"),
+                    "amount_scale": parsed.get("amount_scale", "Undisclosed"),
+                    "vc_lead": parsed.get("vc_lead", "Undisclosed"),
                     "summary": parsed.get("brief_summary", title),
-                    "key_people": parsed.get("key_people", []),
-                    "relevant": parsed.get("is_relevant", True)
+                    "relevant": parsed.get("is_relevant", True),
+                    "link": link
                 }
         except Exception as e:
             if "429" in str(e) or "rate_limit" in str(e).lower():
@@ -372,9 +482,12 @@ Respond ONLY with raw JSON in this format:
         "company": brand_hint[:30],
         "brand_key": clean_brand,
         "city": "India",
-        "type": "GCC Expansion",
+        "stage_type": "GCC Expansion",
+        "amount_scale": "Undisclosed",
+        "vc_lead": "Undisclosed",
         "summary": title,
-        "relevant": True
+        "relevant": True,
+        "link": link
     }
 
 def run_gcc_radar():
@@ -394,6 +507,7 @@ def run_gcc_radar():
     print(f"📊 Total collected stories across all sources: {len(all_articles)}")
     processed_count = 0
     new_signals = 0
+    new_hitlist_items = []
 
     for article in all_articles:
         title = article.get("title", "")
@@ -414,13 +528,15 @@ def run_gcc_radar():
         brand_key = analysis.get("brand_key")
         company = analysis.get("company")
         city = analysis.get("city")
-        lead_type = analysis.get("type")
+        lead_type = analysis.get("stage_type", "GCC Expansion")
         exec_summary = analysis.get("summary") or title
 
         print(f"\n✨ [AI Extracted Signal #{processed_count}]")
         print(f"   🏢 Company  : {company}")
         print(f"   📍 Hub/City : {city}")
         print(f"   🏷️ Category : {lead_type}")
+        print(f"   💰 Amount   : {analysis.get('amount_scale')}")
+        print(f"   🤝 VC / Lead: {analysis.get('vc_lead')}")
         print(f"   📝 Summary  : {exec_summary}")
         print(f"   🔗 URL      : {link}")
 
@@ -428,19 +544,18 @@ def run_gcc_radar():
             print(f"   ⏭️ Status   : Previously seen in database (deduplicated)")
             continue
         else:
-            print(f"   ✅ Status   : NEW Lead Signal! (Sending Discord Alert)")
+            print(f"   ✅ Status   : NEW Lead Signal! (Added to BDM Daily Hitlist)")
 
         # Mark processed in SQLite
         mark_brand_processed(brand_key, company, city)
 
-        company_website = analysis.get("company_website", "")
-        key_people = analysis.get("key_people", [])
-
-        # Post alert to dedicated Discord channel
-        if DISCORD_WEBHOOK_URL:
-            post_to_discord(DISCORD_WEBHOOK_URL, title, exec_summary, link, company, city, lead_type, company_website, key_people)
-
+        new_hitlist_items.append(analysis)
         new_signals += 1
+
+    # Post BDM Daily Hitlist Digest to Discord
+    if new_hitlist_items and DISCORD_WEBHOOK_URL:
+        print(f"\n🚀 Posting BDM Daily Hitlist Digest with {len(new_hitlist_items)} new leads to Discord...")
+        post_bdm_daily_hitlist_digest(DISCORD_WEBHOOK_URL, new_hitlist_items)
 
     print(f"✨ GCC Leadership Radar Run Complete. Relevant Signals Evaluated: {processed_count}, New Alerts Sent: {new_signals}")
 
