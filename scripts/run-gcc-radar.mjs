@@ -23,8 +23,8 @@ export async function getGoogleSheetsClient() {
 }
 
 export function isGccRadarEnabled(settingsMap = {}) {
-  const rawValue = String(settingsMap.gcc_radar_enabled ?? settingsMap.gcc_leadership_radar_enabled ?? 'TRUE').trim().toLowerCase();
-  return !['false', 'off', '0', 'no', 'mute'].includes(rawValue);
+  const rawValue = String(settingsMap.gcc_radar_enabled ?? settingsMap.gcc_leadership_radar_enabled ?? 'FALSE').trim().toLowerCase();
+  return ['true', '1', 'yes', 'on', 'enable', 'enabled'].includes(rawValue);
 }
 
 export function selectGccRadarDiscordWebhook(settingsMap = {}, envWebhook = '') {
