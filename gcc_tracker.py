@@ -87,11 +87,11 @@ WEBSITES_TO_SCRAPE = [
     }
 ]
 
-# Targeted Google Queries (Strictly Last 48h)
+# Targeted Google Queries (Strictly Last 24h)
 SEARCH_QUERIES = [
-    '("Global Capability Center" OR "GCC" OR "Technology Center") ("Ahmedabad" OR "GIFT City" OR "Pune" OR "Mumbai" OR "Bangalore" OR "Hyderabad" OR "Chennai" OR "Gurgaon" OR "Noida") ("launch" OR "set up" OR "expand" OR "opens" OR "invests" OR "leases") when:2d',
-    '(startup OR "tech company" OR "D2C" OR "Fintech") (raises OR secures OR bags OR "mops up" OR funding) ("Seed" OR "Series" OR "crore" OR "million" OR "Cr") (India OR Bangalore OR Mumbai OR Delhi OR Gurgaon OR Pune OR Hyderabad OR Ahmedabad) when:2d',
-    'site:vccircle.com (raises OR funding OR "Series" OR "Seed" OR "crore" OR "bags") when:2d'
+    '("Global Capability Center" OR "GCC" OR "Technology Center") ("Ahmedabad" OR "GIFT City" OR "Pune" OR "Mumbai" OR "Bangalore" OR "Hyderabad" OR "Chennai" OR "Gurgaon" OR "Noida") ("launch" OR "set up" OR "expand" OR "opens" OR "invests" OR "leases") when:1d',
+    '(startup OR "tech company" OR "D2C" OR "Fintech") (raises OR secures OR bags OR "mops up" OR funding) ("Seed" OR "Series" OR "crore" OR "million" OR "Cr") (India OR Bangalore OR Mumbai OR Delhi OR Gurgaon OR Pune OR Hyderabad OR Ahmedabad) when:1d',
+    'site:vccircle.com (raises OR funding OR "Series" OR "Seed" OR "crore" OR "bags") when:1d'
 ]
 
 TRIGGER_KEYWORDS = [
@@ -99,6 +99,18 @@ TRIGGER_KEYWORDS = [
     "leases", "office space", "sq ft", "raise", "raised", "raises", "funding", "fund", "funds",
     "bags", "secures", "series", "seed", "invest", "investment", "mops up", "cr", "crore", "million", "$"
 ]
+
+def is_within_last_24h(pub_date_str):
+    if not pub_date_str:
+        return True
+    try:
+        from email.utils import parsedate_to_datetime
+        dt = parsedate_to_datetime(pub_date_str)
+        now = datetime.now(timezone.utc)
+        diff_hours = (now - dt.astimezone(timezone.utc)).total_seconds() / 3600
+        return diff_hours <= 24.5
+    except Exception:
+        return True
 
 def fetch_url_text(url):
     headers = {
@@ -171,12 +183,14 @@ def search_google_news_rss(query):
         try:
             feed = feedparser.parse(url)
             for entry in feed.entries:
-                articles.append({
-                    "title": entry.get("title", ""),
-                    "summary": entry.get("summary", ""),
-                    "link": entry.get("link", "")
-                })
-            print(f"🔎 Found {len(articles)} RSS results for query via feedparser")
+                pub_date = entry.get("published", "")
+                if is_within_last_24h(pub_date):
+                    articles.append({
+                        "title": entry.get("title", ""),
+                        "summary": entry.get("summary", ""),
+                        "link": entry.get("link", "")
+                    })
+            print(f"🔎 Found {len(articles)} RSS results within last 24h for query via feedparser")
             return articles[:10]
         except Exception as e:
             print(f"⚠️ feedparser error: {e}")
@@ -190,8 +204,10 @@ def search_google_news_rss(query):
                 title = item.findtext('title') or ''
                 link = item.findtext('link') or ''
                 summary = item.findtext('description') or ''
-                articles.append({'title': title, 'summary': summary, 'link': link})
-            print(f"🔎 Found {len(articles)} RSS results for query via XML parser")
+                pub_date = item.findtext('pubDate') or ''
+                if is_within_last_24h(pub_date):
+                    articles.append({'title': title, 'summary': summary, 'link': link})
+            print(f"🔎 Found {len(articles)} RSS results within last 24h for query via XML parser")
         except Exception as e:
             print(f"⚠️ XML parse error: {e}")
 
