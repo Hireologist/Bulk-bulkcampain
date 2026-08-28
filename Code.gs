@@ -96,7 +96,7 @@ function createOutreachSystem(forceReset = false) {
         ['discord_positive_webhook', 'https://discord.com/api/webhooks/...', 'Channel webhook for New Positive/Neutral lead alerts'],
         ['discord_rereply_webhook', 'https://discord.com/api/webhooks/...', 'Channel webhook for Re-replies from existing leads'],
         ['discord_gcc_radar_webhook', 'https://discord.com/api/webhooks/...', 'Channel webhook for GCC Leadership Radar alerts'],
-        ['gcc_radar_enabled', 'TRUE', 'Set to TRUE to run GCC Leadership Radar daily, or FALSE/OFF to mute'],
+        ['gcc_radar_enabled', 'FALSE', 'Set to TRUE to run GCC Leadership Radar daily, or FALSE/OFF to mute'],
         ['cron_gcc_radar_time', '09:00', 'Time to trigger GCC Leadership Radar on cron-job.org (HH:MM in 24hr IST format)'],
         ['groq_api_key', 'gsk_...', 'Groq API Key (Free) for AI Sentiment & Summary']
       ]

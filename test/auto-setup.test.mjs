@@ -49,7 +49,7 @@ describe('🚀 New User Onboarding & Auto-Provisioning Simulation Test', () => {
     assert.strictEqual(settingsMap.cron_diagnostic_schedule, 'daily_0900');
     assert.strictEqual(settingsMap.discord_alerts_enabled, 'TRUE');
     assert.strictEqual(settingsMap.discord_domain_alerts_enabled, 'TRUE');
-    assert.strictEqual(settingsMap.gcc_radar_enabled, 'TRUE');
+    assert.strictEqual(settingsMap.gcc_radar_enabled, 'FALSE');
   });
 
   test('Templates schema sample data contains valid spintax syntax', () => {

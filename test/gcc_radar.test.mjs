@@ -3,8 +3,8 @@ import assert from 'node:assert';
 import { isGccRadarEnabled, selectGccRadarDiscordWebhook } from '../scripts/run-gcc-radar.mjs';
 
 describe('GCC Leadership Radar Configuration & Settings Tests', () => {
-  it('should enable GCC Radar by default or when set to TRUE', () => {
-    assert.strictEqual(isGccRadarEnabled({}), true);
+  it('should disable GCC Radar by default and enable only when explicitly set to TRUE', () => {
+    assert.strictEqual(isGccRadarEnabled({}), false);
     assert.strictEqual(isGccRadarEnabled({ gcc_radar_enabled: 'TRUE' }), true);
     assert.strictEqual(isGccRadarEnabled({ gcc_radar_enabled: 'true' }), true);
     assert.strictEqual(isGccRadarEnabled({ gcc_leadership_radar_enabled: 'TRUE' }), true);
