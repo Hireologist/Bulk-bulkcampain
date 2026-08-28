@@ -46,13 +46,17 @@ describe('Smart Cron-Job.org Synchronizer Unit Tests', () => {
     };
 
     const jobs = parseScheduleFromSettings(customSettings);
-    assert.strictEqual(jobs.length, 4);
+    assert.strictEqual(jobs.length, 5);
 
     const outreach = jobs.find((j) => j.action === 'outreach');
     assert.strictEqual(outreach.schedule.timezone, 'America/New_York');
     assert.deepStrictEqual(outreach.schedule.hours, [11]);
     assert.deepStrictEqual(outreach.schedule.minutes, [15]);
     assert.deepStrictEqual(outreach.schedule.wdays, [1, 2, 3, 4, 5]);
+
+    const domainHealth = jobs.find((j) => j.title === 'Domain Health Audit');
+    assert.strictEqual(domainHealth.workflow, 'domain-health.yml');
+    assert.deepStrictEqual(domainHealth.schedule.wdays, [1]);
 
     const inbox = jobs.find((j) => j.action === 'inbox');
     assert.deepStrictEqual(inbox.schedule.minutes, [0, 20, 40]);
@@ -71,6 +75,17 @@ describe('Smart Cron-Job.org Synchronizer Unit Tests', () => {
     const body = JSON.parse(payload.job.extendedData.body);
     assert.strictEqual(body.ref, 'main');
     assert.strictEqual(body.inputs.action, 'followup');
+  });
+
+  test('buildJobPayload correctly replaces workflow URL for domain health', () => {
+    const domainHealthConfig = JOBS_TO_CREATE.find((j) => j.title === 'Domain Health Audit');
+    const payload = buildJobPayload(repoName, dispatchUrl, pat, domainHealthConfig);
+
+    assert.strictEqual(payload.job.title, 'Sheet-bot - Domain Health Audit');
+    assert.strictEqual(payload.job.url, 'https://api.github.com/repos/user/Sheet-bot/actions/workflows/domain-health.yml/dispatches');
+    const body = JSON.parse(payload.job.extendedData.body);
+    assert.strictEqual(body.ref, 'main');
+    assert.strictEqual(body.inputs, undefined);
   });
 
   test('isJobUpToDate returns true when existing job matches exactly', () => {
