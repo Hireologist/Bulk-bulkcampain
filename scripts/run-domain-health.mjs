@@ -117,26 +117,29 @@ async function runDomainHealth() {
 
   console.log('✅ Domain_Health tab successfully updated.');
 
-  // Load Settings tab to get discord webhook
+  // Load Settings tab to get discord webhook and alert toggle
   let discordUrl = process.env.DISCORD_WEBHOOK_URL;
-  if (!discordUrl) {
-    try {
-      const settingsRes = await sheets.spreadsheets.values.get({
-        spreadsheetId: sheetId,
-        range: `'Settings'!A:Z`,
-      });
-      const [sHeaders, ...sRows] = settingsRes.data.values || [];
-      if (sRows) {
-        const settings = Object.fromEntries(sRows.map(r => [r[0], r[1]]));
-        discordUrl = settings.discord_updates_webhook || settings.discord_webhook;
-      }
-    } catch {
-      // ignore
+  let domainAlertsEnabled = true;
+
+  try {
+    const settingsRes = await sheets.spreadsheets.values.get({
+      spreadsheetId: sheetId,
+      range: `'Settings'!A:Z`,
+    });
+    const [sHeaders, ...sRows] = settingsRes.data.values || [];
+    if (sRows) {
+      const settings = Object.fromEntries(sRows.map(r => [r[0], r[1]]));
+      discordUrl = settings.discord_updates_webhook || settings.discord_webhook || discordUrl;
+      
+      const domainToggle = String(settings.discord_domain_alerts_enabled ?? settings.discord_alerts_enabled ?? 'TRUE').trim().toLowerCase();
+      domainAlertsEnabled = !['false', 'off', '0', 'no', 'mute'].includes(domainToggle);
     }
+  } catch {
+    // ignore
   }
 
-  // Alert to Discord if any failures detected
-  if (discordUrl && failingDomains.length > 0) {
+  // Alert to Discord if any failures detected and alerts are enabled
+  if (discordUrl && failingDomains.length > 0 && domainAlertsEnabled) {
     const issues = failingDomains
       .map((d) => `• **${d.domain}**: SPF ${d.spf ? '✅' : '❌'} | DMARC ${d.dmarc ? '✅' : '❌'}`)
       .join('\n');
@@ -144,6 +147,8 @@ async function runDomainHealth() {
       discordUrl,
       `🚨 **Domain Health Warning**:\nThe following domain(s) have missing SPF or DMARC records which will damage inbox deliverability:\n${issues}`
     );
+  } else if (!domainAlertsEnabled && failingDomains.length > 0) {
+    console.log('🔕 Domain Health Discord alerts are disabled in Settings (discord_domain_alerts_enabled = FALSE). Skipping webhook.');
   }
 }
 
