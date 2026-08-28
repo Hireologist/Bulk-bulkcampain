@@ -5,7 +5,6 @@ import urllib.parse
 import json
 import time
 import re
-import xml.etree.ElementTree as ET
 from datetime import datetime, timezone, timedelta
 
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -63,7 +62,7 @@ if not existing_columns or "brand_key" not in existing_columns:
     """)
     conn.commit()
 
-# 3. Direct Website Scraping Targets
+# 3. Direct Website Scraping (NO /feed/ URLs)
 WEBSITES_TO_SCRAPE = [
     {
         "url": "https://economictimes.indiatimes.com/tech/funding",
@@ -100,18 +99,6 @@ TRIGGER_KEYWORDS = [
     "bags", "secures", "series", "seed", "invest", "investment", "mops up", "cr", "crore", "million", "$"
 ]
 
-def is_within_last_24h(pub_date_str):
-    if not pub_date_str:
-        return True
-    try:
-        from email.utils import parsedate_to_datetime
-        dt = parsedate_to_datetime(pub_date_str)
-        now = datetime.now(timezone.utc)
-        diff_hours = (now - dt.astimezone(timezone.utc)).total_seconds() / 3600
-        return diff_hours <= 24.5
-    except Exception:
-        return True
-
 def fetch_url_text(url):
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
@@ -125,7 +112,6 @@ def fetch_url_text(url):
         except Exception as e:
             print(f"⚠️ requests error fetching {url}: {e}")
     
-    # Fallback to urllib
     try:
         import urllib.request
         req = urllib.request.Request(url, headers=headers)
@@ -136,7 +122,6 @@ def fetch_url_text(url):
         return ""
 
 def is_url_date_recent(url):
-    # Check if URL contains explicit date path like /2026/08/28/ or /2026-08-28/
     m = re.search(r'/(202[4-9])[-/](0[1-9]|1[0-2])[-/](0[1-9]|[12][0-9]|3[01])/', url)
     if m:
         try:
@@ -144,7 +129,7 @@ def is_url_date_recent(url):
             pub_date = datetime(year, month, day, tzinfo=timezone.utc)
             now = datetime.now(timezone.utc)
             diff_days = (now - pub_date).total_seconds() / 86400
-            if diff_days > 1.5:  # older than ~36 hours
+            if diff_days > 1.2:
                 return False
         except Exception:
             pass
@@ -171,7 +156,6 @@ def scrape_direct_webpage(site_info):
                 if is_url_date_recent(href):
                     articles.append({"title": title, "summary": "", "link": href})
     else:
-        # Regex fallback for link and title extraction
         matches = re.findall(r'<a\s+(?:[^>]*?\s+)?href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', html, re.DOTALL | re.IGNORECASE)
         for href, raw_title in matches:
             title = re.sub(r'<[^>]+>', '', raw_title).strip()
@@ -188,47 +172,8 @@ def scrape_direct_webpage(site_info):
             seen.add(art["link"])
             unique_articles.append(art)
             
-    print(f"📰 Scraped {len(unique_articles)} fresh (24h) live stories directly from {domain}")
+    print(f"📰 Scraped {len(unique_articles)} live stories directly from {domain}")
     return unique_articles[:15]
-
-def search_google_news_rss(query):
-    encoded = urllib.parse.quote(query)
-    url = f"https://news.google.com/rss/search?q={encoded}&hl=en-IN&gl=IN&ceid=IN:en"
-    articles = []
-
-    if feedparser:
-        try:
-            feed = feedparser.parse(url)
-            for entry in feed.entries:
-                pub_date = entry.get("published", "")
-                if is_within_last_24h(pub_date):
-                    articles.append({
-                        "title": entry.get("title", ""),
-                        "summary": entry.get("summary", ""),
-                        "link": entry.get("link", "")
-                    })
-            print(f"🔎 Found {len(articles)} RSS results within last 24h for query via feedparser")
-            return articles[:10]
-        except Exception as e:
-            print(f"⚠️ feedparser error: {e}")
-
-    # Fallback to standard XML parsing
-    xml_data = fetch_url_text(url)
-    if xml_data:
-        try:
-            root = ET.fromstring(xml_data)
-            for item in root.findall('.//item'):
-                title = item.findtext('title') or ''
-                link = item.findtext('link') or ''
-                summary = item.findtext('description') or ''
-                pub_date = item.findtext('pubDate') or ''
-                if is_within_last_24h(pub_date):
-                    articles.append({'title': title, 'summary': summary, 'link': link})
-            print(f"🔎 Found {len(articles)} RSS results within last 24h for query via XML parser")
-        except Exception as e:
-            print(f"⚠️ XML parse error: {e}")
-
-    return articles[:10]
 
 def normalize_brand(name):
     if not name:
@@ -236,6 +181,13 @@ def normalize_brand(name):
     clean = re.sub(r'(?i)\b(technologies|technology|tech|pvt|ltd|limited|inc|corp|india|group|solutions|services|platform|labs|app|semi|capital)\b', '', name)
     clean = re.sub(r'[^a-zA-Z0-9]', '', clean).lower()
     return clean if len(clean) >= 3 else name.lower()
+
+def is_recent_article(entry, max_age_hours=24):
+    if hasattr(entry, 'published_parsed') and entry.published_parsed:
+        article_timestamp = time.mktime(entry.published_parsed)
+        age_in_hours = (time.time() - article_timestamp) / 3600
+        return age_in_hours <= max_age_hours
+    return True
 
 def is_brand_processed(brand_key):
     if not brand_key:
@@ -249,351 +201,252 @@ def mark_brand_processed(brand_key, company_name, city):
     cursor.execute("INSERT OR IGNORE INTO seen_gccs (brand_key, company_name, city) VALUES (?, ?, ?)", (brand_key, company_name, city))
     conn.commit()
 
-def build_linkedin_search_url(query):
-    import urllib.parse
-    encoded = urllib.parse.quote(query)
-    return f"https://www.linkedin.com/search/results/people/?keywords={encoded}"
+def is_likely_mandate(title, summary):
+    text = (title + " " + summary).lower()
+    return any(w in text for w in TRIGGER_KEYWORDS)
 
-def build_google_search_url(query):
-    import urllib.parse
-    encoded = urllib.parse.quote(query)
-    return f"https://www.google.com/search?q={encoded}"
-
-def post_bdm_daily_hitlist_digest(webhook_url, items):
-    if not webhook_url or not webhook_url.startswith("http") or not items:
-        print("⚠️ No valid Discord Webhook URL provided or empty hitlist items.")
-        return False
-
-    now_ist = datetime.now(IST)
-    date_str = now_ist.strftime("%d-%b-%Y").upper()
-
-    header = f"📊 **BDM DAILY HITLIST | {date_str}**"
-
-    lines = []
-    lines.append(f"{'COMPANY':<16} | {'STAGE/TYPE':<12} | {'AMOUNT/SCALE':<12} | {'CITY':<10} | {'VC / LEAD'}")
-    lines.append("-" * 74)
-
-    quick_links = ["\n**QUICK ACTION LINKS:**"]
-
-    for item in items:
-        full_comp = item.get("company", "Company")
-        full_stage = item.get("stage_type", "GCC Launch")
-        full_amount = item.get("amount_scale", "Undisclosed")
-        full_city = item.get("city", "India")
-        full_vc = item.get("vc_lead", "Undisclosed")
-        news_link = item.get("link", "")
-
-        comp = full_comp[:15]
-        stage = full_stage[:12]
-        amount = full_amount[:12]
-        city = full_city[:10]
-        vc = full_vc[:16]
-
-        lines.append(f"{comp:<16} | {stage:<12} | {amount:<12} | {city:<10} | {vc}")
-
-        is_gcc = "gcc" in full_stage.lower()
-
-        if is_gcc:
-            lead_q = '"Managing Director" OR "Site Leader" OR "Head of India" OR "Director of Engineering"'
-            lead_label = "Site Lead"
-            lead_url = build_google_search_url(f'site:linkedin.com/in "{full_comp}" ({lead_q}) "{full_city}"')
-        else:
-            lead_q = '"Founder" OR "CEO" OR "Chief People Officer" OR "Head of Talent"'
-            lead_label = "Founder"
-            lead_url = build_google_search_url(f'site:linkedin.com/in "{full_comp}" ({lead_q})')
-
-        link_parts = [f"• **{full_comp}**: [{lead_label}]({lead_url})"]
-
-        if full_vc and full_vc.lower() not in ["undisclosed", "n/a", "none"]:
-            vc_url = build_google_search_url(f'site:linkedin.com/in "{full_vc}" ("Talent Partner" OR "Operating Partner" OR "Head of Talent")')
-            link_parts.append(f"[VC]({vc_url})")
-
-        if news_link:
-            link_parts.append(f"[News]({news_link})")
-
-        quick_links.append(" • ".join(link_parts))
-
-    table_block = "```text\n" + "\n".join(lines) + "\n```"
-    full_content = f"{header}\n\n{table_block}\n" + "\n".join(quick_links)
-
-    # Split into chunks if hitlist exceeds 1900 chars
-    chunks = []
-    if len(full_content) <= 1900:
-        chunks = [full_content]
-    else:
-        chunks.append(f"{header}\n\n{table_block}")
-        current_chunk = "**QUICK ACTION LINKS:**\n"
-        for ql in quick_links[1:]:
-            if len(current_chunk) + len(ql) + 1 > 1800:
-                chunks.append(current_chunk)
-                current_chunk = ql + "\n"
-            else:
-                current_chunk += ql + "\n"
-        if current_chunk.strip():
-            chunks.append(current_chunk)
-
-    headers = {"Content-Type": "application/json"}
-    success = True
-
-    for chunk in chunks:
-        payload = json.dumps({"content": chunk}).encode('utf-8')
-        posted = False
-        if requests:
-            try:
-                res = requests.post(webhook_url, data=payload, headers=headers, timeout=10)
-                if res.status_code in [200, 204]:
-                    posted = True
-            except Exception as e:
-                print(f"❌ requests error posting digest to Discord: {e}")
-
-        if not posted:
-            try:
-                import urllib.request
-                req = urllib.request.Request(webhook_url, data=payload, headers=headers)
-                with urllib.request.urlopen(req, timeout=10) as res:
-                    posted = True
-            except Exception as e:
-                print(f"❌ urllib error posting digest to Discord: {e}")
-
-        if posted:
-            print(f"✅ Posted BDM Daily Hitlist digest chunk to Discord!")
-        else:
-            success = False
-
-    return success
-
-def post_to_discord(webhook_url, title, summary, link, company_name, city, lead_type, company_website="", key_people=None):
-    if not webhook_url or not webhook_url.startswith("http"):
-        print("⚠️ No valid Discord Webhook URL provided. Skipping Discord alert.")
-        return False
-
-    now_ist = datetime.now(IST)
-    ist_str = now_ist.strftime("%d %b %Y, %I:%M %p IST")
-    comp = company_name or "Company"
-
-    # 1. Official Website URL Link
-    if company_website:
-        clean_web = company_website.strip()
-        web_url = clean_web if clean_web.startswith("http") else f"https://{clean_web}"
-        website_val = f"🔗 [{clean_web}]({web_url})"
-    else:
-        google_web_search = build_google_search_url(f"{comp} official website")
-        website_val = f"🔍 [Search {comp} Official Website]({google_web_search})"
-
-    # 2. LinkedIn Leadership Profile Links
-    people_lines = []
-    if key_people and isinstance(key_people, list):
-        for person in key_people[:3]:
-            p_clean = str(person).strip()
-            if p_clean and p_clean.lower() != "none":
-                li_url = build_linkedin_search_url(f"{p_clean} {comp}")
-                people_lines.append(f"• **{p_clean}**: [LinkedIn Search]({li_url})")
-
-    main_li_search = build_linkedin_search_url(f"{comp} Founder OR GCC Head OR Vice President")
-    people_lines.append(f"• 👔 [Find {comp} Leadership on LinkedIn]({main_li_search})")
-    
-    linkedin_val = "\n".join(people_lines)
-
-    fields = [
-        {"name": "🏢 Company", "value": comp, "inline": True},
-        {"name": "📍 Hub / City", "value": city or "India / APAC", "inline": True},
-        {"name": "🏷️ Category", "value": lead_type or "GCC Expansion", "inline": True},
-        {"name": "📰 Source Article", "value": f"🔗 [Read Full News Article]({link})" if link else "N/A", "inline": False},
-        {"name": "🌐 Official Website", "value": website_val, "inline": False},
-        {"name": "💼 Executive LinkedIn Profiles", "value": linkedin_val, "inline": False},
-        {"name": "🕒 Signal Time (IST)", "value": ist_str, "inline": False}
-    ]
-
-    embed = {
-        "title": f"📡 GCC Leadership Radar Alert: {comp}",
-        "description": summary[:1000] if summary else title,
-        "url": link,
-        "color": 3447003 if "GCC" in str(lead_type) else 15105570,
-        "fields": fields,
-        "footer": {"text": "GCC Leadership Radar • IST (Asia/Kolkata)"},
-        "timestamp": now_ist.isoformat()
-    }
-
-    payload = json.dumps({"content": "⚡ **New GCC Leadership Radar Signal Detected!**", "embeds": [embed]}).encode('utf-8')
-    headers = {"Content-Type": "application/json"}
-
-    if requests:
-        try:
-            res = requests.post(webhook_url, data=payload, headers=headers, timeout=10)
-            if res.status_code in [200, 204]:
-                print(f"✅ Posted alert to Discord for {comp}")
-                return True
-        except Exception as e:
-            print(f"❌ requests error posting to Discord: {e}")
-
-    try:
-        import urllib.request
-        req = urllib.request.Request(webhook_url, data=payload, headers=headers)
-        with urllib.request.urlopen(req, timeout=10) as res:
-            print(f"✅ Posted alert to Discord for {comp} via urllib")
-            return True
-    except Exception as e:
-        print(f"❌ urllib error posting to Discord: {e}")
-
-    return False
-
-def analyze_story_with_ai(title, summary, link):
-    brand_hint = title.split("-")[0].split("|")[0].split(":")[0].strip()
-    clean_brand = normalize_brand(brand_hint)
-
+def analyze_article_with_llm(title, summary, max_retries=3):
     if not groq_client:
+        brand_hint = title.split("-")[0].split("|")[0].split(":")[0].strip()
+        clean_brand = normalize_brand(brand_hint)
         return {
-            "company": brand_hint[:30],
-            "brand_key": clean_brand,
-            "city": "India",
+            "is_lead": True,
+            "company": brand_hint[:14],
             "stage_type": "GCC Expansion",
             "amount_scale": "Undisclosed",
+            "city": "India",
             "vc_lead": "Undisclosed",
-            "summary": title,
-            "relevant": True,
-            "link": link
+            "is_gcc": "gcc" in (title + " " + summary).lower()
         }
 
-    prompt = f"""Extract structured GCC or tech company expansion/funding details from this news story:
-Title: {title}
-Summary: {summary}
-
-CRITICAL FRESHNESS RULE:
-Set "is_relevant": false if the article refers to past old funding rounds, old press releases, or historical news older than 24 hours. Only set "is_relevant": true if it is fresh tech funding or new GCC expansion news from the last 24 hours.
-
-Respond ONLY with raw JSON in this format:
-{{
-  "is_relevant": true,
-  "company_name": "Company Name",
-  "company_website": "official website domain or leave empty",
-  "city": "City or Region e.g. Pune, Bangalore, Hyderabad, India",
-  "stage_type": "Series A | Series B | Seed | Debt | New GCC | GCC Expansion | Office Lease",
-  "amount_scale": "$12M or ₹100 Cr or 50,000 sq ft or Undisclosed",
-  "vc_lead": "VC Fund / Lead Investor / Partner Name or Undisclosed",
-  "brief_summary": "1 sentence executive summary of the signal"
-}}"""
+    prompt = f"""
+    Analyze this Indian business news item (published in the last 24 hours):
+    Headline: "{title}"
+    Snippet: "{summary[:250]}"
+    
+    Task:
+    1. Determine if this represents fresh news from the last 24 hours of:
+       a) A company setting up/expanding a GCC, Tech Center, or office facility in India.
+       b) An Indian company/startup raising capital (Seed, Series A/B/C/D, Growth, Debt, or Equity >= ₹4 Cr / $500k).
+    2. Exclude: generic reports, old news/historical archive, multiple wrap-ups (e.g. 'Multiple' or 'Top 10'), stock market daily wraps, layoffs, government policy announcements.
+    
+    Return ONLY a JSON object:
+    {{
+        "is_lead": true/false,
+        "company": "Short Core Company Name (max 14 chars, NOT 'Multiple')",
+        "stage_type": "New GCC/GCC Expansion/Series A/Series B/Series C/Seed/Growth/Debt",
+        "amount_scale": "e.g. ₹62 Cr / $10M / 91k sq ft / 1st India Ctr",
+        "city": "Mumbai/Hyderabad/Bangalore/Pune/Ahmedabad/GIFT City/NCR/Chennai/India",
+        "vc_lead": "Lead VC / Global HQ / Self-Funded / Undisclosed",
+        "is_gcc": true/false
+    }}
+    """
 
     models_to_try = [
-        MODEL_NAME,             # 1. Primary: openai/gpt-oss-120b (120B top intelligence)
-        "qwen/qwen3.8-27b",      # 2. Fallback 1: Qwen 3.8 27B (High accuracy entity extraction)
+        MODEL_NAME,             # 1. Primary: openai/gpt-oss-120b
+        "qwen/qwen3.8-27b",      # 2. Fallback 1: Qwen 3.8 27B
         "qwen/qwen3.6-27b",      # 3. Fallback 2: Qwen 3.6 27B
         "groq/compound",         # 4. Fallback 3: Groq Compound Router
         "openai/gpt-oss-20b"     # 5. Fallback 4: GPT-OSS 20B
     ]
-    for model in models_to_try:
-        try:
-            time.sleep(1.2)  # Throttle to respect Groq free tier TPM limits
-            response = groq_client.chat.completions.create(
-                model=model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.2,
-                max_tokens=500
-            )
-            content = response.choices[0].message.content.strip()
-            match = re.search(r'\{.*\}', content, re.DOTALL)
-            if match:
-                parsed = json.loads(match.group(0))
-                company = parsed.get("company_name", brand_hint[:30])
-                brand_key = normalize_brand(company) or clean_brand
-                return {
-                    "company": company,
-                    "company_website": parsed.get("company_website", ""),
-                    "brand_key": brand_key,
-                    "city": parsed.get("city", "India"),
-                    "stage_type": parsed.get("stage_type", "GCC Expansion"),
-                    "amount_scale": parsed.get("amount_scale", "Undisclosed"),
-                    "vc_lead": parsed.get("vc_lead", "Undisclosed"),
-                    "summary": parsed.get("brief_summary", title),
-                    "relevant": parsed.get("is_relevant", True),
-                    "link": link
-                }
-        except Exception as e:
-            if "429" in str(e) or "rate_limit" in str(e).lower():
-                print(f"⏳ Groq rate limit encountered. Waiting 3s before retry with fallback model...")
-                time.sleep(3.0)
-            else:
-                print(f"⚠️ Groq AI analysis error: {e}")
 
-    return {
-        "company": brand_hint[:30],
-        "brand_key": clean_brand,
-        "city": "India",
-        "stage_type": "GCC Expansion",
-        "amount_scale": "Undisclosed",
-        "vc_lead": "Undisclosed",
-        "summary": title,
-        "relevant": True,
-        "link": link
+    for model in models_to_try:
+        for attempt in range(max_retries):
+            try:
+                time.sleep(1.0)
+                res = groq_client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.1
+                )
+                content = res.choices[0].message.content.strip()
+                if content.startswith("```json"):
+                    content = content[7:-3].strip()
+                elif content.startswith("```"):
+                    content = content[3:-3].strip()
+                return json.loads(content)
+            except Exception as e:
+                if "429" in str(e) or "rate_limit" in str(e).lower():
+                    time.sleep(2.5 * (attempt + 1))
+                else:
+                    break
+
+    return {"is_lead": False}
+
+def truncate(text, length):
+    text = str(text).strip()
+    return text[:length - 2] + ".." if len(text) > length else text.ljust(length)
+
+def post_to_discord(payload_content):
+    if not DISCORD_WEBHOOK_URL or not DISCORD_WEBHOOK_URL.startswith("http"):
+        print("⚠️ No valid Discord Webhook URL provided. Skipping Discord post.")
+        return False
+
+    payload = {
+        "content": payload_content,
+        "username": "BDM Daily Hitlist",
+        "avatar_url": "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
     }
 
-def run_gcc_radar():
-    print("📡 Starting GCC Leadership Radar Tracker...")
-    all_articles = []
+    headers = {"Content-Type": "application/json"}
+    payload_data = json.dumps(payload).encode('utf-8')
 
-    # 1. Scrape direct webpages
-    for site in WEBSITES_TO_SCRAPE:
-        arts = scrape_direct_webpage(site)
-        all_articles.extend(arts)
+    if requests:
+        try:
+            res = requests.post(DISCORD_WEBHOOK_URL, data=payload_data, headers=headers, timeout=10)
+            if res.status_code in [200, 204]:
+                print("🚀 Message chunk delivered to Discord successfully!")
+                return True
+            else:
+                print(f"Discord Response: {res.status_code}, {res.text}")
+        except Exception as e:
+            print(f"Failed to post to Discord via requests: {e}")
 
-    # 2. Search Google RSS queries
-    for q in SEARCH_QUERIES:
-        arts = search_google_news_rss(q)
-        all_articles.extend(arts)
+    try:
+        import urllib.request
+        req = urllib.request.Request(DISCORD_WEBHOOK_URL, data=payload_data, headers=headers)
+        with urllib.request.urlopen(req, timeout=10) as res:
+            print("🚀 Message chunk delivered to Discord successfully via urllib!")
+            return True
+    except Exception as e:
+        print(f"Failed to post to Discord via urllib: {e}")
 
-    print(f"📊 Total collected stories across all sources: {len(all_articles)}")
-    processed_count = 0
-    new_signals = 0
-    new_hitlist_items = []
+    return False
 
-    for article in all_articles:
-        title = article.get("title", "")
-        summary = article.get("summary", "")
-        link = article.get("link", "")
-        combined_text = (title + " " + summary).lower()
+def send_consolidated_discord_hitlist(leads):
+    if not DISCORD_WEBHOOK_URL or not leads:
+        print("ℹ️ No new leads to send.")
+        return
 
-        # Check trigger keywords
-        if not any(kw in combined_text for kw in TRIGGER_KEYWORDS):
-            continue
+    now_ist = datetime.now(IST)
+    today_str = now_ist.strftime("%d-%b-%Y").upper()
 
-        processed_count += 1
-        analysis = analyze_story_with_ai(title, summary, link)
+    # 1. Build Compact ASCII Table
+    header = f"📊 **BDM DAILY HITLIST | {today_str}**\n"
+    table = "```\n"
+    table += f"{'COMPANY'.ljust(15)}| {'STAGE/TYPE'.ljust(15)}| {'AMOUNT/SCALE'.ljust(14)}| {'CITY'.ljust(11)}| {'VC / LEAD'.ljust(13)}\n"
+    table += "-" * 74 + "\n"
 
-        if not analysis.get("relevant"):
-            continue
+    for item in leads:
+        company = truncate(item.get("company", "Company"), 14)
+        stage = truncate(item.get("stage_type", "GCC Expansion"), 14)
+        scale = truncate(item.get("amount_scale", "Undisclosed"), 13)
+        city = truncate(item.get("city", "India"), 10)
+        vc = truncate(item.get("vc_lead", "Undisclosed"), 12)
+        table += f"{company} | {stage} | {scale} | {city} | {vc}\n"
 
-        brand_key = analysis.get("brand_key")
-        company = analysis.get("company")
-        city = analysis.get("city")
-        lead_type = analysis.get("stage_type", "GCC Expansion")
-        exec_summary = analysis.get("summary") or title
+    table += "```"
 
-        print(f"\n✨ [AI Extracted Signal #{processed_count}]")
-        print(f"   🏢 Company  : {company}")
-        print(f"   📍 Hub/City : {city}")
-        print(f"   🏷️ Category : {lead_type}")
-        print(f"   💰 Amount   : {analysis.get('amount_scale')}")
-        print(f"   🤝 VC / Lead: {analysis.get('vc_lead')}")
-        print(f"   📝 Summary  : {exec_summary}")
-        print(f"   🔗 URL      : {link}")
-
-        if is_brand_processed(brand_key):
-            print(f"   ⏭️ Status   : Previously seen in database (deduplicated)")
-            continue
+    # 2. Build Compact Quick Action Links
+    links_lines = ["⚡ **QUICK ACTION LINKS:**"]
+    for i, item in enumerate(leads, 1):
+        comp_name = item.get("company", "Company")
+        city_name = item.get("city", "India")
+        is_gcc = item.get("is_gcc", False)
+        news_url = item.get("url", "")
+        
+        if is_gcc:
+            dork_lead = f'https://www.google.com/search?q=site:linkedin.com/in+"{urllib.parse.quote(comp_name)}"+("Managing+Director"+OR+"Site+Leader"+OR+"Head+of+India"+OR+"Director+of+Engineering")+"{urllib.parse.quote(city_name)}"'
+            links_lines.append(f"{i}. **{comp_name}**: [Site Lead]({dork_lead}) • [News]({news_url})")
         else:
-            print(f"   ✅ Status   : NEW Lead Signal! (Added to BDM Daily Hitlist)")
+            dork_founder = f'https://www.google.com/search?q=site:linkedin.com/in+"{urllib.parse.quote(comp_name)}"+("Founder"+OR+"CEO"+OR+"Chief+People+Officer"+OR+"Head+of+Talent")'
+            vc_lead = item.get("vc_lead", "")
+            if vc_lead and vc_lead.lower() not in ["null", "undisclosed", "self-funded", "global hq"]:
+                dork_vc = f'https://www.google.com/search?q=site:linkedin.com/in+"{urllib.parse.quote(vc_lead)}"+("Talent+Partner"+OR+"Operating+Partner"+OR+"Head+of+Talent")'
+                links_lines.append(f"{i}. **{comp_name}**: [Founder]({dork_founder}) • [VC]({dork_vc}) • [News]({news_url})")
+            else:
+                links_lines.append(f"{i}. **{comp_name}**: [Founder]({dork_founder}) • [News]({news_url})")
 
-        # Mark processed in SQLite
-        mark_brand_processed(brand_key, company, city)
+    links_text = "\n".join(links_lines)
+    full_message = header + table + "\n" + links_text
 
-        new_hitlist_items.append(analysis)
-        new_signals += 1
+    # 3. Smart Chunking to Respect Discord's 2,000-Char Limit
+    if len(full_message) <= 1950:
+        post_to_discord(full_message)
+    else:
+        post_to_discord(header + table)
+        time.sleep(0.4)
+        
+        current_chunk = ""
+        for line in links_lines:
+            if len(current_chunk) + len(line) + 1 > 1900:
+                post_to_discord(current_chunk)
+                current_chunk = line + "\n"
+                time.sleep(0.4)
+            else:
+                current_chunk += line + "\n"
+        if current_chunk:
+            post_to_discord(current_chunk)
 
-    # Post BDM Daily Hitlist Digest to Discord
-    if new_hitlist_items and DISCORD_WEBHOOK_URL:
-        print(f"\n🚀 Posting BDM Daily Hitlist Digest with {len(new_hitlist_items)} new leads to Discord...")
-        post_bdm_daily_hitlist_digest(DISCORD_WEBHOOK_URL, new_hitlist_items)
+def run_gcc_radar():
+    print(f"🔍 Scanning Direct Webpages + Live Queries with Groq AI...")
+    raw_articles = []
 
-    print(f"✨ GCC Leadership Radar Run Complete. Relevant Signals Evaluated: {processed_count}, New Alerts Sent: {new_signals}")
+    # 1. Direct Web Scraping of Real Sites (NO /feed/)
+    for site in WEBSITES_TO_SCRAPE:
+        raw_articles.extend(scrape_direct_webpage(site))
+
+    # 2. Targeted Media & GCC Search Index
+    for q in SEARCH_QUERIES:
+        try:
+            encoded_q = urllib.parse.quote(q)
+            rss_url = f"https://news.google.com/rss/search?q={encoded_q}&hl=en-IN&gl=IN&ceid=IN:en"
+            if feedparser:
+                g_feed = feedparser.parse(rss_url)
+                for e in g_feed.entries[:20]:
+                    if not is_recent_article(e, max_age_hours=24):
+                        continue
+                    raw_articles.append({
+                        "title": e.title,
+                        "summary": getattr(e, "summary", ""),
+                        "link": e.link
+                    })
+            else:
+                xml_data = fetch_url_text(rss_url)
+                if xml_data:
+                    import xml.etree.ElementTree as ET
+                    root = ET.fromstring(xml_data)
+                    for item in root.findall('.//item'):
+                        title = item.findtext('title') or ''
+                        link = item.findtext('link') or ''
+                        summary = item.findtext('description') or ''
+                        raw_articles.append({"title": title, "summary": summary, "link": link})
+        except Exception as err:
+            print(f"⚠️ RSS Search error for query '{q}': {err}")
+
+    verified_leads = []
+    seen_in_run = set()
+
+    for art in raw_articles:
+        title = art["title"]
+        summary = art.get("summary", "")
+
+        if not is_likely_mandate(title, summary):
+            continue
+
+        time.sleep(0.6)  # Prevent rate limits
+        analysis = analyze_article_with_llm(title, summary)
+
+        if analysis.get("is_lead") and analysis.get("company"):
+            company = analysis["company"].strip()
+            
+            # Filter generic words like 'Multiple'
+            if company.lower() in ["multiple", "top 10", "unknown", "india", "startup", "gcc"]:
+                continue
+
+            brand_key = normalize_brand(company)
+
+            if brand_key in seen_in_run or is_brand_processed(brand_key):
+                continue
+
+            seen_in_run.add(brand_key)
+            analysis["url"] = art["link"]
+            verified_leads.append(analysis)
+            print(f"✅ Added to Hitlist: {company} ({analysis.get('stage_type')})")
+            mark_brand_processed(brand_key, company, analysis.get("city", "India"))
+
+    send_consolidated_discord_hitlist(verified_leads)
+    print(f"🏁 Finished. Handled {len(verified_leads)} leads.")
 
 if __name__ == "__main__":
     run_gcc_radar()
