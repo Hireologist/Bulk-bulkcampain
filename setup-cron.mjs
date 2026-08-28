@@ -90,11 +90,13 @@ export function parseScheduleFromSettings(settings = {}) {
   const outreachTime = parseTime(settings.cron_outreach_time || '10:00', 10, 0);
   const digestTime = parseTime(settings.cron_digest_time || '18:30', 18, 30);
   const inboxMinutes = parseMinutesList(settings.cron_inbox_minutes || '15');
+  const domainHealthTime = parseTime(settings.cron_domain_health_time || '06:00', 6, 0);
 
   return [
     {
       title: 'Followup Engine',
       action: 'followup',
+      workflow: 'outreach.yml',
       schedule: {
         timezone,
         expiresAt: 0,
@@ -108,6 +110,7 @@ export function parseScheduleFromSettings(settings = {}) {
     {
       title: 'Cold Outreach',
       action: 'outreach',
+      workflow: 'outreach.yml',
       schedule: {
         timezone,
         expiresAt: 0,
@@ -121,6 +124,7 @@ export function parseScheduleFromSettings(settings = {}) {
     {
       title: 'Inbox Checker',
       action: 'inbox',
+      workflow: 'outreach.yml',
       schedule: {
         timezone,
         expiresAt: 0,
@@ -134,6 +138,7 @@ export function parseScheduleFromSettings(settings = {}) {
     {
       title: 'Daily Digest',
       action: 'digest',
+      workflow: 'outreach.yml',
       schedule: {
         timezone,
         expiresAt: 0,
@@ -144,6 +149,20 @@ export function parseScheduleFromSettings(settings = {}) {
         months: [-1],
       },
     },
+    {
+      title: 'Domain Health Audit',
+      workflow: 'domain-health.yml',
+      body: { ref: 'main' },
+      schedule: {
+        timezone,
+        expiresAt: 0,
+        hours: [domainHealthTime.hour],
+        minutes: [domainHealthTime.minute],
+        mdays: [-1],
+        wdays: [1], // Every Monday
+        months: [-1],
+      },
+    },
   ];
 }
 
@@ -151,10 +170,22 @@ export const JOBS_TO_CREATE = parseScheduleFromSettings({});
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export function buildJobPayload(repoName, dispatchUrl, cleanPat, jobConfig) {
+export function buildJobPayload(repoName, defaultDispatchUrl, cleanPat, jobConfig) {
+  let targetUrl = defaultDispatchUrl;
+  if (jobConfig.workflow && defaultDispatchUrl) {
+    targetUrl = defaultDispatchUrl.replace(/\/workflows\/[^/]+\/dispatches/, `/workflows/${jobConfig.workflow}/dispatches`);
+  }
+
+  const requestBody = jobConfig.body || {
+    ref: 'main',
+    inputs: {
+      action: jobConfig.action,
+    },
+  };
+
   return {
     job: {
-      url: dispatchUrl,
+      url: targetUrl,
       title: `${repoName} - ${jobConfig.title}`,
       enabled: true,
       saveResponses: true,
@@ -168,12 +199,7 @@ export function buildJobPayload(repoName, dispatchUrl, cleanPat, jobConfig) {
           'User-Agent': 'cron-job-org',
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          ref: 'main',
-          inputs: {
-            action: jobConfig.action,
-          },
-        }),
+        body: JSON.stringify(requestBody),
       },
     },
   };
