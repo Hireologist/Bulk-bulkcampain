@@ -1030,6 +1030,7 @@ export async function runFollowups() {
       });
     } catch (e) {
       console.error(`Follow-up failed for ${email}:`, e.message);
+      await recordFailedSend(sheets, email, `followup_${nextCount}`, e.message);
       if (isDailyLimitError(e)) {
         console.warn(`⚠️ Daily sending limit hit for inbox [${inboxToUse.email}]. Disabling inbox for follow-ups.`);
         limitExceededInboxes.add(inboxToUse.email);
