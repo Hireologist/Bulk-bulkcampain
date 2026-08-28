@@ -135,6 +135,32 @@ def is_url_date_recent(url):
             pass
     return True
 
+def is_webpage_date_recent(html):
+    if not html:
+        return True
+    m = re.search(r'property=["\'](article:published_time|og:updated_time|datePublished)["\']\s+content=["\']([^"\']+)["\']', html, re.I)
+    if not m:
+        m = re.search(r'itemprop=["\']datePublished["\']\s+content=["\']([^"\']+)["\']', html, re.I)
+    if not m:
+        m = re.search(r'"datePublished":\s*"([^"]+)"', html)
+    if m:
+        pub_str = m.group(2) if len(m.groups()) > 1 else m.group(1)
+        try:
+            if "T" in pub_str:
+                clean_str = pub_str.replace("Z", "+00:00")
+                dt = datetime.fromisoformat(clean_str)
+            else:
+                from email.utils import parsedate_to_datetime
+                dt = parsedate_to_datetime(pub_str)
+            dt_utc = dt.astimezone(timezone.utc)
+            now_utc = datetime.now(timezone.utc)
+            age_hours = (now_utc - dt_utc).total_seconds() / 3600
+            if age_hours > 24.5:
+                return False
+        except Exception:
+            pass
+    return True
+
 def scrape_direct_webpage(site_info):
     url = site_info["url"]
     domain = site_info["domain"]
@@ -170,9 +196,12 @@ def scrape_direct_webpage(site_info):
     for art in articles:
         if art["link"] not in seen:
             seen.add(art["link"])
-            unique_articles.append(art)
+            # Fetch article page HTML to inspect exact meta published_time
+            art_html = fetch_url_text(art["link"])
+            if is_webpage_date_recent(art_html):
+                unique_articles.append(art)
             
-    print(f"📰 Scraped {len(unique_articles)} live stories directly from {domain}")
+    print(f"📰 Scraped {len(unique_articles)} strictly fresh (<=24h) live stories directly from {domain}")
     return unique_articles[:15]
 
 def normalize_brand(name):
