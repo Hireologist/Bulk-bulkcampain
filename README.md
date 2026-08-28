@@ -35,6 +35,7 @@ An automated, 100% free, serverless cold email outreach engine built with **Node
 - **🔥 Peer-to-Peer Free Warmup**: Built-in synthetic inbox warmup engine between enabled inboxes with progressive daily volume ramp-up.
 - **⛔ Global Suppression & 1-Click Unsubscribe**: Fast in-memory cached suppression list with HMAC signed unsubscribe tokens and CAN-SPAM legal footers.
 - **🤖 AI Sentiment & Summary Analysis**: Uses Groq LLM to categorize prospect replies (`POSITIVE`, `NEUTRAL`, `NEGATIVE`, `OOO`) with resilient fallback.
+- **📡 GCC Leadership Radar & Startup Funding Tracker**: Automated daily tracking engine (09:00 AM IST via Python & Groq AI) monitoring new GCC launches, office space leases, and tech funding deals in India with direct LinkedIn leadership search links and dedicated Discord channel alerts.
 - **⏱️ Dynamic Timezones & Schedules**: Customize cron execution hours and timezones (`Asia/Kolkata`, `America/New_York`, `UTC`) directly in your Google Sheet `Settings` tab.
 
 ---
