@@ -33,3 +33,5 @@ jobs:
           CRON_KEY: ${{ inputs.cron_api_key || secrets.CRON_KEY || secrets.CRON_JOB_API_KEY }}
           GITHUB_PAT: ${{ inputs.github_pat || secrets.GITHUB_PAT || secrets.PAT || secrets.GH_PAT }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
