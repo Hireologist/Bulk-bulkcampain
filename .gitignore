@@ -25,7 +25,7 @@ yarn-error.log*
 # Python & Databases
 __pycache__/
 *.pyc
-*.db
+!gcc_leads.db
 
 # OS metadata
 .DS_Store
