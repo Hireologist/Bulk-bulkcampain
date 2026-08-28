@@ -121,6 +121,9 @@ export const COMPLETE_SCHEMA = {
       ['discord_updates_webhook', 'https://discord.com/api/webhooks/...', 'Channel webhook for Start/End/Digest alerts'],
       ['discord_positive_webhook', 'https://discord.com/api/webhooks/...', 'Channel webhook for New Positive/Neutral lead alerts'],
       ['discord_rereply_webhook', 'https://discord.com/api/webhooks/...', 'Channel webhook for Re-replies from existing leads'],
+      ['gcc_radar_enabled', 'TRUE', 'Master switch for GCC Leadership Radar (TRUE = Running, FALSE = Muted)'],
+      ['discord_gcc_radar_webhook', 'https://discord.com/api/webhooks/...', 'Separate Discord Webhook URL for GCC Leadership Radar Alerts'],
+      ['cron_gcc_radar_time', '09:00', 'Time to trigger GCC Leadership Radar on cron-job.org (HH:MM in 24hr format)'],
       ['groq_api_key', 'gsk_...', 'Groq API Key (Free) for AI Sentiment & Summary']
     ]
   },

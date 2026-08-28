@@ -165,6 +165,22 @@ export function parseScheduleFromSettings(settings = {}) {
     },
   ];
 
+  const gccRadarTime = parseTime(settings.cron_gcc_radar_time || '09:00', 9, 0);
+  jobs.push({
+    title: 'GCC Leadership Radar',
+    workflow: 'gcc_leadership_radar.yml',
+    body: { ref: 'main' },
+    schedule: {
+      timezone,
+      expiresAt: 0,
+      hours: [gccRadarTime.hour],
+      minutes: [gccRadarTime.minute],
+      mdays: [-1],
+      wdays,
+      months: [-1],
+    },
+  });
+
   const diagScheduleType = String(settings.cron_diagnostic_schedule || 'daily_0900').trim().toLowerCase();
   const diagTime = parseTime(settings.cron_diagnostic_time || (diagScheduleType.includes('0830') ? '08:30' : '09:00'), 9, 0);
 

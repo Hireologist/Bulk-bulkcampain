@@ -47,7 +47,10 @@ describe('Smart Cron-Job.org Synchronizer Unit Tests', () => {
     };
 
     const jobs = parseScheduleFromSettings(customSettings);
-    assert.strictEqual(jobs.length, 6);
+    assert.strictEqual(jobs.length, 7);
+
+    const gccRadar = jobs.find((j) => j.title === 'GCC Leadership Radar');
+    assert.strictEqual(gccRadar.workflow, 'gcc_leadership_radar.yml');
 
     const outreach = jobs.find((j) => j.action === 'outreach');
     assert.strictEqual(outreach.schedule.timezone, 'America/New_York');
@@ -69,7 +72,7 @@ describe('Smart Cron-Job.org Synchronizer Unit Tests', () => {
 
     // Test "manual" mode (diagnostic job omitted)
     const manualJobs = parseScheduleFromSettings({ cron_diagnostic_schedule: 'manual' });
-    assert.strictEqual(manualJobs.length, 5);
+    assert.strictEqual(manualJobs.length, 6);
     assert.strictEqual(manualJobs.find(j => j.title === 'Campaign Pre-Flight Diagnostic'), undefined);
 
     // Test "weekly_monday_0830" mode
