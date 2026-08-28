@@ -246,7 +246,11 @@ function isPastCutoff(hour = 18, minute = 30) {
 }
 
 // Discord Webhook Notification
-async function notifyDiscord(url, content) {
+async function notifyDiscord(url, content, settings = {}) {
+  const isEnabled = String(settings.discord_alerts_enabled ?? 'TRUE').trim().toLowerCase();
+  if (['false', 'off', '0', 'no', 'mute'].includes(isEnabled)) {
+    return;
+  }
   const targetUrl = url || process.env.DISCORD_WEBHOOK_URL;
   if (targetUrl && targetUrl.startsWith('http')) {
     try {
