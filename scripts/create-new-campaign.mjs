@@ -850,6 +850,7 @@ if (process.argv[1] && path.resolve(fileURLToPath(import.meta.url)) === path.res
   let campaignName = process.env.CAMPAIGN_NAME || '';
   let existingSheetId = process.env.EXISTING_SHEET_ID || process.env.SPREADSHEET_ID || '';
   let userEmail = process.env.USER_EMAIL || '';
+  let makePublic = process.env.MAKE_PUBLIC !== 'false';
   let cronApiKey = process.env.CRON_API_KEY || process.env.CRON_KEY || '';
   let githubPat = process.env.PAT_GITHUB || process.env.GITHUB_PAT || process.env.GH_PAT || process.env.PAT || '';
   let discordWebhook = process.env.DISCORD_WEBHOOK_URL || '';
