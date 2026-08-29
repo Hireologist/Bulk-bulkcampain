@@ -79,4 +79,35 @@ describe('Suppression & Compliance Module Unit Tests', () => {
     assert.ok(footer.includes('https://mysite.com/unsubscribe?email=john%40example.com'));
     assert.ok(footer.includes('Unsubscribe'));
   });
+
+  test('buildSenderFooter auto-generates dynamic mailto link to exact sender with subject and body', () => {
+    const settings = {
+      business_name: 'Alpha Outreach',
+    };
+    const lead = {
+      email: 'prospect@client.com',
+      senderEmail: 'demo@mycompany.com',
+      campaign: 'cold_outreach'
+    };
+    const footer = buildSenderFooter(settings, lead);
+
+    // Verifies mailto recipient is the sender demo@mycompany.com
+    assert.ok(footer.includes('mailto:demo@mycompany.com?'));
+    // Verifies mailto subject is pre-filled
+    assert.ok(footer.includes('subject=Unsubscribe%20-%20prospect%40client.com'));
+    // Verifies mailto body is pre-filled
+    assert.ok(footer.includes('body=Please%20unsubscribe%20prospect%40client.com%20from%20all%20future%20email%20communications.'));
+  });
+
+  test('buildSenderFooter falls back to sender domain or support email when senderEmail is omitted', () => {
+    const settings = {
+      support_email: 'help@brand.com'
+    };
+    const lead = { email: 'user@sample.com' };
+    const footer = buildSenderFooter(settings, lead);
+
+    assert.ok(footer.includes('mailto:help@brand.com?'));
+    assert.ok(footer.includes('subject=Unsubscribe%20-%20user%40sample.com'));
+    assert.ok(footer.includes('body=Please%20unsubscribe%20user%40sample.com%20from%20all%20future%20email%20communications.'));
+  });
 });
