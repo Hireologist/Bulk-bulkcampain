@@ -81,9 +81,17 @@ export function buildSenderFooter(settings = {}, lead = {}, secret = 'default-se
   const campaignId = lead.campaign || 'default';
   const token = generateUnsubscribeToken(email, campaignId, secret);
 
-  const unsubscribeUrl = settings.unsubscribe_url
-    ? `${settings.unsubscribe_url}?email=${encodeURIComponent(email)}&token=${token}&campaign=${encodeURIComponent(campaignId)}`
-    : `mailto:${settings.support_email || 'unsubscribe@domain.com'}?subject=Unsubscribe%20${encodeURIComponent(email)}`;
+  // Auto-generate target recipient from the exact sender email or sender domain
+  const senderEmail = lead.senderEmail || lead.sender || settings.support_email || settings.senderEmail || (email.includes('@') ? `unsubscribe@${email.split('@')[1]}` : 'unsubscribe@domain.com');
+
+  let unsubscribeUrl = '';
+  if (settings.unsubscribe_url) {
+    unsubscribeUrl = `${settings.unsubscribe_url}?email=${encodeURIComponent(email)}&token=${token}&campaign=${encodeURIComponent(campaignId)}`;
+  } else {
+    const mailtoSubject = encodeURIComponent(`Unsubscribe - ${email}`);
+    const mailtoBody = encodeURIComponent(`Please unsubscribe ${email} from all future email communications.`);
+    unsubscribeUrl = `mailto:${senderEmail}?subject=${mailtoSubject}&body=${mailtoBody}`;
+  }
 
   const addressLine = businessAddress ? `<br>${businessAddress}` : '';
 

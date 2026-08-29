@@ -484,7 +484,7 @@ export async function runColdOutreach() {
     let body = replaceTags(template.Body || template.body);
 
     // Auto-inject CAN-SPAM legal footer with signed unsubscribe token
-    const footer = buildSenderFooter(config.settings, { email, campaign: 'cold' }, process.env.UNSUBSCRIBE_SECRET);
+    const footer = buildSenderFooter(config.settings, { email, campaign: 'cold', senderEmail }, process.env.UNSUBSCRIBE_SECRET);
     body = `${body}${footer}`;
 
     let currentInboxStats = inboxStatsMap.get(inbox.email.toLowerCase()) || { sent: 0, bounced: 0, complaints: 0, sentToday: 0 };
@@ -773,7 +773,9 @@ export async function runSingleLeadOutreach(singleLeadPayload = {}) {
     };
 
     const subject = replaceTags(template.Subject || template['Subject line']);
-    const body = replaceTags(template.Body || template.body);
+    let body = replaceTags(template.Body || template.body);
+    const footer = buildSenderFooter(config.settings, { email, campaign: 'single_lead', senderEmail }, process.env.UNSUBSCRIBE_SECRET);
+    body = `${body}${footer}`;
 
     const transporter = nodemailer.createTransport({
       host: inbox.smtp_host,
@@ -1029,7 +1031,9 @@ export async function runFollowups() {
     };
 
     const finalSubj = `${replaceTags(template.Subject || 'Re:')} ${subjectLine}`.trim();
-    const finalBody = replaceTags(template.Body || template.body);
+    let finalBody = replaceTags(template.Body || template.body);
+    const footer = buildSenderFooter(config.settings, { email, campaign: 'followup', senderEmail }, process.env.UNSUBSCRIBE_SECRET);
+    finalBody = `${finalBody}${footer}`;
 
     const transporter = nodemailer.createTransport({
       host: inboxToUse.smtp_host,
