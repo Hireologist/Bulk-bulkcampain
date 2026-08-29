@@ -44,7 +44,9 @@ if GROQ_API_KEY and GROQ_API_KEY.startswith("gsk_"):
         print(f"⚠️ Groq client initialization warning: {e}")
 
 # 2. SQLite Database for Persistent Deduplication
-conn = sqlite3.connect("gcc_leads.db")
+db_dir = os.path.dirname(os.path.abspath(__file__))
+db_path = os.path.join(db_dir, "gcc_leads.db")
+conn = sqlite3.connect(db_path)
 cursor = conn.cursor()
 
 cursor.execute("PRAGMA table_info(seen_gccs)")

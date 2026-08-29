@@ -26,7 +26,7 @@ An automated, 100% free, production-ready serverless cold outreach platform buil
    - `GOOGLE_SERVICE_ACCOUNT_JSON`: Your Google Cloud Service Account JSON key.
 3. **Run 1-Click Auto-Setup**: Go to GitHub **Actions** > run **`🚀 1-Click Complete Auto-Setup & Provisioning`**.
 
-👉 **For detailed step-by-step instructions, see the [⚡ Complete Setup Guide (SETUP_10MIN.md)](./SETUP_10MIN.md).**
+👉 **For detailed step-by-step instructions, see the [⚡ Complete Setup Guide (docs/SETUP_10MIN.md)](./docs/SETUP_10MIN.md).**
 
 ---
 
@@ -36,7 +36,7 @@ All in-depth technical guides, schemas, and walkthroughs are organized into dedi
 
 | Guide | Description |
 | :--- | :--- |
-| ⚡ [**Rapid 3-Minute Setup Guide**](./SETUP_10MIN.md) | Step-by-step instructions to go from zero to live sending in 3 minutes. |
+| ⚡ [**Rapid 3-Minute Setup Guide**](./docs/SETUP_10MIN.md) | Step-by-step instructions to go from zero to live sending in 3 minutes. |
 | 🔑 [**API Keys & Credentials Hub**](./docs/API_KEYS_AND_CREDENTIALS_GUIDE.md) | Where to get Discord webhooks, Groq AI keys, cron-job API, GitHub PAT, and passwords. |
 | 💬 [**Discord Server & Webhook Setup**](./docs/DISCORD_WEBHOOK_SETUP.md) | How to create a Discord server, channels, and real-time alert webhooks. |
 | 📄 [**Google Service Account Key Setup**](./docs/GOOGLE_SERVICE_ACCOUNT_SETUP.md) | Step-by-step 60-second guide to generate `GOOGLE_SERVICE_ACCOUNT_JSON`. |
