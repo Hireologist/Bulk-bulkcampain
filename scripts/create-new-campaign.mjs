@@ -181,6 +181,268 @@ export async function registerCronJobsForCampaign({
   return { registeredCount: registeredJobs.length, jobs: registeredJobs };
 }
 
+export async function runPreflightChecks({
+  campaignName,
+  existingSheetId = '',
+  userEmail = '',
+  githubPat = '',
+  cronApiKey = '',
+  isCI = process.env.GITHUB_ACTIONS === 'true',
+  skipGoogleAuth = false
+}) {
+  const errors = [];
+  const warnings = [];
+  const checks = [];
+
+  console.log(`\n=============================================================`);
+  console.log(`🔍 RUNNING PRE-FLIGHT VALIDATION CHECKS`);
+  console.log(`=============================================================`);
+
+  // 1. Campaign Name Validation
+  if (!campaignName || typeof campaignName !== 'string' || !campaignName.trim()) {
+    errors.push('Campaign Name is required and cannot be empty.');
+    checks.push({ name: 'Campaign Name', status: 'FAIL', detail: 'Missing or empty' });
+  } else {
+    const slug = slugify(campaignName.trim());
+    const workflowPath = path.join(process.cwd(), '.github', 'workflows', `outreach_${slug}.yml`);
+    const workflowExists = fs.existsSync(workflowPath);
+    checks.push({
+      name: 'Campaign Name & Slug',
+      status: 'PASS',
+      detail: `"${campaignName.trim()}" (slug: ${slug})${workflowExists ? ' [will update existing workflow]' : ''}`
+    });
+  }
+
+  // 2. Google Service Account Validation
+  if (!skipGoogleAuth) {
+    try {
+      const { auth, sheets, drive } = getGoogleClient();
+      checks.push({
+        name: 'Google Service Account',
+        status: 'PASS',
+        detail: 'Credentials parsed & initialized'
+      });
+
+      // Verify connection to Drive API
+      try {
+        await drive.about.get({ fields: 'user' });
+        checks.push({
+          name: 'Google Drive API Connection',
+          status: 'PASS',
+          detail: 'Drive API reachable & authenticated'
+        });
+      } catch (driveErr) {
+        if (driveErr.status === 401 || driveErr.status === 403) {
+          errors.push(`Google Drive API authentication failed (HTTP ${driveErr.status}): ${driveErr.message}`);
+          checks.push({
+            name: 'Google Drive API Connection',
+            status: 'FAIL',
+            detail: driveErr.message
+          });
+        } else {
+          checks.push({
+            name: 'Google Drive API Connection',
+            status: 'WARN',
+            detail: `Drive API status: ${driveErr.message}`
+          });
+        }
+      }
+
+      // If existingSheetId is provided, verify accessibility
+      if (existingSheetId && existingSheetId.trim()) {
+        try {
+          const sheetRes = await sheets.spreadsheets.get({
+            spreadsheetId: existingSheetId.trim(),
+            fields: 'spreadsheetId,properties.title'
+          });
+          checks.push({
+            name: 'Existing Google Sheet Access',
+            status: 'PASS',
+            detail: `Accessible: "${sheetRes.data.properties?.title || existingSheetId}"`
+          });
+        } catch (sheetErr) {
+          errors.push(`Cannot access existing Google Sheet "${existingSheetId}". Ensure the Service Account email is added as Editor. Details: ${sheetErr.message}`);
+          checks.push({
+            name: 'Existing Google Sheet Access',
+            status: 'FAIL',
+            detail: `Inaccessible (${sheetErr.message})`
+          });
+        }
+      }
+    } catch (gErr) {
+      errors.push(`Google Service Account credentials invalid or missing: ${gErr.message}`);
+      checks.push({
+        name: 'Google Service Account',
+        status: 'FAIL',
+        detail: gErr.message
+      });
+    }
+  }
+
+  // 3. GitHub Personal Access Token (PAT) Validation
+  const effectivePat = githubPat || process.env.PAT_GITHUB || process.env.GITHUB_PAT || process.env.GH_PAT || process.env.PAT || '';
+  if (isCI) {
+    if (!effectivePat) {
+      errors.push(
+        `Missing GitHub Personal Access Token (PAT_GITHUB).\n` +
+        `   👉 GitHub requires a PAT with 'workflow' and 'repo' scopes to commit & push dedicated workflows.\n` +
+        `   👉 Solution: Add 'PAT_GITHUB' to Repository Secrets (Settings > Secrets and variables > Actions).`
+      );
+      checks.push({
+        name: 'GitHub PAT (workflow scope)',
+        status: 'FAIL',
+        detail: 'Missing secret PAT_GITHUB'
+      });
+    } else {
+      // Validate PAT with GitHub API
+      try {
+        const repoInfo = process.env.GITHUB_REPOSITORY
+          ? { owner: process.env.GITHUB_REPOSITORY.split('/')[0], repo: process.env.GITHUB_REPOSITORY.split('/')[1] }
+          : autoDetectGitRepo();
+
+        const testUrl = repoInfo 
+          ? `https://api.github.com/repos/${repoInfo.owner}/${repoInfo.repo}`
+          : 'https://api.github.com/user';
+
+        const ghRes = await fetch(testUrl, {
+          headers: {
+            Authorization: `Bearer ${effectivePat}`,
+            'User-Agent': 'Sheet-Bot-Provisioner',
+            Accept: 'application/vnd.github+json'
+          }
+        });
+
+        if (ghRes.ok) {
+          const scopes = ghRes.headers.get('x-oauth-scopes') || '';
+          const hasWorkflow = scopes.includes('workflow');
+          if (scopes && !hasWorkflow) {
+            warnings.push(`GitHub PAT may lack 'workflow' scope (found scopes: ${scopes}). Pushing workflow files might fail.`);
+            checks.push({
+              name: 'GitHub PAT Auth',
+              status: 'WARN',
+              detail: `Authenticated (scopes: ${scopes}) - missing 'workflow' scope`
+            });
+          } else {
+            checks.push({
+              name: 'GitHub PAT Auth',
+              status: 'PASS',
+              detail: `Authenticated & verified (scopes: ${scopes || 'fine-grained token'})`
+            });
+          }
+        } else {
+          errors.push(`GitHub PAT authentication failed (HTTP ${ghRes.status} ${ghRes.statusText}). Check your PAT_GITHUB secret.`);
+          checks.push({
+            name: 'GitHub PAT Auth',
+            status: 'FAIL',
+            detail: `HTTP ${ghRes.status} ${ghRes.statusText}`
+          });
+        }
+      } catch (ghErr) {
+        warnings.push(`Could not verify GitHub PAT via network: ${ghErr.message}`);
+        checks.push({
+          name: 'GitHub PAT Auth',
+          status: 'WARN',
+          detail: `Network check bypassed: ${ghErr.message}`
+        });
+      }
+    }
+  } else {
+    // Local execution
+    if (effectivePat) {
+      checks.push({
+        name: 'GitHub PAT',
+        status: 'PASS',
+        detail: 'Configured (automated cron-job.org sync enabled)'
+      });
+    } else {
+      checks.push({
+        name: 'GitHub PAT',
+        status: 'INFO',
+        detail: 'Not set (cron-job.org auto-dispatch will be skipped)'
+      });
+    }
+  }
+
+  // 4. cron-job.org API Key Validation
+  const effectiveCronKey = cronApiKey || process.env.CRON_API_KEY || process.env.CRON_KEY || '';
+  if (effectiveCronKey) {
+    try {
+      const cronRes = await fetch('https://api.cron-job.org/jobs', {
+        headers: { Authorization: `Bearer ${effectiveCronKey}` }
+      });
+      if (cronRes.ok) {
+        checks.push({
+          name: 'cron-job.org API',
+          status: 'PASS',
+          detail: 'Connected & authenticated'
+        });
+      } else {
+        warnings.push(`cron-job.org API Key returned HTTP ${cronRes.status}. Automated cron scheduling may fail.`);
+        checks.push({
+          name: 'cron-job.org API',
+          status: 'WARN',
+          detail: `HTTP ${cronRes.status} ${cronRes.statusText}`
+        });
+      }
+    } catch (cErr) {
+      warnings.push(`Could not reach cron-job.org: ${cErr.message}`);
+      checks.push({
+        name: 'cron-job.org API',
+        status: 'WARN',
+        detail: `Network check bypassed: ${cErr.message}`
+      });
+    }
+  } else {
+    checks.push({
+      name: 'cron-job.org API',
+      status: 'INFO',
+      detail: 'Not set (schedules can be added later)'
+    });
+  }
+
+  // Print Pre-Flight Results
+  console.log(`📋 PRE-FLIGHT CHECK RESULTS:`);
+  for (const c of checks) {
+    const badge = c.status === 'PASS' ? '✅ PASS' : c.status === 'FAIL' ? '❌ FAIL' : c.status === 'WARN' ? '⚠️ WARN' : 'ℹ️ INFO';
+    console.log(`  ${badge.padEnd(8)} | ${c.name.padEnd(28)} | ${c.detail}`);
+  }
+  console.log(`-------------------------------------------------------------`);
+
+  // If there are failures, output Step Summary and throw
+  if (errors.length > 0) {
+    const errorMarkdown = 
+`## 🚨 Campaign Pre-Flight Validation Failed
+
+> **Campaign Name:** \`${campaignName || 'Unknown'}\`  
+> **Status:** Aborted before creating any resources to prevent incomplete configuration.
+
+### ❌ Failed Checks:
+${errors.map((e, idx) => `${idx + 1}. ${e}`).join('\n\n')}
+
+### 📋 Full Check Summary:
+| Check | Status | Details |
+| :--- | :---: | :--- |
+${checks.map(c => `| **${c.name}** | ${c.status === 'PASS' ? '✅ PASS' : c.status === 'FAIL' ? '❌ FAIL' : c.status === 'WARN' ? '⚠️ WARN' : 'ℹ️ INFO'} | ${c.detail} |`).join('\n')}
+
+---
+👉 **Next Steps:** Resolve the missing secrets above, then re-run the workflow!
+`;
+    writeGitHubStepSummary(errorMarkdown);
+
+    console.error(`\n❌ PRE-FLIGHT VALIDATION FAILED with ${errors.length} error(s):`);
+    errors.forEach((err, idx) => console.error(`  ${idx + 1}. ${err}`));
+    console.error(`\n🛑 Aborting campaign provisioning to protect against partial/incomplete setup.\n`);
+
+    const failureError = new Error(`Pre-flight validation failed with ${errors.length} error(s). See logs above.`);
+    failureError.errors = errors;
+    failureError.checks = checks;
+    throw failureError;
+  }
+
+  console.log(`🎉 All required pre-flight checks passed! Beginning campaign provisioning...\n`);
+  return { valid: true, checks, warnings };
+}
+
 export async function createNewCampaign({
   campaignName,
   existingSheetId = '',
@@ -189,7 +451,8 @@ export async function createNewCampaign({
   timezone = 'Asia/Kolkata',
   cronApiKey = '',
   githubPat = '',
-  discordWebhook = ''
+  discordWebhook = '',
+  skipPreflight = false
 }) {
   if (!campaignName || typeof campaignName !== 'string' || !campaignName.trim()) {
     throw new Error('Campaign Name is required to create a new campaign.');
@@ -197,6 +460,18 @@ export async function createNewCampaign({
 
   const cleanName = campaignName.trim();
   const slug = slugify(cleanName);
+
+  // 0. Execute Pre-flight Validation Checks First
+  if (!skipPreflight) {
+    await runPreflightChecks({
+      campaignName: cleanName,
+      existingSheetId,
+      userEmail,
+      githubPat,
+      cronApiKey
+    });
+  }
+
   console.log(`\n=============================================================`);
   console.log(`🪄 PROVISIONING CAMPAIGN: "${cleanName}" (Slug: ${slug})`);
   console.log(`=============================================================`);
@@ -510,7 +785,10 @@ if (process.argv[1] && path.resolve(fileURLToPath(import.meta.url)) === path.res
   let campaignName = process.env.CAMPAIGN_NAME || '';
   let existingSheetId = process.env.EXISTING_SHEET_ID || process.env.SPREADSHEET_ID || '';
   let userEmail = process.env.USER_EMAIL || '';
-  let makePublic = process.env.MAKE_PUBLIC !== 'false';
+  let cronApiKey = process.env.CRON_API_KEY || process.env.CRON_KEY || '';
+  let githubPat = process.env.PAT_GITHUB || process.env.GITHUB_PAT || process.env.GH_PAT || process.env.PAT || '';
+  let discordWebhook = process.env.DISCORD_WEBHOOK_URL || '';
+  let skipPreflight = false;
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--name' && args[i + 1]) {
@@ -519,6 +797,14 @@ if (process.argv[1] && path.resolve(fileURLToPath(import.meta.url)) === path.res
       existingSheetId = args[++i];
     } else if (args[i] === '--email' && args[i + 1]) {
       userEmail = args[++i];
+    } else if (args[i] === '--cron-key' && args[i + 1]) {
+      cronApiKey = args[++i];
+    } else if (args[i] === '--pat' && args[i + 1]) {
+      githubPat = args[++i];
+    } else if (args[i] === '--webhook' && args[i + 1]) {
+      discordWebhook = args[++i];
+    } else if (args[i] === '--skip-preflight') {
+      skipPreflight = true;
     } else if (args[i] === '--private') {
       makePublic = false;
     } else if (!campaignName && !args[i].startsWith('--')) {
@@ -535,9 +821,13 @@ if (process.argv[1] && path.resolve(fileURLToPath(import.meta.url)) === path.res
     campaignName,
     existingSheetId,
     userEmail,
-    makePublic
+    makePublic,
+    cronApiKey,
+    githubPat,
+    discordWebhook,
+    skipPreflight
   }).catch(err => {
-    console.error(`❌ Campaign creation failed: ${err.message}`);
+    console.error(`\n❌ Campaign creation failed: ${err.message}`);
     process.exit(1);
   });
 }
