@@ -54,13 +54,16 @@
 Add your sending mailboxes with their credentials:
 - **`email`**: The mailbox address (e.g. `alex@yourdomain.com`).
 - **`smtp_host` / `smtp_port`**: `smtp.gmail.com` / `465` (SSL) or `587` (TLS).
-- **`smtp_user` / `smtp_pass`**: Email and App Password.
+- **`smtp_user` / `smtp_pass`**: Email and 16-character Google App Password (see [Google App Password Setup & Recovery Guide](docs/GOOGLE_APP_PASSWORD_SETUP.md)).
 - **`imap_host` / `imap_port`**: `imap.gmail.com` / `993` (for reply detection & draft mode).
 - **`daily_limit`**: Max sends per day for this inbox (e.g. `50`).
 - **`is_active`**: `TRUE` to enable sending.
 - **`warmup_enabled`**: Set to `TRUE` to enable automated peer warmup with other inboxes.
 - **`warmup_day`**: Current warmup day (ramps up +3 emails/day).
 - **`warmup_target_volume`**: Maximum daily warmup emails (e.g. `40`).
+
+> 💡 **Password Changed on Google?** If you change your Google account password, your 16-character App Password is automatically revoked. Follow [Google App Password Recovery](docs/GOOGLE_APP_PASSWORD_SETUP.md) to generate a new code and update `smtp_pass`.
+
 
 ---
 

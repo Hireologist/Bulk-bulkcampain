@@ -5,6 +5,7 @@ import axios from 'axios';
 import { fileURLToPath } from 'url';
 import { parseSpintax } from '../src/spintax.mjs';
 import { checkDnsRecords } from '../src/dns-check.mjs';
+import { isAuthError, sendAuthFailureAlert, writeGitHubStepSummary } from '../src/alerts.mjs';
 
 /**
  * 🩺 CAMPAIGN HEALTH & PRE-FLIGHT DIAGNOSTIC SUITE
@@ -146,6 +147,8 @@ export async function runCampaignDiagnostics() {
   // -------------------------------------------------------------
   // STEP 3: Inboxes SMTP & IMAP Authentication Handshake
   // -------------------------------------------------------------
+  const discordWebhookUrl = settings.discord_updates_webhook || process.env.DISCORD_WEBHOOK_URL;
+
   console.log('\n📬 STEP 3: Inboxes SMTP & IMAP Authentication Testing (0 sends)');
   const inboxes = inboxesData.rows.map(r => {
     const obj = {};
@@ -175,7 +178,21 @@ export async function runCampaignDiagnostics() {
         await transporter.verify();
         logPass(`SMTP handshake verified for: "${inbox.email}" (${inbox.smtp_host}:${inbox.smtp_port})`);
       } catch (err) {
-        logFail(`SMTP authentication failed for "${inbox.email}": ${err.message}`);
+        if (isAuthError(err)) {
+          logFail(`🚨 GOOGLE APP PASSWORD AUTHENTICATION FAILED for "${inbox.email}": ${err.message}\n` +
+                  `      💡 Common Cause: Google password changed or 16-char App Password was revoked/expired.\n` +
+                  `      👉 1. Generate new App Password at: https://myaccount.google.com/apppasswords\n` +
+                  `      👉 2. Update 'smtp_pass' in Google Sheet 'Inboxes' tab for [${inbox.email}].\n` +
+                  `      👉 3. Full Guide: docs/GOOGLE_APP_PASSWORD_SETUP.md`);
+          await sendAuthFailureAlert({
+            inboxEmail: inbox.email,
+            errorDetails: err.message,
+            webhookUrl: discordWebhookUrl,
+            context: 'Campaign Pre-Flight Diagnostic (SMTP Audit)'
+          });
+        } else {
+          logFail(`SMTP authentication failed for "${inbox.email}": ${err.message}`);
+        }
       }
 
       // Test IMAP Handshake
@@ -198,7 +215,18 @@ export async function runCampaignDiagnostics() {
           logPass(`IMAP connection verified for: "${inbox.email}" (${inbox.imap_host}:${inbox.imap_port})`);
           await client.logout();
         } catch (err) {
-          logWarn(`IMAP connection failed for "${inbox.email}": ${err.message} (Inbox reply checker may not scan this mailbox).`);
+          if (isAuthError(err)) {
+            logFail(`🚨 GOOGLE APP PASSWORD IMAP AUTHENTICATION FAILED for "${inbox.email}": ${err.message}\n` +
+                    `      👉 Update 'smtp_pass' in Google Sheet 'Inboxes' tab with a fresh 16-character App Password.`);
+            await sendAuthFailureAlert({
+              inboxEmail: inbox.email,
+              errorDetails: `IMAP Auth: ${err.message}`,
+              webhookUrl: discordWebhookUrl,
+              context: 'Campaign Pre-Flight Diagnostic (IMAP Audit)'
+            });
+          } else {
+            logWarn(`IMAP connection failed for "${inbox.email}": ${err.message} (Inbox reply checker may not scan this mailbox).`);
+          }
           if (client) {
             try { await client.logout(); } catch { /* ignore */ }
           }

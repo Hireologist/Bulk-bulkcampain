@@ -49,3 +49,6 @@ export async function checkDomainAuth(domain) {
 
   return result;
 }
+
+export const checkDnsRecords = checkDomainAuth;
+
