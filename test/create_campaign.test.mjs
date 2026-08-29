@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { slugify } from '../scripts/create-new-campaign.mjs';
+import { slugify, runPreflightChecks } from '../scripts/create-new-campaign.mjs';
 
 describe('Create New Campaign Module Unit Tests', () => {
   test('slugify cleans and formats campaign names correctly', () => {
@@ -10,4 +10,47 @@ describe('Create New Campaign Module Unit Tests', () => {
     assert.strictEqual(slugify(''), 'custom_campaign');
     assert.strictEqual(slugify('___special___'), 'special');
   });
+
+  test('runPreflightChecks fails when campaign name is empty', async () => {
+    await assert.rejects(
+      async () => {
+        await runPreflightChecks({
+          campaignName: '',
+          skipGoogleAuth: true,
+          isCI: false
+        });
+      },
+      {
+        message: /Pre-flight validation failed/
+      }
+    );
+  });
+
+  test('runPreflightChecks fails in CI if GitHub PAT is missing', async () => {
+    await assert.rejects(
+      async () => {
+        await runPreflightChecks({
+          campaignName: 'Test Campaign',
+          skipGoogleAuth: true,
+          isCI: true,
+          githubPat: ''
+        });
+      },
+      {
+        message: /Pre-flight validation failed/
+      }
+    );
+  });
+
+  test('runPreflightChecks succeeds when valid inputs provided and auth bypassed', async () => {
+    const result = await runPreflightChecks({
+      campaignName: 'Valid Tech Campaign',
+      skipGoogleAuth: true,
+      isCI: false
+    });
+    assert.strictEqual(result.valid, true);
+    assert.ok(Array.isArray(result.checks));
+    assert.ok(result.checks.some(c => c.name === 'Campaign Name & Slug' && c.status === 'PASS'));
+  });
 });
+
