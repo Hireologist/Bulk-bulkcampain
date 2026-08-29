@@ -122,6 +122,8 @@ Compose your cold email pitch using dynamic template tags and **Spintax rotation
 | **`discord_gcc_radar_webhook`**| `https://...` | Dedicated Discord channel Webhook URL for GCC Leadership Radar alerts. |
 | **`cron_gcc_radar_time`**| `09:00` | Time to trigger GCC Leadership Radar on cron-job.org (`HH:MM`). |
 
+> 🔑 **Need help getting your API keys or Discord webhooks?** Read the [**Complete API Keys & Credentials Guide**](./docs/API_KEYS_AND_CREDENTIALS_GUIDE.md) for 30-second instructions on every key.
+
 ---
 
 ### 7. 🛡️ Deliverability, Compliance & Health Monitoring
