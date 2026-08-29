@@ -84,8 +84,10 @@ async function run() {
     GROQ_API_KEY: groqApiKey,
   };
 
+  const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+  const trackerScriptPath = path.join(scriptDir, 'gcc_tracker.py');
   const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
-  const child = spawn(pythonCmd, ['gcc_tracker.py'], {
+  const child = spawn(pythonCmd, [trackerScriptPath], {
     env,
     stdio: 'inherit',
   });

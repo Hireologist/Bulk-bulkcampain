@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 import { parseSpintax } from '../src/spintax.mjs';
 import { checkDnsRecords } from '../src/dns-check.mjs';
 import { isAuthError, sendAuthFailureAlert, writeGitHubStepSummary, sendCronSyncAlert } from '../src/alerts.mjs';
-import { parseScheduleFromSettings, fetchExistingJobs, fetchJobDetails, updateCronJob } from '../setup-cron.mjs';
+import { parseScheduleFromSettings, fetchExistingJobs, fetchJobDetails, updateCronJob } from './setup-cron.mjs';
 
 /**
  * 🩺 CAMPAIGN HEALTH & PRE-FLIGHT DIAGNOSTIC SUITE

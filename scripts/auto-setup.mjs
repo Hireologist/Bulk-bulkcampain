@@ -1,7 +1,7 @@
 import { google } from 'googleapis';
 import { fileURLToPath } from 'url';
 import { checkDomainAuth } from '../src/dns-check.mjs';
-import { syncCronJobs, parseScheduleFromSettings, autoDetectGitRepo } from '../setup-cron.mjs';
+import { syncCronJobs, parseScheduleFromSettings, autoDetectGitRepo } from './setup-cron.mjs';
 import { postToDiscord } from '../src/alerts.mjs';
 
 /**
