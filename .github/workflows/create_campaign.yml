@@ -82,7 +82,7 @@ jobs:
             git commit -m "feat(campaign): add dedicated workflow for [${{ inputs.campaign_name }}]"
             if [ -n "$PAT_TOKEN" ]; then
               echo "🚀 Pushing new workflow to GitHub repository using GitHub PAT..."
-              git push "https://x-access-token:${PAT_TOKEN}@github.com/${{ github.repository }}.git" HEAD:main
+              git push "https://${PAT_TOKEN}@github.com/${{ github.repository }}.git" HEAD:main || git push "https://x-access-token:${PAT_TOKEN}@github.com/${{ github.repository }}.git" HEAD:main
             else
               echo "::error::GitHub requires a Personal Access Token (PAT) with 'workflow' scope to commit new workflow files into .github/workflows/."
               echo "::error::Please add 'PAT_GITHUB' to your repository Secrets (Settings > Secrets and variables > Actions), or supply it in the workflow inputs."
