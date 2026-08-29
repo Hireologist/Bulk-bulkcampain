@@ -11,20 +11,22 @@ An automated, 100% free, serverless cold email outreach engine built with **Node
 ## 📋 Table of Contents
 0. [⚡ 1-Click Rapid Setup Guide](./SETUP_10MIN.md)
 1. [🧪 Step-by-Step Manual Testing Guide](./docs/MANUAL_TESTING.md)
-2. [Key Features](#-key-features)
-3. [How to Import & Setup Your Own GitHub Repo](#-how-to-import--setup-your-own-github-repo)
-4. [Online Web Dashboard (GitHub Pages)](#-online-web-dashboard-github-pages)
-5. [Prerequisites & Requirements](#-prerequisites--requirements)
-6. [Step-by-Step Initial Setup (Only 2 Secrets)](#-step-by-step-initial-setup)
-7. [Dynamic Cron Schedules & Timezones in Google Sheets](#-dynamic-cron-schedules)
-8. [Running & Testing the Engine](#-running--testing-the-engine)
-9. [Google Sheets Architecture & Color-Coded Tabs](#-google-sheets-architecture--color-coded-tabs)
+2. [🧩 Chrome Extension User Guide](./docs/CHROME_EXTENSION_GUIDE.md)
+3. [Key Features](#-key-features)
+4. [How to Import & Setup Your Own GitHub Repo](#-how-to-import--setup-your-own-github-repo)
+5. [Online Web Dashboard (GitHub Pages)](#-online-web-dashboard-github-pages)
+6. [Prerequisites & Requirements](#-prerequisites--requirements)
+7. [Step-by-Step Initial Setup (Only 2 Secrets)](#-step-by-step-initial-setup)
+8. [Dynamic Cron Schedules & Timezones in Google Sheets](#-dynamic-cron-schedules)
+9. [Running & Testing the Engine](#-running--testing-the-engine)
+10. [Google Sheets Architecture & Color-Coded Tabs](#-google-sheets-architecture--color-coded-tabs)
 
 ---
 
 ## ⚡ Key Features
 
 - **🚀 1-Click Automated Setup & Provisioning**: Single workflow (`setup_engine.yml`) that automatically generates all 11 Google Sheet tabs, headers, formulas, sample leads, and provisions all `cron-job.org` timers.
+- **🧩 Manifest V3 Chrome Extension**: Fast in-browser lead parsing and dispatch tool with auto-name and company extraction, multi-campaign switcher, and batch queueing (see [Chrome Extension Guide](./docs/CHROME_EXTENSION_GUIDE.md)).
 - **🌐 100% Online GitHub Pages Web Dashboard**: Live browser view (`https://<YOUR_USERNAME>.github.io/<YOUR_REPO_NAME>/`) for 24/7 visual analytics, lead search, inbox health, and 1-click cloud triggers.
 - **🎲 Spintax (Spin Syntax) Randomization**: High-entropy email variations using `{{Hi|Hey|Hello}}` and `{{option 1 | option 2}}` across subject lines and email bodies to eliminate repetitive pattern matching and skyrocket deliverability.
 - **⏯️ Master Campaign ON/OFF Toggle**: Start, pause, or resume all outreach and follow-ups dynamically in 1 second by setting `campaign_active = TRUE/FALSE` in Google Sheet `Settings`.
