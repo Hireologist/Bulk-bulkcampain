@@ -4,6 +4,16 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { COMPLETE_SCHEMA, formatSheetTab } from './auto-setup.mjs';
 import { postToDiscord, writeGitHubStepSummary } from '../src/alerts.mjs';
+import {
+  parseWeekdays,
+  parseTime,
+  parseMinutesList,
+  buildJobPayload,
+  fetchExistingJobs,
+  updateCronJob,
+  createCronJob,
+  autoDetectGitRepo
+} from '../setup-cron.mjs';
 
 /**
  * 🪄 1-Click Multi-Campaign & Google Sheet Provisioner
@@ -56,12 +66,129 @@ export function slugify(str) {
     .replace(/^_+|_+$/g, '') || 'custom_campaign';
 }
 
+export async function registerCronJobsForCampaign({
+  campaignName,
+  slug,
+  cronApiKey,
+  githubPat,
+  settings = {},
+}) {
+  if (!cronApiKey || !githubPat) return { registeredCount: 0, jobs: [] };
+
+  const cleanName = campaignName.trim();
+  const repoInfo = process.env.GITHUB_REPOSITORY
+    ? { owner: process.env.GITHUB_REPOSITORY.split('/')[0], repo: process.env.GITHUB_REPOSITORY.split('/')[1] }
+    : autoDetectGitRepo();
+
+  if (!repoInfo) {
+    console.warn('  ⚠️ Could not determine GitHub repository. Skipping automated cron job creation.');
+    return { registeredCount: 0, jobs: [] };
+  }
+
+  const { owner, repo } = repoInfo;
+  const dispatchUrl = `https://api.github.com/repos/${owner}/${repo}/actions/workflows/outreach_${slug}.yml/dispatches`;
+
+  const timezone = settings.cron_timezone || 'Asia/Kolkata';
+  const wdays = parseWeekdays(settings.cron_days || 'Mon-Sat');
+  const followupTime = parseTime(settings.cron_followup_time || '09:30', 9, 30);
+  const outreachTime = parseTime(settings.cron_outreach_time || '10:00', 10, 0);
+  const digestTime = parseTime(settings.cron_digest_time || '18:30', 18, 30);
+  const inboxMinutes = parseMinutesList(settings.cron_inbox_minutes || '15');
+
+  const jobsToCreate = [
+    {
+      title: `[${cleanName}] Followup Engine`,
+      action: 'followup',
+      workflow: `outreach_${slug}.yml`,
+      schedule: {
+        timezone,
+        expiresAt: 0,
+        hours: [followupTime.hour],
+        minutes: [followupTime.minute],
+        mdays: [-1],
+        wdays,
+        months: [-1],
+      },
+    },
+    {
+      title: `[${cleanName}] Cold Outreach`,
+      action: 'outreach',
+      workflow: `outreach_${slug}.yml`,
+      schedule: {
+        timezone,
+        expiresAt: 0,
+        hours: [outreachTime.hour],
+        minutes: [outreachTime.minute],
+        mdays: [-1],
+        wdays,
+        months: [-1],
+      },
+    },
+    {
+      title: `[${cleanName}] Inbox Checker`,
+      action: 'inbox',
+      workflow: `outreach_${slug}.yml`,
+      schedule: {
+        timezone,
+        expiresAt: 0,
+        hours: [-1],
+        minutes: inboxMinutes,
+        mdays: [-1],
+        wdays,
+        months: [-1],
+      },
+    },
+    {
+      title: `[${cleanName}] Daily Digest`,
+      action: 'digest',
+      workflow: `outreach_${slug}.yml`,
+      schedule: {
+        timezone,
+        expiresAt: 0,
+        hours: [digestTime.hour],
+        minutes: [digestTime.minute],
+        mdays: [-1],
+        wdays,
+        months: [-1],
+      },
+    },
+  ];
+
+  const registeredJobs = [];
+  try {
+    const existingJobs = await fetchExistingJobs(cronApiKey);
+
+    for (const jobConfig of jobsToCreate) {
+      const payload = buildJobPayload(repo, dispatchUrl, githubPat, jobConfig);
+      const existing = existingJobs.find(
+        (j) => (j.title || '').includes(jobConfig.title) || (j.url || '').includes(`outreach_${slug}.yml`)
+      );
+
+      if (existing) {
+        await updateCronJob(cronApiKey, existing.jobId, payload);
+        registeredJobs.push({ title: jobConfig.title, id: existing.jobId, action: 'updated' });
+        console.log(`  🔄 Updated cron job: "${jobConfig.title}" (ID: ${existing.jobId})`);
+      } else {
+        const newJobId = await createCronJob(cronApiKey, payload);
+        registeredJobs.push({ title: jobConfig.title, id: newJobId, action: 'created' });
+        console.log(`  ✨ Created cron job: "${jobConfig.title}" (ID: ${newJobId})`);
+      }
+    }
+  } catch (cronErr) {
+    console.warn(`  ⚠️ Cron-job.org sync error: ${cronErr.message}`);
+  }
+
+  return { registeredCount: registeredJobs.length, jobs: registeredJobs };
+}
+
 export async function createNewCampaign({
   campaignName,
   existingSheetId = '',
   userEmail = '',
   makePublic = true,
   timezone = 'Asia/Kolkata',
+  cronApiKey = '',
+  githubPat = '',
   discordWebhook = ''
 }) {
   if (!campaignName || typeof campaignName !== 'string' || !campaignName.trim()) {
@@ -210,7 +337,7 @@ export async function createNewCampaign({
     }
   } catch (_) {}
 
-  // 5. Generate Dedicated GitHub Actions Workflow File
+  // 6. Generate Dedicated GitHub Actions Workflow File (With Diagnostics Support)
   const workflowFileName = `outreach_${slug}.yml`;
   const workflowsDir = path.join(process.cwd(), '.github', 'workflows');
   if (!fs.existsSync(workflowsDir)) {
@@ -240,7 +367,7 @@ on:
         required: true
         default: 'inbox'
         type: choice
-        options: [outreach, followup, inbox, digest, warmup, single_lead]
+        options: [outreach, followup, inbox, digest, warmup, single_lead, diagnostic]
       email:
         description: 'Recipient Email (for single_lead)'
         required: false
@@ -263,6 +390,8 @@ jobs:
       GOOGLE_SERVICE_ACCOUNT_JSON: \${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
       SELECTED_ACTION: \${{ inputs.action || github.event.inputs.action }}
       CAMPAIGN_NAME: "${cleanName}"
+      CRON_API_KEY: \${{ secrets.CRON_API_KEY }}
+      DISCORD_WEBHOOK_URL: \${{ secrets.DISCORD_WEBHOOK_URL }}
 
     steps:
       - name: Checkout Code
@@ -277,7 +406,12 @@ jobs:
       - name: Install Dependencies
         run: npm ci --no-audit --no-fund
 
+      - name: Execute Diagnostics (if selected)
+        if: \${{ (inputs.action || github.event.inputs.action || 'inbox') == 'diagnostic' }}
+        run: node scripts/run-campaign-diagnostics.mjs --sheet-id "${spreadsheetId}"
+
       - name: Execute Campaign Engine [${cleanName}]
+        if: \${{ (inputs.action || github.event.inputs.action || 'inbox') != 'diagnostic' }}
         run: node engine.mjs "\${{ inputs.action || 'inbox' }}"
         env:
           SINGLE_EMAIL: \${{ inputs.email || github.event.client_payload.email || '' }}
@@ -293,7 +427,27 @@ jobs:
   console.log(`   🏷️  Name: "🚀 Outreach Engine — [${cleanName}]"`);
   console.log(`   🛑 Can be stopped / paused independently on GitHub Actions!\n`);
 
-  // 6. Write GitHub Actions Step Summary
+  // 7. Auto-Register Cron Jobs on cron-job.org if credentials exist
+  const effectiveCronKey = cronApiKey || process.env.CRON_API_KEY || '';
+  const effectiveGithubPat = githubPat || process.env.PAT_GITHUB || process.env.GITHUB_PAT || process.env.GITHUB_TOKEN || '';
+  let cronResult = { registeredCount: 0, jobs: [] };
+
+  if (effectiveCronKey && effectiveGithubPat) {
+    console.log(`⏰ Automatically registering cron-job.org schedules for "[${cleanName}]"...`);
+    cronResult = await registerCronJobsForCampaign({
+      campaignName: cleanName,
+      slug,
+      cronApiKey: effectiveCronKey,
+      githubPat: effectiveGithubPat,
+    });
+    if (cronResult.registeredCount > 0) {
+      console.log(`✅ Registered ${cronResult.registeredCount} cron schedules on cron-job.org!`);
+    }
+  } else {
+    console.log(`ℹ️ Cron API Key or GitHub PAT not set. Skipping automatic cron-job.org creation.`);
+  }
+
+  // 8. Write GitHub Actions Step Summary
   const ghSummaryMarkdown = 
 `## ✨ New Campaign Provisioned: \`${cleanName}\`
 
@@ -304,26 +458,28 @@ jobs:
 | **🔓 Permissions** | Public (Anyone with link can **Edit**) |
 | **🐙 Dedicated Workflow** | [\`.github/workflows/${workflowFileName}\`](./.github/workflows/${workflowFileName}) |
 | **🏷️ Run Prefix** | \`[${cleanName}]\` |
+| **⏰ Automated Cron Schedules** | ${cronResult.registeredCount > 0 ? `✅ ${cronResult.registeredCount} jobs registered on cron-job.org` : 'ℹ️ Manual / On-Demand'} |
 
 ### 🚀 Next Steps:
 1. Open the [Google Sheet](${spreadsheetUrl}) and add your sender inboxes in the **\`Inboxes\`** tab.
 2. Add your prospect leads into the **\`Details\`** tab.
-3. Trigger outreach independently from the **Actions** tab on GitHub!
+3. Trigger outreach or diagnostics independently from the **Actions** tab on GitHub!
 `;
   writeGitHubStepSummary(ghSummaryMarkdown);
 
-  // 7. Send Discord Notification Alert
+  // 9. Send Discord Notification Alert
   const webhookUrl = discordWebhook || process.env.DISCORD_WEBHOOK_URL;
   if (webhookUrl && webhookUrl.startsWith('http')) {
     const embed = {
       title: `✨ New Campaign Created: [${cleanName}]`,
       color: 0x00ff88,
-      description: `A brand-new Google Sheet and dedicated GitHub Actions workflow have been provisioned!`,
+      description: `A brand-new Google Sheet, dedicated GitHub Actions workflow, and automated schedules have been provisioned!`,
       fields: [
         { name: '📊 Google Sheet', value: `[Open Spreadsheet](${spreadsheetUrl})`, inline: true },
         { name: '🆔 Sheet ID', value: `\`${spreadsheetId}\``, inline: true },
         { name: '🔓 Permissions', value: 'Public (Edit Access ✅)', inline: true },
         { name: '🐙 Dedicated Workflow', value: `\`${workflowFileName}\``, inline: false },
+        { name: '⏰ Cron Jobs', value: cronResult.registeredCount > 0 ? `${cronResult.registeredCount} active on cron-job.org ✅` : 'On-Demand ℹ️', inline: true },
       ],
       footer: { text: 'Sheet-bot Multi-Campaign Provisioner' },
       timestamp: new Date().toISOString()

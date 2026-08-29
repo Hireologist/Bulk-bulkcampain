@@ -56,6 +56,8 @@ jobs:
           GOOGLE_SERVICE_ACCOUNT_EMAIL: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_EMAIL }}
           GOOGLE_PRIVATE_KEY: ${{ secrets.GOOGLE_PRIVATE_KEY }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          CRON_API_KEY: ${{ secrets.CRON_API_KEY }}
+          GITHUB_PAT: ${{ secrets.PAT_GITHUB || secrets.GITHUB_TOKEN }}
 
       - name: Commit & Push New Campaign Workflow to GitHub
         run: |
