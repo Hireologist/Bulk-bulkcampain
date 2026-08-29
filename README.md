@@ -38,6 +38,7 @@ All in-depth technical guides, schemas, and walkthroughs are organized into dedi
 | :--- | :--- |
 | ⚡ [**Rapid 3-Minute Setup Guide**](./SETUP_10MIN.md) | Step-by-step instructions to go from zero to live sending in 3 minutes. |
 | 🔑 [**API Keys & Credentials Hub**](./docs/API_KEYS_AND_CREDENTIALS_GUIDE.md) | Where to get Discord webhooks, Groq AI keys, cron-job API, GitHub PAT, and passwords. |
+| 💬 [**Discord Server & Webhook Setup**](./docs/DISCORD_WEBHOOK_SETUP.md) | How to create a Discord server, channels, and real-time alert webhooks. |
 | 📄 [**Google Service Account Key Setup**](./docs/GOOGLE_SERVICE_ACCOUNT_SETUP.md) | Step-by-step 60-second guide to generate `GOOGLE_SERVICE_ACCOUNT_JSON`. |
 | 📁 [**Multi-Campaign Strategy**](./docs/MULTI_CAMPAIGN_GUIDE.md) | How to scale to multiple clients & campaigns using the 1-Repo architecture. |
 | 📊 [**Google Sheets Schema & Tabs**](./docs/GOOGLE_SHEETS_SCHEMA.md) | Details on all 11 tabs, formulas, Spintax syntax, and custom settings. |

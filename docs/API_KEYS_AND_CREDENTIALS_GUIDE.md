@@ -23,6 +23,7 @@ This guide provides step-by-step instructions (under 30 seconds each) for obtain
 Discord webhooks send instant real-time alerts to your team channels when emails are sent, daily digests are calculated, or interested leads reply!
 
 ### Steps to create Discord Webhooks:
+*(👉 For full visual walkthrough on creating servers, channels, and webhooks, read the [Discord Webhook Setup Guide](./DISCORD_WEBHOOK_SETUP.md))*
 1. Open **Discord** and open your server (or create a free private server).
 2. Create 2 or 3 channels (e.g. `#outreach-updates`, `#hot-replies`, `#funding-radar`).
 3. Hover over a channel (e.g. `#hot-replies`) and click the **Gear icon** ⚙️ (**Edit Channel**).
