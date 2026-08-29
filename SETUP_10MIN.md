@@ -15,8 +15,9 @@
 ---
 
 ### Step 2: Download Google Service Account Key (60 Seconds)
+*(👉 For full visual walkthrough, read the [Google Service Account Setup Guide](./docs/GOOGLE_SERVICE_ACCOUNT_SETUP.md))*
 1. Go to **[Google Cloud Console](https://console.cloud.google.com/)** and create a project (e.g. `sheet-outreach-bot`).
-2. Go to **APIs & Services** > **Library**, search for **Google Sheets API**, and click **Enable**.
+2. Go to **APIs & Services** > **Library**, enable **Google Sheets API** and **Google Drive API**.
 3. Go to **APIs & Services** > **Credentials** > **+ CREATE CREDENTIALS** > **Service Account** (Name: `sheet-bot`, click **Create & Continue** > **Done**).
 4. Click on the created service account email:
    - Go to the **Keys** tab > **Add Key** > **Create new key** > **JSON** > **Create**.
