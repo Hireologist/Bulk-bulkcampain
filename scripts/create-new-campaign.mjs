@@ -164,14 +164,41 @@ export async function registerCronJobsForCampaign({
         (j) => (j.title || '').includes(jobConfig.title) || (j.url || '').includes(`outreach_${slug}.yml`)
       );
 
+      // Pacing delay to avoid cron-job.org 429 rate limit
+      await new Promise((r) => setTimeout(r, 600));
+
       if (existing) {
-        await updateCronJob(cronApiKey, existing.jobId, payload);
-        registeredJobs.push({ title: jobConfig.title, id: existing.jobId, action: 'updated' });
-        console.log(`  🔄 Updated cron job: "${jobConfig.title}" (ID: ${existing.jobId})`);
+        try {
+          await updateCronJob(cronApiKey, existing.jobId, payload);
+          registeredJobs.push({ title: jobConfig.title, id: existing.jobId, action: 'updated' });
+          console.log(`  🔄 Updated cron job: "${jobConfig.title}" (ID: ${existing.jobId})`);
+        } catch (err) {
+          if (String(err.message).includes('429')) {
+            console.log(`  ⏳ Rate limited on cron-job.org. Retrying after 1.5s...`);
+            await new Promise((r) => setTimeout(r, 1500));
+            await updateCronJob(cronApiKey, existing.jobId, payload);
+            registeredJobs.push({ title: jobConfig.title, id: existing.jobId, action: 'updated' });
+            console.log(`  🔄 Updated cron job: "${jobConfig.title}" (ID: ${existing.jobId})`);
+          } else {
+            console.warn(`  ⚠️ Could not update "${jobConfig.title}": ${err.message}`);
+          }
+        }
       } else {
-        const newJobId = await createCronJob(cronApiKey, payload);
-        registeredJobs.push({ title: jobConfig.title, id: newJobId, action: 'created' });
-        console.log(`  ✨ Created cron job: "${jobConfig.title}" (ID: ${newJobId})`);
+        try {
+          const newJobId = await createCronJob(cronApiKey, payload);
+          registeredJobs.push({ title: jobConfig.title, id: newJobId, action: 'created' });
+          console.log(`  ✨ Created cron job: "${jobConfig.title}" (ID: ${newJobId})`);
+        } catch (err) {
+          if (String(err.message).includes('429')) {
+            console.log(`  ⏳ Rate limited on cron-job.org. Retrying after 1.5s...`);
+            await new Promise((r) => setTimeout(r, 1500));
+            const newJobId = await createCronJob(cronApiKey, payload);
+            registeredJobs.push({ title: jobConfig.title, id: newJobId, action: 'created' });
+            console.log(`  ✨ Created cron job: "${jobConfig.title}" (ID: ${newJobId})`);
+          } else {
+            console.warn(`  ⚠️ Could not create "${jobConfig.title}": ${err.message}`);
+          }
+        }
       }
     }
   } catch (cronErr) {
