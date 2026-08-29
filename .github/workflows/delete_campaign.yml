@@ -22,6 +22,14 @@ on:
         required: true
         type: boolean
         default: true
+      github_pat:
+        description: 'GitHub PAT with workflow scope (Optional if secret PAT_GITHUB is set)'
+        required: false
+        type: string
+      cron_api_key:
+        description: 'cron-job.org API Key (Optional if secret CRON_API_KEY is set)'
+        required: false
+        type: string
 
 jobs:
   delete-campaign:
@@ -31,7 +39,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.PAT_GITHUB || secrets.GITHUB_PAT || secrets.GITHUB_TOKEN }}
+          token: ${{ inputs.github_pat || secrets.PAT_GITHUB || secrets.GITHUB_PAT || secrets.GH_PAT || secrets.PAT || secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js (with cache)
         uses: actions/setup-node@v4
@@ -49,10 +57,13 @@ jobs:
           DELETE_SHEET: ${{ inputs.delete_google_sheet }}
           DELETE_CRON: ${{ inputs.delete_cron_jobs }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-          CRON_API_KEY: ${{ secrets.CRON_API_KEY }}
+          CRON_API_KEY: ${{ inputs.cron_api_key || secrets.CRON_API_KEY || secrets.CRON_KEY }}
+          GITHUB_PAT: ${{ inputs.github_pat || secrets.PAT_GITHUB || secrets.GITHUB_PAT || secrets.GH_PAT || secrets.PAT }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
       - name: Commit & Push Workflow Deletion
+        env:
+          PAT_TOKEN: ${{ inputs.github_pat || secrets.PAT_GITHUB || secrets.GITHUB_PAT || secrets.GH_PAT || secrets.PAT }}
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
@@ -61,5 +72,12 @@ jobs:
             echo "No files modified or removed."
           else
             git commit -m "chore(campaign): delete campaign [${{ inputs.campaign_name }}]"
-            git push
+            if [ -n "$PAT_TOKEN" ]; then
+              echo "🚀 Pushing changes to GitHub repository using GitHub PAT..."
+              git push "https://x-access-token:${PAT_TOKEN}@github.com/${{ github.repository }}.git" HEAD:main
+            else
+              echo "::error::GitHub requires a Personal Access Token (PAT) with 'workflow' scope to commit workflow changes into .github/workflows/."
+              echo "::error::Please add 'PAT_GITHUB' to your repository Secrets (Settings > Secrets and variables > Actions), or supply it in the workflow inputs."
+              exit 1
+            fi
           fi
