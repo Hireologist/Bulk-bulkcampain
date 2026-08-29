@@ -202,3 +202,39 @@ export async function sendRunSummaryAlert(summary = {}, webhookUrl) {
   await postToDiscord(webhookUrl, `Run completed at ${new Date().toLocaleTimeString()}`, [embed]);
 }
 
+/**
+ * Send alert when cron-job.org schedule is updated/auto-synchronized
+ */
+export async function sendCronSyncAlert({
+  jobTitle,
+  timezone,
+  hours = [],
+  minutes = [],
+  webhookUrl,
+  context = 'Google Sheet Settings Synchronization'
+}) {
+  if (!webhookUrl || typeof webhookUrl !== 'string' || !webhookUrl.startsWith('http')) {
+    return { success: false, reason: 'No valid webhook URL' };
+  }
+
+  const hourStr = hours.map(h => String(h).padStart(2, '0')).join(', ') || '00';
+  const minStr = minutes.map(m => String(m).padStart(2, '0')).join(', ') || '00';
+
+  const embed = {
+    title: '⏱️ Cron Job Schedule Auto-Synchronized',
+    color: 0x3498db,
+    description: `The schedule for **\`${jobTitle}\`** was automatically updated to match your Google Sheet **\`Settings\`** tab.`,
+    fields: [
+      { name: '📌 Job Title', value: `\`${jobTitle}\``, inline: true },
+      { name: '🌐 Timezone', value: `\`${timezone || 'Asia/Kolkata'}\``, inline: true },
+      { name: '⏰ New Trigger Time', value: `\`${hourStr}:${minStr}\``, inline: true },
+      { name: '⚙️ Source', value: context, inline: false },
+    ],
+    footer: { text: 'Sheet-bot Cron Auto-Synchronizer' },
+    timestamp: new Date().toISOString()
+  };
+
+  await postToDiscord(webhookUrl, `⏱️ **Cron Schedule Auto-Updated**: \`${jobTitle}\` synced with Google Sheet!`, [embed]);
+  return { success: true, jobTitle };
+}
+

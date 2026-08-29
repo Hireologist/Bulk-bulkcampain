@@ -5,7 +5,7 @@ import axios from 'axios';
 import { fileURLToPath } from 'url';
 import { parseSpintax } from '../src/spintax.mjs';
 import { checkDnsRecords } from '../src/dns-check.mjs';
-import { isAuthError, sendAuthFailureAlert, writeGitHubStepSummary } from '../src/alerts.mjs';
+import { isAuthError, sendAuthFailureAlert, writeGitHubStepSummary, sendCronSyncAlert } from '../src/alerts.mjs';
 import { parseScheduleFromSettings, fetchExistingJobs, fetchJobDetails, updateCronJob } from '../setup-cron.mjs';
 
 /**
@@ -448,6 +448,16 @@ export async function runCampaignDiagnostics() {
                 };
                 await updateCronJob(cronApiKey, matched.jobId, updatedPayload);
                 logPass(`Cron Job "${matched.title}": Auto-synchronized & updated schedule to match Google Sheet (${targetJob.schedule.timezone} @ ${formatHour}:${formatMin}) 🔄✅`);
+
+                // Send real-time notification to Discord
+                await sendCronSyncAlert({
+                  jobTitle: matched.title,
+                  timezone: targetJob.schedule.timezone,
+                  hours: targetJob.schedule.hours,
+                  minutes: targetJob.schedule.minutes,
+                  webhookUrl: discordWebhookUrl,
+                  context: 'Pre-Flight Diagnostic Auto-Sync'
+                });
               }
             } catch (jobErr) {
               logWarn(`Cron Job "${matched.title}": Checked (${matched.enabled ? 'ENABLED' : 'PAUSED'}). Auto-sync note: ${jobErr.message}`);
