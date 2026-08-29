@@ -272,11 +272,10 @@ def analyze_article_with_llm(title, summary, max_retries=3):
     """
 
     models_to_try = [
-        MODEL_NAME,             # 1. Primary: openai/gpt-oss-120b
-        "qwen/qwen3.8-27b",      # 2. Fallback 1: Qwen 3.8 27B
-        "qwen/qwen3.6-27b",      # 3. Fallback 2: Qwen 3.6 27B
-        "groq/compound",         # 4. Fallback 3: Groq Compound Router
-        "openai/gpt-oss-20b"     # 5. Fallback 4: GPT-OSS 20B
+        MODEL_NAME,                  # 1. Primary: openai/gpt-oss-120b
+        "llama-3.3-70b-versatile",   # 2. Fallback 1: Llama 3.3 70B
+        "llama-3.1-8b-instant",      # 3. Fallback 2: Llama 3.1 8B
+        "mixtral-8x7b-32768"         # 4. Fallback 3: Mixtral 8x7B
     ]
 
     for model in models_to_try:
