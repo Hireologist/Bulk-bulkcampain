@@ -43,7 +43,6 @@ All in-depth technical guides, schemas, and walkthroughs are organized into dedi
 | 📁 [**Multi-Campaign Strategy**](./docs/MULTI_CAMPAIGN_GUIDE.md) | How to scale to multiple clients & campaigns using the 1-Repo architecture. |
 | 📊 [**Google Sheets Schema & Tabs**](./docs/GOOGLE_SHEETS_SCHEMA.md) | Details on all 11 tabs, formulas, Spintax syntax, and custom settings. |
 | ⏰ [**Automated Cron Scheduling**](./docs/CRON_SETUP.md) | Automated `cron-job.org` dispatch for 100% on-time execution. |
-| 🌐 [**Online Web Dashboard**](./docs/DASHBOARD_GUIDE.md) | Enabling your free 24/7 visual analytics dashboard on GitHub Pages. |
 | 🧩 [**Chrome Extension User Guide**](./docs/CHROME_EXTENSION_GUIDE.md) | 1-click browser lead extraction and queueing extension. |
 | 🔐 [**Google App Passwords Guide**](./docs/GOOGLE_APP_PASSWORD_SETUP.md) | Generating and configuring Gmail / Workspace SMTP App Passwords. |
 | 🧪 [**Step-by-Step Manual Testing**](./docs/MANUAL_TESTING.md) | End-to-end verification checklist for sandbox and live tests. |
