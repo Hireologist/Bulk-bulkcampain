@@ -3,6 +3,7 @@ import { execSync } from 'child_process';
 import { google } from 'googleapis';
 import { fileURLToPath } from 'url';
 import path from 'path';
+import { sendCronSyncAlert } from './src/alerts.mjs';
 
 /**
  * ⚡ Smart Non-Destructive Cron-Job.org Synchronizer
@@ -349,7 +350,7 @@ export async function createCronJob(cronApiKey, payload) {
 /**
  * Smart synchronizer for all outreach jobs
  */
-export async function syncCronJobs(cronApiKey, githubPat, dispatchUrl, repoName, jobsToSync = JOBS_TO_CREATE) {
+export async function syncCronJobs(cronApiKey, githubPat, dispatchUrl, repoName, jobsToSync = JOBS_TO_CREATE, webhookUrl = null) {
   let cleanPat = githubPat.trim();
   if (cleanPat.toLowerCase().startsWith('bearer ')) {
     cleanPat = cleanPat.substring(7).trim();
@@ -386,6 +387,19 @@ export async function syncCronJobs(cronApiKey, githubPat, dispatchUrl, repoName,
           await updateCronJob(cronApiKey, existing.jobId, payload);
           console.log(`✅ [Updated Successfully] "${expectedTitle}" -> New Schedule: ${jobConfig.schedule.timezone} @ ${JSON.stringify(jobConfig.schedule.hours)}:${JSON.stringify(jobConfig.schedule.minutes)}`);
           summary.updated++;
+
+          if (webhookUrl) {
+            try {
+              await sendCronSyncAlert({
+                jobTitle: expectedTitle,
+                timezone: jobConfig.schedule.timezone,
+                hours: jobConfig.schedule.hours,
+                minutes: jobConfig.schedule.minutes,
+                webhookUrl,
+                context: 'cron-job.org Synchronizer'
+              });
+            } catch (_) {}
+          }
         }
       } else {
         console.log(`✨ [Creating New Job] "${expectedTitle}" (${jobConfig.schedule.timezone})...`);
@@ -518,7 +532,8 @@ async function main() {
   console.log(`⏰ Cold Outreach Time: ${JSON.stringify(dynamicJobs.find(j => j.action === 'outreach')?.schedule?.hours[0])}:${String(dynamicJobs.find(j => j.action === 'outreach')?.schedule?.minutes[0]).padStart(2, '0')}`);
   console.log(`⏰ Follow-up Time:    ${JSON.stringify(dynamicJobs.find(j => j.action === 'followup')?.schedule?.hours[0])}:${String(dynamicJobs.find(j => j.action === 'followup')?.schedule?.minutes[0]).padStart(2, '0')}\n`);
 
-  const summary = await syncCronJobs(cronApiKey, githubPat, dispatchUrl, repoName, dynamicJobs);
+  const webhookUrl = sheetSettings.discord_updates_webhook || process.env.DISCORD_WEBHOOK_URL;
+  const summary = await syncCronJobs(cronApiKey, githubPat, dispatchUrl, repoName, dynamicJobs, webhookUrl);
 
   console.log('\n📊 Synchronization Summary:');
   console.log(`• 🛡️ Up-to-Date (Skipped): ${summary.unchanged}`);
