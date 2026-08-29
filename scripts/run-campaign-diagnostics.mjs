@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import { parseSpintax } from '../src/spintax.mjs';
 import { checkDnsRecords } from '../src/dns-check.mjs';
 import { isAuthError, sendAuthFailureAlert, writeGitHubStepSummary } from '../src/alerts.mjs';
+import { parseScheduleFromSettings, fetchExistingJobs, fetchJobDetails, updateCronJob } from '../setup-cron.mjs';
 
 /**
  * 🩺 CAMPAIGN HEALTH & PRE-FLIGHT DIAGNOSTIC SUITE
@@ -385,7 +386,7 @@ export async function runCampaignDiagnostics() {
   }
 
   // -------------------------------------------------------------
-  // STEP 9: Cron Jobs & Automation Schedule Verification
+  // STEP 9: Cron Jobs & Automation Schedule Auto-Synchronization
   // -------------------------------------------------------------
   console.log('\n⏰ STEP 9: Cron Automation & Schedule Verification');
   const cronApiKey = process.env.CRONJOB_API_KEY ||
@@ -400,30 +401,57 @@ export async function runCampaignDiagnostics() {
     settings.cronjob_key ||
     settings.cron_token ||
     settings.cronjob_token;
+
+  const dynamicJobs = parseScheduleFromSettings(settings);
   const cronDays = settings.cron_days || 'Mon-Sat';
   const cronOutreachTime = settings.cron_outreach_time || '10:00';
   const cronFollowupTime = settings.cron_followup_time || '09:30';
 
-  logPass(`Cron Settings in Sheet: Timezone="${cronTimezone}" | Days="${cronDays}" | Outreach="${cronOutreachTime}" | Follow-up="${cronFollowupTime}"`);
+  logPass(`Desired Cron Schedules in Sheet: Timezone="${cronTimezone}" | Days="${cronDays}" | Outreach="${cronOutreachTime}" | Follow-up="${cronFollowupTime}"`);
 
   if (cronApiKey) {
     try {
-      const cRes = await axios.get('https://api.cron-job.org/jobs', {
-        headers: { Authorization: `Bearer ${cronApiKey}` },
-        timeout: 10000
-      });
-      const existingJobs = cRes.data.jobs || [];
+      const existingJobs = await fetchExistingJobs(cronApiKey);
       const sheetBotJobs = existingJobs.filter(j => (j.title || '').toLowerCase().includes('sheet-bot'));
 
       if (sheetBotJobs.length === 0) {
         logWarn(`cron-job.org API connected, but found 0 jobs containing "Sheet-bot". (Run Auto-Setup or setup-cron.mjs to provision them).`);
       } else {
         logPass(`Found ${sheetBotJobs.length} Sheet-bot cron job(s) configured on cron-job.org.`);
-        for (const job of sheetBotJobs) {
-          if (job.enabled) {
-            logPass(`Cron Job "${job.title}": ENABLED ✅`);
-          } else {
-            logWarn(`Cron Job "${job.title}": PAUSED/DISABLED ⚠️ (Enable it on console.cron-job.org)`);
+
+        for (const targetJob of dynamicJobs) {
+          const matched = sheetBotJobs.find(j => (j.title || '').toLowerCase().includes(targetJob.title.toLowerCase()));
+          if (matched) {
+            try {
+              const detailed = await fetchJobDetails(cronApiKey, matched.jobId);
+              const curSchedule = detailed?.jobDetails?.schedule || detailed?.job?.schedule || detailed?.schedule;
+              
+              // Check if schedule matches Sheet
+              const sameTz = curSchedule?.timezone === targetJob.schedule.timezone;
+              const sameHours = JSON.stringify(curSchedule?.hours || []) === JSON.stringify(targetJob.schedule.hours || []);
+              const sameMins = JSON.stringify(curSchedule?.minutes || []) === JSON.stringify(targetJob.schedule.minutes || []);
+              const isEnabled = matched.enabled;
+
+              const formatHour = JSON.stringify(targetJob.schedule.hours || []);
+              const formatMin = JSON.stringify(targetJob.schedule.minutes || []);
+
+              if (sameTz && sameHours && sameMins && isEnabled) {
+                logPass(`Cron Job "${matched.title}": ENABLED & in sync with Google Sheet (${targetJob.schedule.timezone} @ ${formatHour}:${formatMin}) ✅`);
+              } else {
+                // Auto-sync schedule via PATCH to match Google Sheet!
+                const updatedPayload = {
+                  job: {
+                    ...(detailed?.jobDetails || detailed?.job || {}),
+                    enabled: true,
+                    schedule: targetJob.schedule
+                  }
+                };
+                await updateCronJob(cronApiKey, matched.jobId, updatedPayload);
+                logPass(`Cron Job "${matched.title}": Auto-synchronized & updated schedule to match Google Sheet (${targetJob.schedule.timezone} @ ${formatHour}:${formatMin}) 🔄✅`);
+              }
+            } catch (jobErr) {
+              logWarn(`Cron Job "${matched.title}": Checked (${matched.enabled ? 'ENABLED' : 'PAUSED'}). Auto-sync note: ${jobErr.message}`);
+            }
           }
         }
       }
@@ -431,7 +459,7 @@ export async function runCampaignDiagnostics() {
       logWarn(`Could not verify cron-job.org API: ${err.message} (Verify your CRONJOB_API_KEY).`);
     }
   } else {
-    logPass(`Cron schedules parsed from Google Sheet. (Add CRONJOB_API_KEY secret to enable live API auditing during diagnostics).`);
+    logPass(`Cron schedules parsed from Google Sheet. (Add CRONJOB_API_KEY secret to enable live auto-syncing during diagnostics).`);
   }
 
   return finishReport(report);
