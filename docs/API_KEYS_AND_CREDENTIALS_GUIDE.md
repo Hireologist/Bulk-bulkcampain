@@ -93,7 +93,7 @@ Google requires an **App Password** (16-character code) instead of your regular 
 6. Copy the password (without spaces: `abcdefghijklmnop`).
 7. Paste it in your Google Sheet **`Inboxes`** tab under the `smtp_pass` column for that sender.
 
-👉 *For detailed troubleshooting and Workspace admin permissions, read [Google App Password Setup & Recovery](docs/GOOGLE_APP_PASSWORD_SETUP.md).*
+👉 *For detailed troubleshooting and Workspace admin permissions, read [Google App Password Setup & Recovery](./GOOGLE_APP_PASSWORD_SETUP.md).*
 
 ---
 
@@ -101,4 +101,4 @@ Google requires an **App Password** (16-character code) instead of your regular 
 
 Allows the engine to format, read, and write to Google Sheets automatically.
 
-👉 *For complete step-by-step instructions, read the [Google Service Account Setup Guide](docs/GOOGLE_SERVICE_ACCOUNT_SETUP.md).*
+👉 *For complete step-by-step instructions, read the [Google Service Account Setup Guide](./GOOGLE_SERVICE_ACCOUNT_SETUP.md).*

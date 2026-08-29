@@ -171,6 +171,6 @@ sequenceDiagram
 
 ### 📚 Related Documentation
 * [10-Minute Setup Guide (`SETUP_10MIN.md`)](../SETUP_10MIN.md)
-* [Google App Password Setup (`GOOGLE_APP_PASSWORD_SETUP.md`)](GOOGLE_APP_PASSWORD_SETUP.md)
-* [Cron Automation & Timing Sync (`CRON_SETUP.md`)](../CRON_SETUP.md)
-* [Manual Testing & Diagnostic Playbook (`MANUAL_TESTING.md`)](MANUAL_TESTING.md)
+* [Google App Password Setup (`GOOGLE_APP_PASSWORD_SETUP.md`)](./GOOGLE_APP_PASSWORD_SETUP.md)
+* [Cron Automation & Timing Sync (`CRON_SETUP.md`)](./CRON_SETUP.md)
+* [Manual Testing & Diagnostic Playbook (`MANUAL_TESTING.md`)](./MANUAL_TESTING.md)

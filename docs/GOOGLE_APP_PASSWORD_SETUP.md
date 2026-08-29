@@ -94,5 +94,5 @@ Sheet-bot includes automatic fail-safes:
 
 ## 📚 Related Documentation
 - [10-Minute Setup Guide](../SETUP_10MIN.md)
-- [Cron Automation Setup](../CRON_SETUP.md)
-- [Architecture & Reliability](../docs/ARCHITECTURE.md)
+- [Cron Automation Setup](./CRON_SETUP.md)
+- [Architecture & Reliability](./ARCHITECTURE.md)
