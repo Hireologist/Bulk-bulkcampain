@@ -58,6 +58,7 @@ export function slugify(str) {
 
 export async function createNewCampaign({
   campaignName,
+  existingSheetId = '',
   userEmail = '',
   makePublic = true,
   timezone = 'Asia/Kolkata',
@@ -70,24 +71,33 @@ export async function createNewCampaign({
   const cleanName = campaignName.trim();
   const slug = slugify(cleanName);
   console.log(`\n=============================================================`);
-  console.log(`🪄 CREATING NEW CAMPAIGN: "${cleanName}" (Slug: ${slug})`);
+  console.log(`🪄 PROVISIONING CAMPAIGN: "${cleanName}" (Slug: ${slug})`);
   console.log(`=============================================================`);
 
   const { sheets, drive } = getGoogleClient();
 
-  // 1. Create the Google Spreadsheet
-  console.log(`📄 Creating new Google Spreadsheet: "[Sheet-bot] ${cleanName}"...`);
-  const createRes = await sheets.spreadsheets.create({
-    requestBody: {
-      properties: {
-        title: `[Sheet-bot] ${cleanName}`,
-      },
-    },
-  });
+  let spreadsheetId = (existingSheetId || '').trim();
+  let spreadsheetUrl = '';
 
-  const spreadsheetId = createRes.data.spreadsheetId;
-  const spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`;
-  console.log(`✅ Google Sheet Created successfully!`);
+  if (spreadsheetId) {
+    console.log(`📄 Connecting to Existing Google Sheet (ID: ${spreadsheetId})...`);
+    spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`;
+  } else {
+    // 1. Create a brand new Google Spreadsheet
+    console.log(`📄 Creating new Google Spreadsheet: "[Sheet-bot] ${cleanName}"...`);
+    const createRes = await sheets.spreadsheets.create({
+      requestBody: {
+        properties: {
+          title: `[Sheet-bot] ${cleanName}`,
+        },
+      },
+    });
+
+    spreadsheetId = createRes.data.spreadsheetId;
+    spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`;
+    console.log(`✅ Google Sheet Created successfully!`);
+  }
+
   console.log(`🆔 Sheet ID:  ${spreadsheetId}`);
   console.log(`🔗 Sheet URL: ${spreadsheetUrl}\n`);
 
@@ -127,32 +137,59 @@ export async function createNewCampaign({
     }
   }
 
-  // 4. Provision all 11 color-coded tabs & schemas
-  console.log(`\n📊 Provisioning all 11 tabs, headers, formulas, and default settings...`);
-  for (const [title, config] of Object.entries(COMPLETE_SCHEMA)) {
-    // Add Tab
-    await sheets.spreadsheets.batchUpdate({
-      spreadsheetId,
-      requestBody: {
-        requests: [{ addSheet: { properties: { title } } }],
-      },
-    });
+  // 4. Non-Destructive Tab & Schema Synchronization (All 11 Tabs)
+  console.log(`\n📊 Synchronizing all 11 tabs, headers, formulas, and default settings...`);
+  const meta = await sheets.spreadsheets.get({ spreadsheetId });
+  const existingSheets = meta.data.sheets || [];
+  const existingTitles = new Set(existingSheets.map((s) => s.properties.title));
 
-    const values = [config.headers, ...(config.sampleData || [])];
-    await sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: `'${title}'!A1:${String.fromCharCode(64 + config.headers.length)}${values.length}`,
-      valueInputOption: 'USER_ENTERED',
-      requestBody: { values },
-    });
-    console.log(`  ✨ Initialized tab: "${title}"`);
+  for (const [title, config] of Object.entries(COMPLETE_SCHEMA)) {
+    if (!existingTitles.has(title)) {
+      // Create missing tab
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+          requests: [{ addSheet: { properties: { title } } }],
+        },
+      });
+
+      const values = [config.headers, ...(config.sampleData || [])];
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: `'${title}'!A1:${String.fromCharCode(64 + config.headers.length)}${values.length}`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values },
+      });
+      console.log(`  ✨ Created missing tab: "${title}"`);
+    } else {
+      // Check for missing headers and append non-destructively
+      const res = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `'${title}'!A1:Z1`,
+      });
+      const existingHeaders = (res.data.values?.[0] || []).map((h) => String(h).trim());
+      const missingHeaders = config.headers.filter((h) => !existingHeaders.includes(h));
+
+      if (missingHeaders.length > 0) {
+        const startColIdx = existingHeaders.length + 1;
+        await sheets.spreadsheets.values.update({
+          spreadsheetId,
+          range: `'${title}'!${String.fromCharCode(64 + startColIdx)}1:${String.fromCharCode(64 + startColIdx + missingHeaders.length - 1)}1`,
+          valueInputOption: 'USER_ENTERED',
+          requestBody: { values: [missingHeaders] },
+        });
+        console.log(`  ➕ Appended missing headers to "${title}": ${missingHeaders.join(', ')}`);
+      } else {
+        console.log(`  🛡️ Tab "${title}" is already up-to-date.`);
+      }
+    }
   }
 
-  // Delete default "Sheet1"
+  // Delete default "Sheet1" only if our tabs exist and Sheet1 is empty
   try {
-    const meta = await sheets.spreadsheets.get({ spreadsheetId });
-    const sheet1 = meta.data.sheets?.find(s => s.properties.title === 'Sheet1');
-    if (sheet1) {
+    const updatedMeta = await sheets.spreadsheets.get({ spreadsheetId });
+    const sheet1 = updatedMeta.data.sheets?.find(s => s.properties.title === 'Sheet1');
+    if (sheet1 && updatedMeta.data.sheets.length > 1) {
       await sheets.spreadsheets.batchUpdate({
         spreadsheetId,
         requestBody: {
@@ -304,12 +341,15 @@ jobs:
 if (process.argv[1] && path.resolve(fileURLToPath(import.meta.url)) === path.resolve(process.argv[1])) {
   const args = process.argv.slice(2);
   let campaignName = process.env.CAMPAIGN_NAME || '';
+  let existingSheetId = process.env.EXISTING_SHEET_ID || process.env.SPREADSHEET_ID || '';
   let userEmail = process.env.USER_EMAIL || '';
   let makePublic = process.env.MAKE_PUBLIC !== 'false';
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--name' && args[i + 1]) {
       campaignName = args[++i];
+    } else if ((args[i] === '--sheet-id' || args[i] === '--existing-id') && args[i + 1]) {
+      existingSheetId = args[++i];
     } else if (args[i] === '--email' && args[i + 1]) {
       userEmail = args[++i];
     } else if (args[i] === '--private') {
@@ -326,6 +366,7 @@ if (process.argv[1] && path.resolve(fileURLToPath(import.meta.url)) === path.res
 
   createNewCampaign({
     campaignName,
+    existingSheetId,
     userEmail,
     makePublic
   }).catch(err => {

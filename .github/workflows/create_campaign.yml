@@ -11,6 +11,9 @@ on:
         description: 'Campaign Name (e.g. "US Tech Recruiting" or "SaaS Founders")'
         required: true
         default: 'New Campaign'
+      existing_sheet_id:
+        description: 'Existing Raw Google Sheet ID (leave blank to auto-create a brand new Sheet)'
+        required: false
       user_email:
         description: 'Your Google Email to share Editor access directly (optional)'
         required: false
@@ -41,7 +44,12 @@ jobs:
         run: npm ci --no-audit --no-fund
 
       - name: Provision Google Sheet & Dedicated Workflow
-        run: node scripts/create-new-campaign.mjs --name "${{ inputs.campaign_name }}" --email "${{ inputs.user_email }}" ${{ inputs.make_public && '' || '--private' }}
+        run: |
+          node scripts/create-new-campaign.mjs \
+            --name "${{ inputs.campaign_name }}" \
+            ${{ inputs.existing_sheet_id && format('--sheet-id "{0}"', inputs.existing_sheet_id) || '' }} \
+            --email "${{ inputs.user_email }}" \
+            ${{ inputs.make_public && '' || '--private' }}
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           GOOGLE_SERVICE_ACCOUNT_EMAIL: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_EMAIL }}
