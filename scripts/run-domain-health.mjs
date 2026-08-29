@@ -1,4 +1,6 @@
 import { google } from 'googleapis';
+import { fileURLToPath } from 'url';
+import path from 'path';
 import { checkDomainAuth } from '../src/dns-check.mjs';
 import { postToDiscord } from '../src/alerts.mjs';
 
@@ -152,7 +154,10 @@ async function runDomainHealth() {
   }
 }
 
-runDomainHealth().catch((err) => {
-  console.error('Fatal error in domain health check:', err);
-  process.exit(1);
-});
+if (process.argv[1] && path.resolve(fileURLToPath(import.meta.url)) === path.resolve(process.argv[1])) {
+  runDomainHealth().catch((err) => {
+    console.error('Fatal error in domain health check:', err);
+    process.exit(1);
+  });
+}
+

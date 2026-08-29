@@ -1,5 +1,7 @@
 import { spawn } from 'child_process';
 import { google } from 'googleapis';
+import { fileURLToPath } from 'url';
+import path from 'path';
 
 export async function getGoogleSheetsClient() {
   const serviceAccountJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
@@ -104,6 +106,7 @@ async function run() {
   });
 }
 
-if (process.argv[1] && process.argv[1].endsWith('run-gcc-radar.mjs')) {
+if (process.argv[1] && path.resolve(fileURLToPath(import.meta.url)) === path.resolve(process.argv[1])) {
   run();
 }
+

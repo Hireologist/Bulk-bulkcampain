@@ -12,10 +12,10 @@ import { fileURLToPath } from 'node:url';
 import { getSendDelay, trackOutcome, checkAndResetDailyStats } from './src/throttle.mjs';
 import { sendWithRetry } from './src/retry.mjs';
 import { isSuppressed, addToSuppression, buildSenderFooter } from './src/suppression.mjs';
-import { alertIfUnhealthy, sendRunSummaryAlert, postToDiscord } from './src/alerts.mjs';
+import { alertIfUnhealthy, sendRunSummaryAlert, postToDiscord, isAuthError, sendAuthFailureAlert } from './src/alerts.mjs';
 import { runWarmupCycle } from './src/warmup.mjs';
 import { parseSpintax } from './src/spintax.mjs';
-export { parseSpintax };
+export { parseSpintax, isAuthError };
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID || process.env.SHEET_ID;
 
@@ -557,7 +557,28 @@ export async function runColdOutreach() {
       console.error(`Failed to send to ${email}:`, err.message);
       await recordFailedSend(sheets, email, 'cold', err.message);
 
-      if (isDailyLimitError(err)) {
+      if (isAuthError(err)) {
+        console.error(`🚨 Authentication failed for inbox [${inbox.email}]: ${err.message}`);
+        limitExceededInboxes.add(inbox.email);
+        inboxUsage[inbox.email] = Infinity;
+
+        await sendAuthFailureAlert({
+          inboxEmail: inbox.email,
+          errorDetails: err.message,
+          webhookUrl: config.settings.discord_updates_webhook,
+          context: 'Cold Outreach Live Send'
+        });
+
+        const hasAvailableInboxes = config.inboxes.some(
+          i => !limitExceededInboxes.has(i.email) && inboxUsage[i.email] < parseInt(i.daily_limit || '50', 10)
+        );
+        if (!hasAvailableInboxes) {
+          const stopMsg = `🛑 **Outreach Terminated Immediately:** Active inboxes failed authentication (Google App Password invalid or revoked). Workflow stopped.`;
+          console.error(stopMsg);
+          await notifyDiscord(config.settings.discord_updates_webhook, stopMsg);
+          throw new Error(`Google App Password authentication failed for [${inbox.email}]. Workflow halted. Update smtp_pass in Inboxes tab.`);
+        }
+      } else if (isDailyLimitError(err)) {
         console.warn(`⚠️ Daily sending limit hit for inbox [${inbox.email}]. Disabling inbox for this run.`);
         limitExceededInboxes.add(inbox.email);
         inboxUsage[inbox.email] = Infinity;
@@ -819,6 +840,16 @@ export async function runSingleLeadOutreach(singleLeadPayload = {}) {
     } catch (err) {
       console.error(`Failed send to ${email}:`, err.message);
 
+      if (isAuthError(err)) {
+        await sendAuthFailureAlert({
+          inboxEmail: inboxToUse.email,
+          errorDetails: err.message,
+          webhookUrl: activeWebhookUrl,
+          context: 'Single Lead Outreach Send'
+        });
+        throw new Error(`Google App Password authentication failed for [${inboxToUse.email}]: ${err.message}. Please update smtp_pass in Inboxes tab.`);
+      }
+
       const errLower = (err.message || '').toLowerCase();
       const isBounce = errLower.includes('550') || errLower.includes('551') || errLower.includes('552') || errLower.includes('553') || errLower.includes('554') || errLower.includes('inactive') || errLower.includes('disabled') || errLower.includes('not found') || errLower.includes('user unknown');
 
@@ -1043,7 +1074,25 @@ export async function runFollowups() {
     } catch (e) {
       console.error(`Follow-up failed for ${email}:`, e.message);
       await recordFailedSend(sheets, email, `followup_${nextCount}`, e.message);
-      if (isDailyLimitError(e)) {
+
+      if (isAuthError(e)) {
+        console.error(`🚨 Follow-up authentication failed for inbox [${inboxToUse.email}]: ${e.message}`);
+        limitExceededInboxes.add(inboxToUse.email);
+
+        await sendAuthFailureAlert({
+          inboxEmail: inboxToUse.email,
+          errorDetails: e.message,
+          webhookUrl: config.settings.discord_updates_webhook,
+          context: `Follow-up Sequence (Touch #${nextCount})`
+        });
+
+        if (config.inboxes.every(i => limitExceededInboxes.has(i.email))) {
+          const stopMsg = `🛑 **Follow-ups Terminated Immediately:** Active inboxes failed authentication (Google App Password invalid or revoked). Workflow stopped.`;
+          console.error(stopMsg);
+          await notifyDiscord(config.settings.discord_updates_webhook, stopMsg);
+          throw new Error(`Google App Password authentication failed for [${inboxToUse.email}]. Workflow halted. Update smtp_pass in Inboxes tab.`);
+        }
+      } else if (isDailyLimitError(e)) {
         console.warn(`⚠️ Daily sending limit hit for inbox [${inboxToUse.email}]. Disabling inbox for follow-ups.`);
         limitExceededInboxes.add(inboxToUse.email);
 
@@ -1305,7 +1354,15 @@ export async function runInboxChecker() {
         }
       }
     } catch (e) {
-      if (e.message && (e.message.includes('Connection not available') || e.message.includes('Socket timeout') || e.message.includes('closed'))) {
+      if (isAuthError(e)) {
+        console.error(`🚨 IMAP authentication failed for ${inbox.email}:`, e.message);
+        await sendAuthFailureAlert({
+          inboxEmail: inbox.email,
+          errorDetails: `IMAP: ${e.message}`,
+          webhookUrl: config.settings.discord_updates_webhook,
+          context: 'Inbox Reply Checker (IMAP Audit)'
+        });
+      } else if (e.message && (e.message.includes('Connection not available') || e.message.includes('Socket timeout') || e.message.includes('closed'))) {
         console.warn(`ℹ️ [IMAP Notice] ${inbox.email}: Connection closed (${e.message})`);
       } else {
         console.error(`IMAP error for ${inbox.email}:`, e.message);
@@ -1450,20 +1507,33 @@ async function main() {
       const config = await loadConfig(sheets);
       console.log('🔥 Running Peer-to-Peer Warmup Routine...');
       const warmupRes = await runWarmupCycle(config.inboxes, async (sender, recipientEmail, subject, body) => {
-        const transporter = nodemailer.createTransport({
-          host: sender.smtp_host,
-          port: parseInt(sender.smtp_port, 10),
-          secure: parseInt(sender.smtp_port, 10) === 465,
-          auth: { user: sender.smtp_user, pass: sender.smtp_pass },
-        });
-        await transporter.sendMail({
-          from: `"${sender.display_name || sender.email}" <${sender.email}>`,
-          to: recipientEmail,
-          subject,
-          text: body,
-        });
+        try {
+          const transporter = nodemailer.createTransport({
+            host: sender.smtp_host,
+            port: parseInt(sender.smtp_port, 10),
+            secure: parseInt(sender.smtp_port, 10) === 465,
+            auth: { user: sender.smtp_user, pass: sender.smtp_pass },
+          });
+          await transporter.sendMail({
+            from: `"${sender.display_name || sender.email}" <${sender.email}>`,
+            to: recipientEmail,
+            subject,
+            text: body,
+          });
+        } catch (warmupErr) {
+          if (isAuthError(warmupErr)) {
+            await sendAuthFailureAlert({
+              inboxEmail: sender.email,
+              errorDetails: warmupErr.message,
+              webhookUrl: config.settings.discord_updates_webhook,
+              context: 'Peer-to-Peer Warmup Routine'
+            });
+          }
+          throw warmupErr;
+        }
       });
       console.log(`✅ Warmup cycle status: ${warmupRes.status} (${warmupRes.count || 0} sent)`);
+
     } else if (task) {
       console.warn(`Unknown task: ${task}`);
     }

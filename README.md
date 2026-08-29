@@ -297,7 +297,7 @@ jobs:
 | :--- | :--- |
 | **`📖 Setup_Guide`** | Step-by-step instructions, rules, and status legends for team members. |
 | **`Details`** | Prospect leads (Name, Email, Company, Location, Sent Status, Sent From, Reply Status, Sentiment). |
-| **`Inboxes`** | Primary SMTP/IMAP credentials, daily sending limits, active toggles. |
+| **`Inboxes`** | Primary SMTP/IMAP credentials, daily sending limits, active toggles. (See [Google App Password Setup & Recovery](docs/GOOGLE_APP_PASSWORD_SETUP.md)). |
 | **`Aliases`** | Virtual alias emails and display names used for random `From:` header rotation. |
 | **`Settings`** | Engine delay timers, IST cutoff hours, max batch limits, Discord webhooks, and Groq API key. |
 | **`Templates`** | Cold outreach email templates using dynamic placeholders (`{{full_name}}`, `{{company_name}}`, `{{location}}`, `{{clients}}`, `{{Date}}`). |
