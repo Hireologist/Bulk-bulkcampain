@@ -508,7 +508,7 @@ async function main() {
     sheetSettings.cronjob_key ||
     sheetSettings.cron_token ||
     sheetSettings.cronjob_token;
-  let githubPat = process.env.GITHUB_PAT || process.env.PAT || process.env.GH_PAT || process.env.GH_TOKEN || process.env.GITHUB_TOKEN || sheetSettings.github_pat;
+  let githubPat = process.env.PAT_GITHUB || process.env.GITHUB_PAT || process.env.PAT || process.env.GH_PAT || process.env.GH_TOKEN || process.env.GITHUB_TOKEN || sheetSettings.github_pat;
 
   if (!cronApiKey) {
     if (isNonInteractive) {

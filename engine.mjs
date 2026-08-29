@@ -1131,13 +1131,20 @@ export async function classifyEmailWithAi(groq, emailText = '') {
     return { sentiment, summary };
   }
 
-  try {
-    const aiRes = await sendWithRetry(() => groq.chat.completions.create({
-      model: 'openai/gpt-oss-120b',
-      messages: [
-        {
-          role: 'system',
-          content: `You are an expert sales email assistant. Analyze the incoming lead reply and respond ONLY with a raw, valid JSON object containing exactly 2 keys:
+  const modelsToTry = [
+    'openai/gpt-oss-120b',
+    'llama-3.3-70b-versatile',
+    'llama-3.1-8b-instant'
+  ];
+
+  for (const model of modelsToTry) {
+    try {
+      const aiRes = await sendWithRetry(() => groq.chat.completions.create({
+        model,
+        messages: [
+          {
+            role: 'system',
+            content: `You are an expert sales email assistant. Analyze the incoming lead reply and respond ONLY with a raw, valid JSON object containing exactly 2 keys:
 {
   "sentiment": "POSITIVE" | "NEUTRAL" | "NEGATIVE" | "OOO",
   "summary": "1-2 sentence summary of the lead's message, questions, or objections"
@@ -1150,27 +1157,28 @@ Definitions:
 - "OOO": Automated Out of Office / Vacation auto-responder.
 
 Do NOT include markdown backticks or any conversational text. Return only the JSON.`
-        },
-        { role: 'user', content: emailText.substring(0, 3000) }
-      ],
-    }), { retries: 2, baseDelay: 1000 });
+          },
+          { role: 'user', content: emailText.substring(0, 3000) }
+        ],
+      }), { retries: 2, baseDelay: 1000 });
 
-    const rawText = aiRes.choices[0]?.message?.content?.trim() || '';
-    const cleanJsonText = rawText.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/\s*```$/, '').trim();
-    const parsedObj = JSON.parse(cleanJsonText);
+      const rawText = aiRes.choices[0]?.message?.content?.trim() || '';
+      const cleanJsonText = rawText.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/\s*```$/, '').trim();
+      const parsedObj = JSON.parse(cleanJsonText);
 
-    if (parsedObj.sentiment) {
-      sentiment = String(parsedObj.sentiment).trim().toUpperCase();
+      if (parsedObj.sentiment) {
+        sentiment = String(parsedObj.sentiment).trim().toUpperCase();
+      }
+      if (parsedObj.summary) {
+        summary = String(parsedObj.summary).trim();
+      }
+      return { sentiment, summary };
+    } catch (e) {
+      console.warn(`Groq AI classification with ${model} failed (${e.message}), trying fallback model...`);
     }
-    if (parsedObj.summary) {
-      summary = String(parsedObj.summary).trim();
-    }
-  } catch (e) {
-    console.warn('Groq AI classification error, falling back to unknown sentiment:', e.message);
-    sentiment = 'unknown';
   }
 
-  return { sentiment, summary };
+  return { sentiment: 'unknown', summary };
 }
 
 // ============================================================================
@@ -1536,8 +1544,14 @@ async function main() {
           throw warmupErr;
         }
       });
-      console.log(`✅ Warmup cycle status: ${warmupRes.status} (${warmupRes.count || 0} sent)`);
-
+    } else if (task === 'diagnostic' || task === 'diagnostics') {
+      const { runCampaignDiagnostics } = await import('./scripts/run-campaign-diagnostics.mjs');
+      await runCampaignDiagnostics();
+    } else if (task === 'domain-health' || task === 'domain_health') {
+      const { runDomainHealth } = await import('./scripts/run-domain-health.mjs');
+      if (typeof runDomainHealth === 'function') {
+        await runDomainHealth();
+      }
     } else if (task) {
       console.warn(`Unknown task: ${task}`);
     }
