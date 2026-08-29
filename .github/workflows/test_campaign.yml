@@ -23,7 +23,7 @@ jobs:
         run: npm ci --no-audit --no-fund
 
       - name: Execute Campaign Pre-Flight Audit
-        run: node scripts/test-campaign-diagnostics.mjs
+        run: node scripts/run-campaign-diagnostics.mjs
         env:
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID || secrets.SHEET_ID }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}

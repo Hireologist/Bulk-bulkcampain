@@ -4,7 +4,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { isAuthError, sendAuthFailureAlert, writeGitHubStepSummary } from '../src/alerts.mjs';
-import { runCampaignDiagnostics } from '../scripts/test-campaign-diagnostics.mjs';
+import { runCampaignDiagnostics } from '../scripts/run-campaign-diagnostics.mjs';
+
 
 describe('Google App Password & Authentication Failure Handling Tests', () => {
 
@@ -111,7 +112,7 @@ describe('Google App Password & Authentication Failure Handling Tests', () => {
   });
 
   describe('Diagnostic Runner Module Resolution', () => {
-    test('scripts/test-campaign-diagnostics.mjs exports runCampaignDiagnostics function', () => {
+    test('scripts/run-campaign-diagnostics.mjs exports runCampaignDiagnostics function', () => {
       assert.strictEqual(typeof runCampaignDiagnostics, 'function');
     });
   });
