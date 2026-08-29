@@ -181,18 +181,45 @@ export async function registerCronJobsForCampaign({
   return { registeredCount: registeredJobs.length, jobs: registeredJobs };
 }
 
+export async function loadSettingsFromMainSheet(sheetsClient, mainSheetId) {
+  if (!mainSheetId || typeof mainSheetId !== 'string' || !mainSheetId.trim()) return {};
+  try {
+    const cleanId = mainSheetId.trim();
+    const res = await sheetsClient.spreadsheets.values.get({
+      spreadsheetId: cleanId,
+      range: `'Settings'!A:C`,
+    });
+    const rows = res.data.values || [];
+    const settings = {};
+    for (const r of rows) {
+      if (r[0] !== undefined && r[0] !== null) {
+        const k = String(r[0]).trim();
+        const v = r[1] !== undefined && r[1] !== null ? String(r[1]).trim() : '';
+        settings[k] = v;
+        settings[k.toLowerCase()] = v;
+      }
+    }
+    return settings;
+  } catch (err) {
+    console.warn(`  ℹ️ Note: Could not load settings from main sheet [${mainSheetId}]: ${err.message}`);
+    return {};
+  }
+}
+
 export async function runPreflightChecks({
   campaignName,
   existingSheetId = '',
   userEmail = '',
   githubPat = '',
   cronApiKey = '',
+  mainSheetId = process.env.SPREADSHEET_ID || process.env.SHEET_ID || '',
   isCI = process.env.GITHUB_ACTIONS === 'true',
   skipGoogleAuth = false
 }) {
   const errors = [];
   const warnings = [];
   const checks = [];
+  let mainSettings = {};
 
   console.log(`\n=============================================================`);
   console.log(`🔍 RUNNING PRE-FLIGHT VALIDATION CHECKS`);
@@ -213,7 +240,7 @@ export async function runPreflightChecks({
     });
   }
 
-  // 2. Google Service Account Validation
+  // 2. Google Service Account Validation & Main Sheet Settings Loading
   if (!skipGoogleAuth) {
     try {
       const { auth, sheets, drive } = getGoogleClient();
@@ -248,6 +275,20 @@ export async function runPreflightChecks({
         }
       }
 
+      // Check main sheet if available and inherit global settings
+      if (mainSheetId && mainSheetId.trim()) {
+        try {
+          mainSettings = await loadSettingsFromMainSheet(sheets, mainSheetId);
+          if (Object.keys(mainSettings).length > 0) {
+            checks.push({
+              name: 'Main Google Sheet Settings',
+              status: 'PASS',
+              detail: `Loaded global config from [${mainSheetId.trim()}]`
+            });
+          }
+        } catch (_) {}
+      }
+
       // If existingSheetId is provided, verify accessibility
       if (existingSheetId && existingSheetId.trim()) {
         try {
@@ -280,13 +321,13 @@ export async function runPreflightChecks({
   }
 
   // 3. GitHub Personal Access Token (PAT) Validation
-  const effectivePat = githubPat || process.env.PAT_GITHUB || process.env.GITHUB_PAT || process.env.GH_PAT || process.env.PAT || '';
+  const effectivePat = githubPat || process.env.PAT_GITHUB || process.env.GITHUB_PAT || process.env.GH_PAT || process.env.PAT || mainSettings.github_pat || '';
   if (isCI) {
     if (!effectivePat) {
       errors.push(
         `Missing GitHub Personal Access Token (PAT_GITHUB).\n` +
         `   👉 GitHub requires a PAT with 'workflow' and 'repo' scopes to commit & push dedicated workflows.\n` +
-        `   👉 Solution: Add 'PAT_GITHUB' to Repository Secrets (Settings > Secrets and variables > Actions).`
+        `   👉 Solution: Add 'PAT_GITHUB' to Repository Secrets (Settings > Secrets and variables > Actions), or supply it as input 'github_pat'.`
       );
       checks.push({
         name: 'GitHub PAT (workflow scope)',
@@ -364,7 +405,7 @@ export async function runPreflightChecks({
   }
 
   // 4. cron-job.org API Key Validation
-  const effectiveCronKey = cronApiKey || process.env.CRON_API_KEY || process.env.CRON_KEY || '';
+  const effectiveCronKey = cronApiKey || process.env.CRON_API_KEY || process.env.CRON_KEY || mainSettings.cron_api_key || mainSettings.cronjob_api_key || '';
   if (effectiveCronKey) {
     try {
       const cronRes = await fetch('https://api.cron-job.org/jobs', {
@@ -374,7 +415,7 @@ export async function runPreflightChecks({
         checks.push({
           name: 'cron-job.org API',
           status: 'PASS',
-          detail: 'Connected & authenticated'
+          detail: `Connected & authenticated ${mainSettings.cron_api_key ? '(inherited from main sheet)' : ''}`
         });
       } else {
         warnings.push(`cron-job.org API Key returned HTTP ${cronRes.status}. Automated cron scheduling may fail.`);
@@ -396,7 +437,7 @@ export async function runPreflightChecks({
     checks.push({
       name: 'cron-job.org API',
       status: 'INFO',
-      detail: 'Not set (schedules can be added later)'
+      detail: 'Not set in main sheet, secrets, or inputs (schedules can be added later via setup_cron or Sheet Settings)'
     });
   }
 
@@ -440,7 +481,7 @@ ${checks.map(c => `| **${c.name}** | ${c.status === 'PASS' ? '✅ PASS' : c.stat
   }
 
   console.log(`🎉 All required pre-flight checks passed! Beginning campaign provisioning...\n`);
-  return { valid: true, checks, warnings };
+  return { valid: true, checks, warnings, mainSettings };
 }
 
 export async function createNewCampaign({
@@ -460,16 +501,20 @@ export async function createNewCampaign({
 
   const cleanName = campaignName.trim();
   const slug = slugify(cleanName);
+  let mainSettings = {};
 
   // 0. Execute Pre-flight Validation Checks First
   if (!skipPreflight) {
-    await runPreflightChecks({
+    const preflightResult = await runPreflightChecks({
       campaignName: cleanName,
       existingSheetId,
       userEmail,
       githubPat,
       cronApiKey
     });
+    if (preflightResult && preflightResult.mainSettings) {
+      mainSettings = preflightResult.mainSettings;
+    }
   }
 
   console.log(`\n=============================================================`);
@@ -477,6 +522,12 @@ export async function createNewCampaign({
   console.log(`=============================================================`);
 
   const { sheets, drive } = getGoogleClient();
+
+  // If mainSettings was not loaded yet, attempt to load from SPREADSHEET_ID
+  const mainSheetId = process.env.SPREADSHEET_ID || process.env.SHEET_ID || '';
+  if (Object.keys(mainSettings).length === 0 && mainSheetId && mainSheetId.trim() && mainSheetId.trim() !== (existingSheetId || '').trim()) {
+    mainSettings = await loadSettingsFromMainSheet(sheets, mainSheetId);
+  }
 
   let spreadsheetId = (existingSheetId || '').trim();
   let spreadsheetUrl = '';
@@ -555,7 +606,19 @@ export async function createNewCampaign({
         },
       });
 
-      const values = [config.headers, ...(config.sampleData || [])];
+      let sampleData = config.sampleData || [];
+      if (title === 'Settings' && mainSettings && Object.keys(mainSettings).length > 0) {
+        sampleData = sampleData.map(([key, defVal, desc]) => {
+          const inheritedVal = mainSettings[key] || mainSettings[key.toLowerCase()];
+          if (inheritedVal !== undefined && inheritedVal !== null && inheritedVal !== '') {
+            return [key, inheritedVal, desc];
+          }
+          return [key, defVal, desc];
+        });
+        console.log(`  ✨ Populated 'Settings' tab with inherited values from main sheet!`);
+      }
+
+      const values = [config.headers, ...sampleData];
       await sheets.spreadsheets.values.update({
         spreadsheetId,
         range: `'${title}'!A1:${String.fromCharCode(64 + config.headers.length)}${values.length}`,
@@ -703,8 +766,8 @@ jobs:
   console.log(`   🛑 Can be stopped / paused independently on GitHub Actions!\n`);
 
   // 7. Auto-Register Cron Jobs on cron-job.org if credentials exist
-  const effectiveCronKey = cronApiKey || process.env.CRON_API_KEY || '';
-  const effectiveGithubPat = githubPat || process.env.PAT_GITHUB || process.env.GITHUB_PAT || process.env.GITHUB_TOKEN || '';
+  const effectiveCronKey = cronApiKey || process.env.CRON_API_KEY || process.env.CRON_KEY || mainSettings.cron_api_key || mainSettings.cronjob_api_key || '';
+  const effectiveGithubPat = githubPat || process.env.PAT_GITHUB || process.env.GITHUB_PAT || process.env.GH_PAT || process.env.PAT || mainSettings.github_pat || '';
   let cronResult = { registeredCount: 0, jobs: [] };
 
   if (effectiveCronKey && effectiveGithubPat) {
@@ -714,12 +777,14 @@ jobs:
       slug,
       cronApiKey: effectiveCronKey,
       githubPat: effectiveGithubPat,
+      settings: mainSettings
     });
     if (cronResult.registeredCount > 0) {
       console.log(`✅ Registered ${cronResult.registeredCount} cron schedules on cron-job.org!`);
     }
   } else {
     console.log(`ℹ️ Cron API Key or GitHub PAT not set. Skipping automatic cron-job.org creation.`);
+    console.log(`👉 To schedule automatically, you can run '⚡ Provision Cron Jobs' in GitHub Actions or add 'cron_api_key' to your Google Sheet Settings.`);
   }
 
   // 8. Write GitHub Actions Step Summary
@@ -733,7 +798,7 @@ jobs:
 | **🔓 Permissions** | Public (Anyone with link can **Edit**) |
 | **🐙 Dedicated Workflow** | [\`.github/workflows/${workflowFileName}\`](./.github/workflows/${workflowFileName}) |
 | **🏷️ Run Prefix** | \`[${cleanName}]\` |
-| **⏰ Automated Cron Schedules** | ${cronResult.registeredCount > 0 ? `✅ ${cronResult.registeredCount} jobs registered on cron-job.org` : 'ℹ️ Manual / On-Demand'} |
+| **⏰ Automated Cron Schedules** | ${cronResult.registeredCount > 0 ? `✅ ${cronResult.registeredCount} jobs registered on cron-job.org` : 'ℹ️ Manual / On-Demand (can be provisioned anytime)'} |
 
 ### 🚀 Next Steps:
 1. Open the [Google Sheet](${spreadsheetUrl}) and add your sender inboxes in the **\`Inboxes\`** tab.
@@ -743,7 +808,7 @@ jobs:
   writeGitHubStepSummary(ghSummaryMarkdown);
 
   // 9. Send Discord Notification Alert
-  const webhookUrl = discordWebhook || process.env.DISCORD_WEBHOOK_URL;
+  const webhookUrl = discordWebhook || process.env.DISCORD_WEBHOOK_URL || mainSettings.discord_updates_webhook || '';
   if (webhookUrl && webhookUrl.startsWith('http')) {
     const embed = {
       title: `✨ New Campaign Created: [${cleanName}]`,
