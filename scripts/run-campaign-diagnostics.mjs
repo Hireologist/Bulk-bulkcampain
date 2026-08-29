@@ -376,6 +376,45 @@ export async function runCampaignDiagnostics() {
     logWarn('Discord webhook URL is not configured. Real-time run notifications will be silenced.');
   }
 
+  // -------------------------------------------------------------
+  // STEP 9: Cron Jobs & Automation Schedule Verification
+  // -------------------------------------------------------------
+  console.log('\n⏰ STEP 9: Cron Automation & Schedule Verification');
+  const cronApiKey = process.env.CRONJOB_API_KEY || settings.cronjob_api_key;
+  const cronDays = settings.cron_days || 'Mon-Sat';
+  const cronOutreachTime = settings.cron_outreach_time || '10:00';
+  const cronFollowupTime = settings.cron_followup_time || '09:30';
+
+  logPass(`Cron Settings in Sheet: Timezone="${cronTimezone}" | Days="${cronDays}" | Outreach="${cronOutreachTime}" | Follow-up="${cronFollowupTime}"`);
+
+  if (cronApiKey) {
+    try {
+      const cRes = await axios.get('https://api.cron-job.org/jobs', {
+        headers: { Authorization: `Bearer ${cronApiKey}` },
+        timeout: 10000
+      });
+      const existingJobs = cRes.data.jobs || [];
+      const sheetBotJobs = existingJobs.filter(j => (j.title || '').toLowerCase().includes('sheet-bot'));
+
+      if (sheetBotJobs.length === 0) {
+        logWarn(`cron-job.org API connected, but found 0 jobs containing "Sheet-bot". (Run Auto-Setup or setup-cron.mjs to provision them).`);
+      } else {
+        logPass(`Found ${sheetBotJobs.length} Sheet-bot cron job(s) configured on cron-job.org.`);
+        for (const job of sheetBotJobs) {
+          if (job.enabled) {
+            logPass(`Cron Job "${job.title}": ENABLED ✅`);
+          } else {
+            logWarn(`Cron Job "${job.title}": PAUSED/DISABLED ⚠️ (Enable it on console.cron-job.org)`);
+          }
+        }
+      }
+    } catch (err) {
+      logWarn(`Could not verify cron-job.org API: ${err.message} (Verify your CRONJOB_API_KEY).`);
+    }
+  } else {
+    logPass(`Cron schedules parsed from Google Sheet. (Add CRONJOB_API_KEY secret to enable live API auditing during diagnostics).`);
+  }
+
   return finishReport(report);
 }
 
