@@ -1,0 +1,36 @@
+name: 🩺 Campaign Health & Pre-Flight Diagnostic
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  run-diagnostics:
+    name: 🔍 Pre-Flight Campaign Diagnostics
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Execute Campaign Pre-Flight Audit
+        run: node scripts/run-campaign-diagnostics.mjs
+        env:
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID || secrets.SHEET_ID || secrets.SINGLE_SHEET_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          GOOGLE_SERVICE_ACCOUNT_EMAIL: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_EMAIL }}
+          GOOGLE_PRIVATE_KEY: ${{ secrets.GOOGLE_PRIVATE_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_UPDATES_WEBHOOK || secrets.DISCORD_WEBHOOK_URL }}
+          CRON_KEY: ${{ secrets.CRON_KEY || secrets.CRON_JOB_API_KEY || secrets.CRONJOB_API_KEY }}
+          GITHUB_PAT: ${{ secrets.PAT_GITHUB || secrets.GITHUB_PAT || secrets.PAT || secrets.GH_PAT }}
+          GITHUB_REPOSITORY: ${{ github.repository }}

@@ -455,7 +455,7 @@ export async function runCampaignDiagnostics() {
                   timezone: targetJob.schedule.timezone,
                   hours: targetJob.schedule.hours,
                   minutes: targetJob.schedule.minutes,
-                  webhookUrl: discordWebhookUrl,
+                  webhookUrl: discordWebhook,
                   context: 'Pre-Flight Diagnostic Auto-Sync'
                 });
               }
