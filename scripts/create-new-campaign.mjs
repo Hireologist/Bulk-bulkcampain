@@ -211,7 +211,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     env:
-      SPREADSHEET_ID: "${spreadsheetId}"
+      SPREADSHEET_ID: \${{ secrets.SPREADSHEET_ID_${slug.toUpperCase()} || "${spreadsheetId}" }}
       GOOGLE_SERVICE_ACCOUNT_JSON: \${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
       SELECTED_ACTION: \${{ inputs.action || github.event.inputs.action }}
       CAMPAIGN_NAME: "${cleanName}"
