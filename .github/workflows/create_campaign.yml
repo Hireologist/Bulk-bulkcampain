@@ -67,6 +67,7 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           CRON_API_KEY: ${{ inputs.cron_api_key || secrets.CRON_API_KEY || secrets.CRON_KEY }}
           GITHUB_PAT: ${{ inputs.github_pat || secrets.PAT_GITHUB || secrets.GITHUB_PAT || secrets.GH_PAT || secrets.PAT }}
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID || secrets.SHEET_ID }}
 
       - name: Commit & Push New Campaign Workflow to GitHub
         env:
