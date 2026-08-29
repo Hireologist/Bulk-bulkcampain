@@ -68,3 +68,9 @@ A modern, Manifest V3 Chrome Extension that lets you send **Single** and **Bulk*
    ```
 3. Click **Parse List**. A live table will show all extracted Names and Companies.
 4. Click **Dispatch Bulk Batch to GitHub**. Watch the real-time progress bar send each lead to GitHub cloud!
+
+---
+
+## 📖 Comprehensive Documentation
+For the complete step-by-step walkthrough, screenshots, sequence diagrams, and PAT permission guides, see:
+👉 **[`docs/CHROME_EXTENSION_GUIDE.md`](../docs/CHROME_EXTENSION_GUIDE.md)**
