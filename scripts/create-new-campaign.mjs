@@ -2,7 +2,7 @@ import { google } from 'googleapis';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { COMPLETE_SCHEMA } from './auto-setup.mjs';
+import { COMPLETE_SCHEMA, formatSheetTab } from './auto-setup.mjs';
 import { postToDiscord, writeGitHubStepSummary } from '../src/alerts.mjs';
 
 /**
@@ -185,17 +185,28 @@ export async function createNewCampaign({
     }
   }
 
+  // 5. Apply Custom Tab Colors & Header Styling (Matching Code.gs)
+  console.log(`🎨 Applying custom tab colors, frozen rows, bold headers, and column widths...`);
+  const finalMeta = await sheets.spreadsheets.get({ spreadsheetId });
+  for (const s of finalMeta.data.sheets || []) {
+    const title = s.properties.title;
+    const config = COMPLETE_SCHEMA[title];
+    if (config) {
+      await formatSheetTab(sheets, spreadsheetId, s.properties.sheetId, title, config);
+    }
+  }
+
   // Delete default "Sheet1" only if our tabs exist and Sheet1 is empty
   try {
-    const updatedMeta = await sheets.spreadsheets.get({ spreadsheetId });
-    const sheet1 = updatedMeta.data.sheets?.find(s => s.properties.title === 'Sheet1');
-    if (sheet1 && updatedMeta.data.sheets.length > 1) {
+    const sheet1 = finalMeta.data.sheets?.find(s => s.properties.title === 'Sheet1');
+    if (sheet1 && (finalMeta.data.sheets || []).length > 1) {
       await sheets.spreadsheets.batchUpdate({
         spreadsheetId,
         requestBody: {
           requests: [{ deleteSheet: { sheetId: sheet1.properties.sheetId } }],
         },
       });
+      console.log(`🗑️ Removed empty default "Sheet1".`);
     }
   } catch (_) {}
 

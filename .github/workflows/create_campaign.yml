@@ -3,6 +3,7 @@ run-name: "➕ Create Campaign: [${{ inputs.campaign_name }}]"
 
 permissions:
   contents: write
+  workflows: write
 
 on:
   workflow_dispatch:

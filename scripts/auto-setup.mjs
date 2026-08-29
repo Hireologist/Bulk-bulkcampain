@@ -41,6 +41,7 @@ function getGoogleAuth() {
 
 export const COMPLETE_SCHEMA = {
   '📖 Setup_Guide': {
+    color: '#0F172A',
     headers: ['Section / Step', 'Instructions & Rules', 'Important Notes'],
     sampleData: [
       ['1. Adding Leads', 'Go to "Details" tab. Add full_name, email, company_name, location. Leave "Sent Status", "Follow up", and "Time" BLANK.', 'The bot only sends emails to rows where Sent Status is completely empty.'],
@@ -61,6 +62,7 @@ export const COMPLETE_SCHEMA = {
     ]
   },
   'Details': {
+    color: '#1A73E8',
     headers: [
       'full_name', 'email', 'company_name', 'location', 
       'Subject Line', 'Sent From', 'Sent Status', 'Time', 
@@ -71,6 +73,7 @@ export const COMPLETE_SCHEMA = {
     ]
   },
   'Aliases': {
+    color: '#EC4899',
     headers: ['alias_email', 'display_name', 'is_active', 'inbox_email'],
     sampleData: [
       ['pooja@companydomain.com', 'Pooja', 'TRUE', 'outreach@companydomain.com'],
@@ -81,6 +84,7 @@ export const COMPLETE_SCHEMA = {
     ]
   },
   'Inboxes': {
+    color: '#059669',
     headers: [
       'email', 'display_name', 'smtp_host', 'smtp_port', 
       'smtp_user', 'smtp_pass', 'imap_host', 'imap_port', 
@@ -95,6 +99,7 @@ export const COMPLETE_SCHEMA = {
     ]
   },
   'Settings': {
+    color: '#4B5563',
     headers: ['Key', 'Value', 'Description'],
     sampleData: [
       ['min_delay_seconds', '15', 'Minimum seconds to wait between sending emails'],
@@ -129,6 +134,7 @@ export const COMPLETE_SCHEMA = {
     ]
   },
   'Templates': {
+    color: '#7C3AED',
     headers: ['Template_Name', 'Subject', 'Body'],
     sampleData: [
       [
@@ -139,6 +145,7 @@ export const COMPLETE_SCHEMA = {
     ]
   },
   'Followup_Templates': {
+    color: '#D97706',
     headers: ['Follow_Up_Number', 'Days_Until_Next', 'Subject', 'Body'],
     sampleData: [
       ['1', '3', 'Re:', 'Hi {{full_name}},\n\nJust following up on my previous note regarding {{company_name}}. Let me know if this is relevant.\n\nBest,\nTeam'],
@@ -147,30 +154,35 @@ export const COMPLETE_SCHEMA = {
     ]
   },
   'Suppressed': {
+    color: '#DC2626',
     headers: ['email', 'reason', 'added_at'],
     sampleData: [
       ['sample-optout@example.com', 'Unsubscribed via Link', '2026-08-28T10:00:00.000Z']
     ]
   },
   'Inbox_Stats': {
+    color: '#0891B2',
     headers: ['inbox_email', 'sent', 'bounced', 'complaints', 'sentToday', 'lastReset'],
     sampleData: [
       ['outreach@companydomain.com', '0', '0', '0', '0', '2026-08-28']
     ]
   },
   'Domain_Health': {
+    color: '#2563EB',
     headers: ['Domain', 'SPF Status', 'DMARC Status', 'SPF Record', 'DMARC Record', 'Last Checked', 'Overall Health'],
     sampleData: [
       ['companydomain.com', 'PASS', 'PASS', 'v=spf1 include:_spf.google.com ~all', 'v=DMARC1; p=quarantine', '2026-08-28T06:00:00.000Z', 'Pass']
     ]
   },
   'Failed_Sends': {
+    color: '#E11D48',
     headers: ['lead_email', 'campaign', 'error', 'attempted_at'],
     sampleData: [
       ['deadlead@nonexistentdomain.com', 'cold', 'Invalid recipient', '2026-08-28T10:00:00.000Z']
     ]
   },
   'Locations': {
+    color: '#64748B',
     headers: ['location_name'],
     sampleData: [
       ['Mumbai'], ['Delhi'], ['Bengaluru'], ['Hyderabad'], ['Ahmedabad'],
@@ -178,6 +190,7 @@ export const COMPLETE_SCHEMA = {
     ]
   },
   'Clients': {
+    color: '#0284C7',
     headers: ['client_name', 'industry'],
     sampleData: [
       ['Bajaj', 'Global'], ['ICICI', 'Global'], ['Mobile Programming', 'IT'],
@@ -186,25 +199,92 @@ export const COMPLETE_SCHEMA = {
     ]
   },
   '📊 Email_Analytics': {
-    headers: ['Metric', 'Value', 'Calculation / Formula'],
+    color: '#0D9488',
+    headers: ['Sender', 'Sent', 'Replied', 'Bounced', 'Positive', 'Negative', 'Neutral', 'Reply Rate', 'Pos Reply Rate'],
     sampleData: [
-      ['Total Leads Ingested', '=COUNTA(Details!B2:B)', 'Calculated automatically'],
-      ['Total Emails Sent', '=COUNTIF(Details!G2:G, "SENT")', 'Calculated automatically'],
-      ['Total Replies Received', '=COUNTIF(Details!G2:G, "replied")', 'Calculated automatically'],
-      ['Positive Responses', '=COUNTIF(Details!L2:L, "POSITIVE")', 'Calculated automatically'],
-      ['Bounces Detected', '=COUNTIF(Details!G2:G, "bounced")', 'Calculated automatically']
+      ['=LET(senders, UNIQUE(FILTER(Details!F2:F, Details!F2:F<>"")), sent, MAP(senders, LAMBDA(s, COUNTIFS(Details!F:F, s))), replied, MAP(senders, LAMBDA(s, COUNTIFS(Details!F:F, s, Details!G:G, "replied"))), bounced, MAP(senders, LAMBDA(s, COUNTIFS(Details!F:F, s, Details!G:G, "bounced"))), positive, MAP(senders, LAMBDA(s, COUNTIFS(Details!F:F, s, Details!L:L, "POSITIVE"))), negative, MAP(senders, LAMBDA(s, COUNTIFS(Details!F:F, s, Details!L:L, "NEGATIVE"))), neutral, MAP(senders, LAMBDA(s, COUNTIFS(Details!F:F, s, Details!L:L, "NEUTRAL"))), reply_rate, MAP(replied, sent, LAMBDA(r, s, IFERROR(r/s, 0))), pos_reply_rate, MAP(positive, sent, LAMBDA(p, s, IFERROR(p/s, 0))), data, HSTACK(senders, sent, replied, bounced, positive, negative, neutral, reply_rate, pos_reply_rate), tot_sent, SUM(sent), tot_replied, SUM(replied), tot_bounced, SUM(bounced), tot_positive, SUM(positive), tot_negative, SUM(negative), tot_neutral, SUM(neutral), tot_reply_rate, IFERROR(tot_replied/tot_sent, 0), tot_pos_reply_rate, IFERROR(tot_positive/tot_sent, 0), totals, HSTACK("TOTAL", tot_sent, tot_replied, tot_bounced, tot_positive, tot_negative, tot_neutral, tot_reply_rate, tot_pos_reply_rate), VSTACK(data, totals))', '', '', '', '', '', '', '', '']
     ]
   },
   '📈 ChartData': {
-    headers: ['Sentiment Category', 'Lead Count'],
+    color: '#6366F1',
+    headers: ['Status', 'Count'],
     sampleData: [
-      ['POSITIVE', '=COUNTIF(Details!L2:L, "POSITIVE")'],
-      ['NEUTRAL', '=COUNTIF(Details!L2:L, "NEUTRAL")'],
-      ['NEGATIVE', '=COUNTIF(Details!L2:L, "NEGATIVE")'],
-      ['OOO (Out of Office)', '=COUNTIF(Details!L2:L, "OOO")']
+      ['POSITIVE', '=COUNTIF(Details!L:L, A2)'],
+      ['NEUTRAL', '=COUNTIF(Details!L:L, A3)'],
+      ['NEGATIVE', '=COUNTIF(Details!L:L, A4)']
     ]
   }
 };
+
+export function hexToRgb(hex = '#1A73E8') {
+  const clean = hex.replace('#', '');
+  const num = parseInt(clean, 16);
+  return {
+    red: ((num >> 16) & 255) / 255,
+    green: ((num >> 8) & 255) / 255,
+    blue: (num & 255) / 255,
+  };
+}
+
+export async function formatSheetTab(sheets, spreadsheetId, sheetNumericId, title, config) {
+  const colorRgb = hexToRgb(config.color || '#1A73E8');
+  const requests = [
+    {
+      updateSheetProperties: {
+        properties: {
+          sheetId: sheetNumericId,
+          tabColor: colorRgb,
+          gridProperties: {
+            frozenRowCount: 1,
+          },
+        },
+        fields: 'tabColor,gridProperties.frozenRowCount',
+      },
+    },
+    {
+      repeatCell: {
+        range: {
+          sheetId: sheetNumericId,
+          startRowIndex: 0,
+          endRowIndex: 1,
+          startColumnIndex: 0,
+          endColumnIndex: config.headers.length,
+        },
+        cell: {
+          userEnteredFormat: {
+            backgroundColor: colorRgb,
+            textFormat: {
+              bold: true,
+              foregroundColor: { red: 1, green: 1, blue: 1 },
+            },
+            horizontalAlignment: 'CENTER',
+            verticalAlignment: 'MIDDLE',
+          },
+        },
+        fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)',
+      },
+    },
+    {
+      autoResizeDimensions: {
+        dimensions: {
+          sheetId: sheetNumericId,
+          dimension: 'COLUMNS',
+          startIndex: 0,
+          endIndex: config.headers.length,
+        },
+      },
+    },
+  ];
+
+  try {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: { requests },
+    });
+  } catch (err) {
+    // Non-critical formatting error, continue gracefully
+  }
+}
 
 async function autoProvisionGoogleSheet(sheets, sheetId) {
   console.log('📊 Synchronizing Google Sheet Structure & Tabs...');
@@ -277,20 +357,29 @@ async function autoProvisionGoogleSheet(sheets, sheetId) {
     }
   }
 
-  // Delete default Sheet1 if other tabs exist
-  if (existingTitles.has('Sheet1') && existingTitles.size > 1) {
-    const sheet1Obj = existingSheets.find((s) => s.properties.title === 'Sheet1');
-    if (sheet1Obj) {
-      try {
-        await sheets.spreadsheets.batchUpdate({
-          spreadsheetId: sheetId,
-          requestBody: {
-            requests: [{ deleteSheet: { sheetId: sheet1Obj.properties.sheetId } }],
-          },
-        });
-        console.log('🗑️ Cleaned up empty default "Sheet1".');
-      } catch (_) {}
+  // 3. Format and Color All Tabs (Tab Colors, Frozen Rows, Bold Headers, Column Auto-Fit)
+  console.log('🎨 Applying custom tab colors, frozen rows, and header styling...');
+  const finalMeta = await sheets.spreadsheets.get({ spreadsheetId: sheetId });
+  for (const s of finalMeta.data.sheets || []) {
+    const title = s.properties.title;
+    const config = COMPLETE_SCHEMA[title];
+    if (config) {
+      await formatSheetTab(sheets, sheetId, s.properties.sheetId, title, config);
     }
+  }
+
+  // 4. Delete default "Sheet1" only if our tabs exist
+  const defaultSheet = (finalMeta.data.sheets || []).find((s) => s.properties.title === 'Sheet1');
+  if (defaultSheet && (finalMeta.data.sheets || []).length > 1) {
+    try {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: sheetId,
+        requestBody: {
+          requests: [{ deleteSheet: { sheetId: defaultSheet.properties.sheetId } }],
+        },
+      });
+      console.log('🗑️ Removed empty default "Sheet1".');
+    } catch (_) {}
   }
 
   console.log(`✅ Google Sheet Provisioning Complete: ${createdCount} tab(s) created, ${updatedCount} tab(s) updated.\n`);
