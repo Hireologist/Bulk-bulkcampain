@@ -1,0 +1,61 @@
+name: ➕ Create New Campaign (Auto-Sheet & Workflow)
+run-name: "➕ Create Campaign: [${{ inputs.campaign_name }}]"
+
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      campaign_name:
+        description: 'Campaign Name (e.g. "US Tech Recruiting" or "SaaS Founders")'
+        required: true
+        default: 'New Campaign'
+      user_email:
+        description: 'Your Google Email to share Editor access directly (optional)'
+        required: false
+      make_public:
+        description: 'Make Google Sheet Public with Edit Access'
+        required: true
+        default: true
+        type: boolean
+
+jobs:
+  create-campaign:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Provision Google Sheet & Dedicated Workflow
+        run: node scripts/create-new-campaign.mjs --name "${{ inputs.campaign_name }}" --email "${{ inputs.user_email }}" ${{ inputs.make_public && '' || '--private' }}
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          GOOGLE_SERVICE_ACCOUNT_EMAIL: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_EMAIL }}
+          GOOGLE_PRIVATE_KEY: ${{ secrets.GOOGLE_PRIVATE_KEY }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+      - name: Commit & Push New Campaign Workflow to GitHub
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/outreach_*.yml
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "feat(campaign): add dedicated workflow for [${{ inputs.campaign_name }}]"
+            git push origin main
+          fi
