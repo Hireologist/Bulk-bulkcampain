@@ -4,7 +4,10 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
-    "test": "node --test"
+    "test": "node --test",
+    "create:campaign": "node scripts/create-new-campaign.mjs",
+    "delete:campaign": "node scripts/delete-campaign.mjs",
+    "diagnostics": "node scripts/run-campaign-diagnostics.mjs"
   },
   "dependencies": {
     "axios": "^1.7.0",

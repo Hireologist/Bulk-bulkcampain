@@ -1,0 +1,64 @@
+name: 🗑️ Delete Campaign
+run-name: "🗑️ Delete Campaign: [${{ inputs.campaign_name }}]"
+
+permissions:
+  contents: write
+  workflows: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      campaign_name:
+        description: 'Campaign Name or Slug to delete (e.g. "Poonam" or "test_poonam")'
+        required: true
+        type: string
+      delete_google_sheet:
+        description: 'Move Google Sheet to Trash? (Default: false / preserve sheet)'
+        required: true
+        type: boolean
+        default: false
+      delete_cron_jobs:
+        description: 'Delete automated cron-job.org schedules for this campaign?'
+        required: true
+        type: boolean
+        default: true
+
+jobs:
+  delete-campaign:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js (with cache)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Execute Campaign Deletion
+        run: node scripts/delete-campaign.mjs
+        env:
+          CAMPAIGN_NAME: ${{ inputs.campaign_name }}
+          DELETE_SHEET: ${{ inputs.delete_google_sheet }}
+          DELETE_CRON: ${{ inputs.delete_cron_jobs }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          CRON_API_KEY: ${{ secrets.CRON_API_KEY }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+      - name: Commit & Push Workflow Deletion
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --staged --quiet; then
+            echo "No files modified or removed."
+          else
+            git commit -m "chore(campaign): delete campaign [${{ inputs.campaign_name }}]"
+            git push
+          fi
