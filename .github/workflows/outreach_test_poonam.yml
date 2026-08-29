@@ -1,0 +1,73 @@
+name: 🚀 Outreach Engine — [Test-poonam]
+run-name: "[Test-poonam] ${{ inputs.action || github.event.client_payload.action || 'scheduled' }} (${{ github.event_name }})"
+
+concurrency:
+  group: outreach-test_poonam-${{ inputs.action || github.event.client_payload.action || github.event_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+on:
+  repository_dispatch:
+    types: [send_single_email_test_poonam, test_poonam_trigger]
+
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Choose task to run for [Test-poonam]'
+        required: true
+        default: 'inbox'
+        type: choice
+        options: [outreach, followup, inbox, digest, warmup, single_lead, diagnostic]
+      email:
+        description: 'Recipient Email (for single_lead)'
+        required: false
+      full_name:
+        description: 'Recipient Full Name (for single_lead)'
+        required: false
+      company_name:
+        description: 'Recipient Company Name (for single_lead)'
+        required: false
+      location:
+        description: 'Recipient Location (for single_lead)'
+        required: false
+
+jobs:
+  run-engine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID_TEST_POONAM || "1b7Dap-gMz8EjRpbnAAvQ1hL-Bi-v9d6DXjFapghN5aw" }}
+      GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+      SELECTED_ACTION: ${{ inputs.action || github.event.inputs.action }}
+      CAMPAIGN_NAME: "Test-poonam"
+      CRON_API_KEY: ${{ secrets.CRON_API_KEY }}
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js (with cache)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Execute Diagnostics (if selected)
+        if: ${{ (inputs.action || github.event.inputs.action || 'inbox') == 'diagnostic' }}
+        run: node scripts/run-campaign-diagnostics.mjs --sheet-id "1b7Dap-gMz8EjRpbnAAvQ1hL-Bi-v9d6DXjFapghN5aw"
+
+      - name: Execute Campaign Engine [Test-poonam]
+        if: ${{ (inputs.action || github.event.inputs.action || 'inbox') != 'diagnostic' }}
+        run: node engine.mjs "${{ inputs.action || 'inbox' }}"
+        env:
+          SINGLE_EMAIL: ${{ inputs.email || github.event.client_payload.email || '' }}
+          SINGLE_FULL_NAME: ${{ inputs.full_name || github.event.client_payload.full_name || '' }}
+          SINGLE_COMPANY: ${{ inputs.company_name || github.event.client_payload.company_name || '' }}
+          SINGLE_LOCATION: ${{ inputs.location || github.event.client_payload.location || '' }}
+          WEBHOOK_URL_OVERRIDE: ${{ github.event.client_payload.webhook_url || '' }}
