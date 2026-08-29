@@ -5,9 +5,10 @@
   "scripts": {
     "start": "node server.mjs",
     "test": "node --test",
-    "create:campaign": "node scripts/create-new-campaign.mjs",
-    "delete:campaign": "node scripts/delete-campaign.mjs",
-    "diagnostics": "node scripts/run-campaign-diagnostics.mjs"
+    "setup": "node scripts/auto-setup.mjs",
+    "cron:sync": "node setup-cron.mjs",
+    "diagnostics": "node scripts/run-campaign-diagnostics.mjs",
+    "domain:health": "node scripts/run-domain-health.mjs"
   },
   "dependencies": {
     "axios": "^1.7.0",

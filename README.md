@@ -10,8 +10,9 @@ An automated, 100% free, serverless cold email outreach engine built with **Node
 
 ## 📋 Table of Contents
 0. [⚡ 1-Click Rapid Setup Guide](./SETUP_10MIN.md)
-1. [🧪 Step-by-Step Manual Testing Guide](./docs/MANUAL_TESTING.md)
-2. [🧩 Chrome Extension User Guide](./docs/CHROME_EXTENSION_GUIDE.md)
+1. [📁 Multi-Campaign Strategy: 1-Repo Per Campaign Guide](./docs/MULTI_CAMPAIGN_GUIDE.md)
+2. [🧪 Step-by-Step Manual Testing Guide](./docs/MANUAL_TESTING.md)
+3. [🧩 Chrome Extension User Guide](./docs/CHROME_EXTENSION_GUIDE.md)
 3. [Key Features](#-key-features)
 4. [How to Import & Setup Your Own GitHub Repo](#-how-to-import--setup-your-own-github-repo)
 5. [Online Web Dashboard (GitHub Pages)](#-online-web-dashboard-github-pages)
