@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { COMPLETE_SCHEMA } from '../scripts/auto-setup.mjs';
-import { parseScheduleFromSettings, buildJobPayload } from '../setup-cron.mjs';
+import { parseScheduleFromSettings, buildJobPayload } from '../scripts/setup-cron.mjs';
 import { parseSpintax } from '../src/spintax.mjs';
 import { isCampaignActive } from '../engine.mjs';
 

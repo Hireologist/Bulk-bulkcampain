@@ -6,7 +6,7 @@
     "start": "node engine.mjs outreach",
     "test": "node --test",
     "setup": "node scripts/auto-setup.mjs",
-    "cron:sync": "node setup-cron.mjs",
+    "cron:sync": "node scripts/setup-cron.mjs",
     "diagnostics": "node scripts/run-campaign-diagnostics.mjs",
     "domain:health": "node scripts/run-domain-health.mjs"
   },

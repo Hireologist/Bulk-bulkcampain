@@ -8,7 +8,7 @@ import {
   parseMinutesList,
   parseWeekdays,
   JOBS_TO_CREATE,
-} from '../setup-cron.mjs';
+} from '../scripts/setup-cron.mjs';
 
 describe('Smart Cron-Job.org Synchronizer Unit Tests', () => {
   const repoName = 'Sheet-bot';
