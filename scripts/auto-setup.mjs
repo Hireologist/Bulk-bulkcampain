@@ -313,9 +313,19 @@ async function runAutoSetup() {
   const settingsRows = settingsRes.data.values || [];
   const settings = Object.fromEntries(settingsRows.map((r) => [r[0], r[1]]));
 
-  // 3. Provision Cron Jobs on cron-job.org if keys are available
-  let cronApiKey = process.env.CRON_KEY || process.env.CRON_JOB_API_KEY || settings.cron_api_key || settings.cron_job_api_key;
-  let githubPat = process.env.GITHUB_PAT || process.env.PAT || process.env.GH_PAT || settings.github_pat;
+  let cronApiKey = process.env.CRONJOB_API_KEY ||
+    process.env.CRON_JOB_API_KEY ||
+    process.env.CRON_API_KEY ||
+    process.env.CRON_KEY ||
+    process.env.CRONJOB_KEY ||
+    settings.cronjob_api_key ||
+    settings.cron_job_api_key ||
+    settings.cron_api_key ||
+    settings.cron_key ||
+    settings.cronjob_key ||
+    settings.cron_token ||
+    settings.cronjob_token;
+  let githubPat = process.env.GITHUB_PAT || process.env.PAT || process.env.GH_PAT || process.env.GH_TOKEN || process.env.GITHUB_TOKEN || settings.github_pat;
 
   const detectedGit = autoDetectGitRepo();
   let repoOwner = process.env.GITHUB_OWNER || (detectedGit ? detectedGit.owner : '');

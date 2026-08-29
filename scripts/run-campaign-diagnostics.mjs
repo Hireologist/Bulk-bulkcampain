@@ -126,7 +126,15 @@ export async function runCampaignDiagnostics() {
   // STEP 2: Settings & Campaign Controls Audit
   // -------------------------------------------------------------
   console.log('\n⚙️ STEP 2: Campaign Settings & Throttle Configuration');
-  const settings = Object.fromEntries(settingsData.rows.map(r => [r[0], r[1]]));
+  const settings = {};
+  for (const r of settingsData.rows) {
+    if (r[0] !== undefined && r[0] !== null) {
+      const k = String(r[0]).trim();
+      const v = r[1] !== undefined && r[1] !== null ? String(r[1]).trim() : '';
+      settings[k] = v;
+      settings[k.toLowerCase()] = v;
+    }
+  }
 
   const isCampaignActive = !['false', '0', 'no', 'off'].includes(String(settings.campaign_active ?? 'TRUE').toLowerCase().trim());
   if (isCampaignActive) {
@@ -380,7 +388,18 @@ export async function runCampaignDiagnostics() {
   // STEP 9: Cron Jobs & Automation Schedule Verification
   // -------------------------------------------------------------
   console.log('\n⏰ STEP 9: Cron Automation & Schedule Verification');
-  const cronApiKey = process.env.CRONJOB_API_KEY || settings.cronjob_api_key;
+  const cronApiKey = process.env.CRONJOB_API_KEY ||
+    process.env.CRON_JOB_API_KEY ||
+    process.env.CRON_API_KEY ||
+    process.env.CRON_KEY ||
+    process.env.CRONJOB_KEY ||
+    settings.cronjob_api_key ||
+    settings.cron_job_api_key ||
+    settings.cron_api_key ||
+    settings.cron_key ||
+    settings.cronjob_key ||
+    settings.cron_token ||
+    settings.cronjob_token;
   const cronDays = settings.cron_days || 'Mon-Sat';
   const cronOutreachTime = settings.cron_outreach_time || '10:00';
   const cronFollowupTime = settings.cron_followup_time || '09:30';

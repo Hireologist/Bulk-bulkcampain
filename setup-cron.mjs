@@ -425,7 +425,16 @@ async function tryLoadSheetSettings() {
     });
     const [headers, ...rows] = res.data.values || [];
     if (!rows) return {};
-    return Object.fromEntries(rows.map((r) => [r[0], r[1]]));
+    const settings = {};
+    for (const r of rows) {
+      if (r[0] !== undefined && r[0] !== null) {
+        const k = String(r[0]).trim();
+        const v = r[1] !== undefined && r[1] !== null ? String(r[1]).trim() : '';
+        settings[k] = v;
+        settings[k.toLowerCase()] = v;
+      }
+    }
+    return settings;
   } catch {
     return {};
   }
@@ -473,8 +482,19 @@ async function main() {
 
   const sheetSettings = await tryLoadSheetSettings();
 
-  let cronApiKey = process.env.CRON_KEY || process.env.CRON_JOB_API_KEY || sheetSettings.cron_api_key || sheetSettings.cron_job_api_key;
-  let githubPat = process.env.GITHUB_PAT || process.env.PAT || process.env.GH_PAT || sheetSettings.github_pat;
+  let cronApiKey = process.env.CRONJOB_API_KEY ||
+    process.env.CRON_JOB_API_KEY ||
+    process.env.CRON_API_KEY ||
+    process.env.CRON_KEY ||
+    process.env.CRONJOB_KEY ||
+    sheetSettings.cronjob_api_key ||
+    sheetSettings.cron_job_api_key ||
+    sheetSettings.cron_api_key ||
+    sheetSettings.cron_key ||
+    sheetSettings.cronjob_key ||
+    sheetSettings.cron_token ||
+    sheetSettings.cronjob_token;
+  let githubPat = process.env.GITHUB_PAT || process.env.PAT || process.env.GH_PAT || process.env.GH_TOKEN || process.env.GITHUB_TOKEN || sheetSettings.github_pat;
 
   if (!cronApiKey) {
     if (isNonInteractive) {
