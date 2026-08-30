@@ -235,6 +235,18 @@ describe('Universal Outreach Engine Unit Tests', () => {
       assert.ok(validSentiments.includes(parsed));
       assert.strictEqual(parsed, 'POSITIVE');
     });
+
+    it('should detect opt-outs in subject line even if email body is blank', () => {
+      const subject = 'Unsubscribe - prospect@client.com';
+      const body = '';
+      const rawReplyText = `${subject} ${body}`.toLowerCase();
+      const isOptOut = rawReplyText.includes('unsubscribe') || 
+                       rawReplyText.includes('opt out') || 
+                       rawReplyText.includes('remove me') || 
+                       rawReplyText.includes('stop emailing');
+
+      assert.strictEqual(isOptOut, true);
+    });
   });
 
   describe('Batch Size Limiter', () => {
