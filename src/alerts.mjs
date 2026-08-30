@@ -1,4 +1,17 @@
 import fs from 'node:fs';
+import { execSync } from 'node:child_process';
+
+function getRepoSlug() {
+  if (process.env.GITHUB_REPOSITORY) return process.env.GITHUB_REPOSITORY;
+  try {
+    const remoteUrl = execSync('git config --get remote.origin.url', { encoding: 'utf8' }).trim();
+    const match = remoteUrl.match(/github\.com[:/]([^/]+)\/([^/.]+)(?:\.git)?$/);
+    if (match) {
+      return `${match[1]}/${match[2]}`;
+    }
+  } catch {}
+  return process.env.GITHUB_REPO || 'Sheet-bot';
+}
 
 /**
  * Discord Observability & Telemetry Alerts
@@ -107,7 +120,7 @@ export async function sendAuthFailureAlert({
   console.error(consoleMessage);
 
   // Write to GitHub Step Summary if running in GitHub Actions
-  const repoName = process.env.GITHUB_REPOSITORY || 'Rohanpatel16/Sheet-bot';
+  const repoName = getRepoSlug();
   const ghSummaryMarkdown = 
 `## 🚨 Critical Authentication Failure on Inbox \`${email}\`
 
