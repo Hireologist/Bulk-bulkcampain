@@ -175,13 +175,15 @@ describe('Universal Outreach Engine Unit Tests', () => {
 
   describe('Template Placeholder Replacement', () => {
     it('should replace all template placeholders dynamically', () => {
-      const template = 'Hi {{full_name}}, saw {{company_name}} in {{location}} on {{Date}}. Clients: {{clients}}. Other: {{other_locations}}.';
+      const template = 'Hi {{full_name}}, saw {{company_name}} in {{location}} on {{Date}}. Clients: {{clients}}. Other: {{other_locations}}. Best, {{sender-name}} ({{sender-email}})';
       const fullName = 'John Doe';
       const companyName = 'Acme Corp';
       const location = 'Bengaluru';
       const clientStr = 'Bajaj, ICICI';
       const randomLocs = 'Mumbai, Delhi';
       const dateStr = '22/08/2026';
+      const senderName = 'Rohan Patel';
+      const senderEmail = 'rohan@example.com';
 
       const result = template
         .replace(/{{full_name}}/gi, fullName)
@@ -189,12 +191,26 @@ describe('Universal Outreach Engine Unit Tests', () => {
         .replace(/{{location}}/gi, location)
         .replace(/{{other_locations}}/gi, randomLocs)
         .replace(/{{clients}}/gi, clientStr)
-        .replace(/{{Date}}/gi, dateStr);
+        .replace(/{{Date}}/gi, dateStr)
+        .replace(/{{sender[-_]?name}}/gi, senderName)
+        .replace(/{{sender[-_]?first[-_]?name}}/gi, senderName.split(' ')[0] || senderName)
+        .replace(/{{sender[-_]?email}}/gi, senderEmail);
 
       assert.strictEqual(
         result,
-        'Hi John Doe, saw Acme Corp in Bengaluru on 22/08/2026. Clients: Bajaj, ICICI. Other: Mumbai, Delhi.'
+        'Hi John Doe, saw Acme Corp in Bengaluru on 22/08/2026. Clients: Bajaj, ICICI. Other: Mumbai, Delhi. Best, Rohan Patel (rohan@example.com)'
       );
+    });
+
+    it('should support {{sender-first-name}} and {{sender_name}} syntax variants', () => {
+      const template = 'Cheers, {{sender-first-name}} from {{sender_name}} team!';
+      const senderName = 'Alex Smith';
+
+      const result = template
+        .replace(/{{sender[-_]?first[-_]?name}}/gi, senderName.split(' ')[0] || senderName)
+        .replace(/{{sender[-_]?name}}/gi, senderName);
+
+      assert.strictEqual(result, 'Cheers, Alex from Alex Smith team!');
     });
   });
 
