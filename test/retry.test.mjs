@@ -45,4 +45,31 @@ describe('Retry Module Unit Tests', () => {
 
     assert.strictEqual(callCount, 3); // Initial attempt + 2 retries
   });
+
+  test('calls onRetry callback with attempt count and delay', async () => {
+    const retryEvents = [];
+    let callCount = 0;
+
+    await sendWithRetry(
+      async () => {
+        callCount++;
+        if (callCount < 2) {
+          throw new Error('Transient error');
+        }
+        return 'done';
+      },
+      {
+        retries: 2,
+        baseDelay: 10,
+        factor: 2,
+        onRetry: (err, attempt, delay) => {
+          retryEvents.push({ message: err.message, attempt, delay });
+        }
+      }
+    );
+
+    assert.strictEqual(retryEvents.length, 1);
+    assert.strictEqual(retryEvents[0].attempt, 1);
+    assert.strictEqual(retryEvents[0].message, 'Transient error');
+  });
 });
