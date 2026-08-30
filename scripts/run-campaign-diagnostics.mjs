@@ -647,52 +647,64 @@ export async function runCampaignDiagnostics() {
       } else {
         logPass(`Found ${campaignJobs.length} cron job(s) configured for "${repoLabel}" on cron-job.org.`);
 
+        const usedJobIds = new Set();
+
         for (const targetJob of dynamicJobs) {
           const targetTitle = targetJob.title.toLowerCase();
-          const matched = campaignJobs.find(j => {
+          
+          // 1. First priority: match by unique unused job with matching title
+          let matched = campaignJobs.find(j => {
+            if (usedJobIds.has(j.jobId)) return false;
             const title = (j.title || '').toLowerCase();
-            const url = (j.url || '').toLowerCase();
-
-            // 1. Match by specific job title first (e.g. "Cold Outreach", "Followup Engine", "Inbox Checker")
-            if (title.includes(targetTitle)) {
-              if (!repoName || title.includes(repoName.toLowerCase()) || url.includes(`/${repoName.toLowerCase()}/`)) return true;
-              return true;
-            }
-
-            // 2. Fallback match by exact workflow file in dispatch URL
-            if (targetJob.workflow && url.includes(`/workflows/${targetJob.workflow.toLowerCase()}/dispatches`)) {
-              if (!repoName || url.includes(`/${repoName.toLowerCase()}/`)) return true;
-            }
-
-            return false;
+            return title.includes(targetTitle);
           });
+
+          // 2. Second priority: match by checking job details payload body action
+          if (!matched) {
+            for (const j of campaignJobs) {
+              if (usedJobIds.has(j.jobId)) continue;
+              try {
+                const detailed = await fetchJobDetails(cronApiKey, j.jobId);
+                const bodyStr = detailed?.jobDetails?.extendedData?.body || detailed?.job?.extendedData?.body || '';
+                if (bodyStr.includes(`"action":"${targetJob.action}"`) || bodyStr.includes(`"action": "${targetJob.action}"`)) {
+                  matched = j;
+                  break;
+                }
+              } catch (_) {}
+            }
+          }
+
           if (matched) {
+            usedJobIds.add(matched.jobId);
             try {
               const detailed = await fetchJobDetails(cronApiKey, matched.jobId);
               const curSchedule = detailed?.jobDetails?.schedule || detailed?.job?.schedule || detailed?.schedule;
               
-              // Check if schedule matches Sheet
+              // Check if schedule matches Sheet (timezone, hours, minutes, and wdays)
               const sameTz = curSchedule?.timezone === targetJob.schedule.timezone;
               const sameHours = JSON.stringify(curSchedule?.hours || []) === JSON.stringify(targetJob.schedule.hours || []);
               const sameMins = JSON.stringify(curSchedule?.minutes || []) === JSON.stringify(targetJob.schedule.minutes || []);
+              const sameWdays = JSON.stringify(curSchedule?.wdays || []) === JSON.stringify(targetJob.schedule.wdays || []);
               const isEnabled = matched.enabled;
 
               const formatHour = JSON.stringify(targetJob.schedule.hours || []);
               const formatMin = JSON.stringify(targetJob.schedule.minutes || []);
+              const expectedTitle = `${repoLabel} - ${targetJob.title}`;
 
-              if (sameTz && sameHours && sameMins && isEnabled) {
+              if (sameTz && sameHours && sameMins && sameWdays && isEnabled && matched.title === expectedTitle) {
                 logPass(`Cron Job "${matched.title}": ENABLED & in sync with Google Sheet (${targetJob.schedule.timezone} @ ${formatHour}:${formatMin}) ✅`);
               } else {
-                // Auto-sync schedule via PATCH to match Google Sheet!
+                // Auto-sync schedule & title via PATCH to match Google Sheet!
                 const updatedPayload = {
                   job: {
                     ...(detailed?.jobDetails || detailed?.job || {}),
+                    title: expectedTitle,
                     enabled: true,
                     schedule: targetJob.schedule
                   }
                 };
                 await updateCronJob(cronApiKey, matched.jobId, updatedPayload);
-                logPass(`Cron Job "${matched.title}": Auto-synchronized & updated schedule to match Google Sheet (${targetJob.schedule.timezone} @ ${formatHour}:${formatMin}) 🔄✅`);
+                logPass(`Cron Job "${expectedTitle}": Auto-synchronized & updated schedule to match Google Sheet (${targetJob.schedule.timezone} @ ${formatHour}:${formatMin}) 🔄✅`);
 
                 // Send real-time notification to Discord
                 await sendCronSyncAlert({
