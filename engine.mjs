@@ -452,7 +452,7 @@ export async function runColdOutreach() {
       if (eligibleAliases.length > 0) {
         const chosenAlias = eligibleAliases[Math.floor(Math.random() * eligibleAliases.length)];
         senderEmail = chosenAlias.alias_email;
-        senderName = chosenAlias.display_name || chosenAlias.alias_email.split('@')[0];
+        senderName = chosenAlias.display_name || chosenAlias.name || chosenAlias.sender_name || chosenAlias.alias_email.split('@')[0];
       }
     }
 
@@ -750,7 +750,7 @@ export async function runSingleLeadOutreach(singleLeadPayload = {}) {
       if (eligibleAliases.length > 0) {
         const chosenAlias = eligibleAliases[Math.floor(Math.random() * eligibleAliases.length)];
         senderEmail = chosenAlias.alias_email;
-        senderName = chosenAlias.display_name || chosenAlias.alias_email.split('@')[0];
+        senderName = chosenAlias.display_name || chosenAlias.name || chosenAlias.sender_name || chosenAlias.alias_email.split('@')[0];
       }
     }
 
@@ -988,7 +988,9 @@ export async function runFollowups() {
 
     // 🎯 1. MATCH EXACT ALIAS & DISPLAY NAME
     const matchedAlias = config.aliases.find(a => a.alias_email.toLowerCase() === originalSenderEmail.toLowerCase());
-    const senderName = matchedAlias ? matchedAlias.display_name : (originalSenderEmail.split('@')[0] || 'Team');
+    const senderName = matchedAlias 
+      ? (matchedAlias.display_name || matchedAlias.name || matchedAlias.sender_name || matchedAlias.alias_email.split('@')[0]) 
+      : (originalSenderEmail.split('@')[0] || 'Team');
     const senderEmail = originalSenderEmail || config.inboxes[0].email;
 
     // 🎯 2. MATCH INBOX CREDENTIALS FOR THIS SENDER (Exact Mailbox, Assigned Inbox, or Same Domain)
