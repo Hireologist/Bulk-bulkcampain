@@ -3,10 +3,11 @@ import nodemailer from 'nodemailer';
 import { ImapFlow } from 'imapflow';
 import axios from 'axios';
 import { fileURLToPath } from 'url';
+import path from 'path';
 import { parseSpintax } from '../src/spintax.mjs';
 import { checkDnsRecords } from '../src/dns-check.mjs';
 import { isAuthError, sendAuthFailureAlert, writeGitHubStepSummary, sendCronSyncAlert } from '../src/alerts.mjs';
-import { parseScheduleFromSettings, fetchExistingJobs, fetchJobDetails, updateCronJob } from './setup-cron.mjs';
+import { parseScheduleFromSettings, fetchExistingJobs, fetchJobDetails, updateCronJob, autoDetectGitRepo } from './setup-cron.mjs';
 
 /**
  * 🩺 CAMPAIGN HEALTH & PRE-FLIGHT DIAGNOSTIC SUITE
@@ -409,18 +410,69 @@ export async function runCampaignDiagnostics() {
 
   logPass(`Desired Cron Schedules in Sheet: Timezone="${cronTimezone}" | Days="${cronDays}" | Outreach="${cronOutreachTime}" | Follow-up="${cronFollowupTime}"`);
 
+  const detectedGit = autoDetectGitRepo();
+  let repoOwner = process.env.GITHUB_OWNER || (detectedGit ? detectedGit.owner : '');
+  let repoName = process.env.GITHUB_REPO || (detectedGit ? detectedGit.repo : '');
+
+  if (process.env.GITHUB_REPOSITORY) {
+    const parts = process.env.GITHUB_REPOSITORY.split('/');
+    if (parts.length === 2) {
+      if (!repoOwner) repoOwner = parts[0];
+      if (!repoName) repoName = parts[1];
+    }
+  }
+
+  const repoLabel = repoName ? `${repoOwner ? repoOwner + '/' : ''}${repoName}` : 'campaign';
+
   if (cronApiKey) {
     try {
       const existingJobs = await fetchExistingJobs(cronApiKey);
-      const sheetBotJobs = existingJobs.filter(j => (j.title || '').toLowerCase().includes('sheet-bot'));
+      const targetTitles = dynamicJobs.map(j => j.title.toLowerCase());
 
-      if (sheetBotJobs.length === 0) {
-        logWarn(`cron-job.org API connected, but found 0 jobs containing "Sheet-bot". (Run Auto-Setup or setup-cron.mjs to provision them).`);
+      const campaignJobs = existingJobs.filter(j => {
+        const title = (j.title || '').toLowerCase();
+        const url = (j.url || '').toLowerCase();
+
+        // 1. If repoName is known, check if title or URL contains repoName
+        if (repoName) {
+          const lowerRepo = repoName.toLowerCase();
+          if (title.includes(lowerRepo)) return true;
+          if (url.includes(`/${lowerRepo}/`)) return true;
+        }
+
+        // 2. If repoOwner is known, check if URL contains repoOwner
+        if (repoOwner && url.includes(`/${repoOwner.toLowerCase()}/`)) {
+          return true;
+        }
+
+        // 3. Fallback: match by known outreach job titles or legacy 'sheet-bot'
+        if (targetTitles.some(t => title.includes(t))) {
+          if (!repoName || title.includes('sheet-bot')) return true;
+        }
+
+        return false;
+      });
+
+      if (campaignJobs.length === 0) {
+        logWarn(`cron-job.org API connected, but found 0 jobs configured for "${repoLabel}". (Run Auto-Setup or setup-cron.mjs to provision them).`);
       } else {
-        logPass(`Found ${sheetBotJobs.length} Sheet-bot cron job(s) configured on cron-job.org.`);
+        logPass(`Found ${campaignJobs.length} cron job(s) configured for "${repoLabel}" on cron-job.org.`);
 
         for (const targetJob of dynamicJobs) {
-          const matched = sheetBotJobs.find(j => (j.title || '').toLowerCase().includes(targetJob.title.toLowerCase()));
+          const targetTitle = targetJob.title.toLowerCase();
+          const matched = campaignJobs.find(j => {
+            const title = (j.title || '').toLowerCase();
+            const url = (j.url || '').toLowerCase();
+
+            // Match by workflow URL if present
+            if (targetJob.workflow && url.includes(`/workflows/${targetJob.workflow.toLowerCase()}/dispatches`)) {
+              if (!repoName || url.includes(`/${repoName.toLowerCase()}/`)) return true;
+            }
+
+            // Match by title
+            if (repoName && title.includes(repoName.toLowerCase()) && title.includes(targetTitle)) return true;
+            return title.includes(targetTitle);
+          });
           if (matched) {
             try {
               const detailed = await fetchJobDetails(cronApiKey, matched.jobId);
@@ -493,7 +545,7 @@ function finishReport(report) {
   return report;
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+if (process.argv[1] && path.resolve(fileURLToPath(import.meta.url)).toLowerCase() === path.resolve(process.argv[1]).toLowerCase()) {
   runCampaignDiagnostics().catch((err) => {
     console.error('Fatal diagnostic runner error:', err);
     process.exit(1);
