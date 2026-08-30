@@ -1301,7 +1301,11 @@ export async function runInboxChecker() {
           // Check if lead was ALREADY positive/neutral or already marked as replied
           const isExistingLead = existingStatus === 'replied' || existingSentiment === 'POSITIVE' || existingSentiment === 'NEUTRAL';
 
-          const { sentiment, summary } = await classifyEmailWithAi(groq, parsed.text || '');
+          const emailSubject = parsed.subject || '';
+          const emailBody = parsed.text || '';
+          const combinedEmailContent = emailSubject ? `Subject: ${emailSubject}\n\n${emailBody}` : emailBody;
+
+          const { sentiment, summary } = await classifyEmailWithAi(groq, combinedEmailContent);
 
           rows[rIdx][col['Sent Status']] = 'replied';
           rows[rIdx][col['Follow up']] = 'Done';
@@ -1314,8 +1318,8 @@ export async function runInboxChecker() {
           }
           rows[rIdx][col['Time']] = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: true });
 
-          // ⛔ Automatically add to Suppression List if lead opted out or expressed negative sentiment
-          const rawReplyText = (parsed.text || '').toLowerCase();
+          // ⛔ Automatically add to Suppression List if lead opted out or expressed negative sentiment (checking both Subject & Body)
+          const rawReplyText = `${emailSubject} ${emailBody}`.toLowerCase();
           const isOptOut = sentiment === 'NEGATIVE' || 
                            rawReplyText.includes('unsubscribe') || 
                            rawReplyText.includes('opt out') || 
