@@ -720,6 +720,7 @@ export async function runCampaignDiagnostics() {
               logWarn(`Cron Job "${matched.title}": Checked (${matched.enabled ? 'ENABLED' : 'PAUSED'}). Auto-sync note: ${jobErr.message}`);
             }
           }
+          await sleep(1500); // Rate limit pacing for cron-job.org API
         }
       }
     } catch (err) {
