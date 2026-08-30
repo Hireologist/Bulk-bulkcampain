@@ -23,12 +23,175 @@ import { parseScheduleFromSettings, fetchExistingJobs, fetchJobDetails, updateCr
  * 8. Master Campaign & Throttle Settings Audit
  */
 
-const REQUIRED_TABS = [
-  'Details', 'Inboxes', 'Aliases', 'Settings', 
-  'Templates', 'Followup_Templates', 'Locations', 
-  'Clients', 'Suppressed', 'Domain_Health', 
-  'Inbox_Stats', 'Failed_Sends'
-];
+import { COMPLETE_SCHEMA } from './auto-setup.mjs';
+
+/**
+ * Convert 1-based column index to spreadsheet column letter (e.g. 1 -> A, 27 -> AA)
+ */
+export function columnIndexToLetter(colIndex) {
+  let temp = colIndex;
+  let letter = '';
+  while (temp > 0) {
+    let mod = (temp - 1) % 26;
+    letter = String.fromCharCode(65 + mod) + letter;
+    temp = Math.floor((temp - mod) / 26);
+  }
+  return letter;
+}
+
+/**
+ * 🔍 Exhaustively audit and auto-repair every tab, column header, and settings key
+ */
+export async function auditAndRepairSheetSchema(sheets, sheetId, spreadsheetMeta, options = { autoRepair: true }) {
+  const existingSheets = spreadsheetMeta?.data?.sheets || [];
+  const existingTabMap = new Map(existingSheets.map(s => [s.properties.title, s.properties.sheetId]));
+  const results = {
+    tabsChecked: 0,
+    missingTabs: [],
+    createdTabs: [],
+    columnsVerified: 0,
+    missingColumns: [],
+    repairedColumns: [],
+    missingSettings: [],
+    repairedSettings: []
+  };
+
+  for (const [tabName, tabConfig] of Object.entries(COMPLETE_SCHEMA)) {
+    results.tabsChecked++;
+    const expectedHeaders = tabConfig.headers || [];
+
+    if (!existingTabMap.has(tabName)) {
+      results.missingTabs.push(tabName);
+      if (options.autoRepair && sheets) {
+        try {
+          await sheets.spreadsheets.batchUpdate({
+            spreadsheetId: sheetId,
+            requestBody: {
+              requests: [{
+                addSheet: {
+                  properties: { title: tabName }
+                }
+              }]
+            }
+          });
+          const rowsToWrite = [expectedHeaders, ...(tabConfig.sampleData || [])];
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: sheetId,
+            range: `'${tabName}'!A1`,
+            valueInputOption: 'USER_ENTERED',
+            requestBody: { values: rowsToWrite }
+          });
+          results.createdTabs.push(tabName);
+        } catch (createErr) {
+          console.warn(`Could not auto-create tab "${tabName}": ${createErr.message}`);
+        }
+      }
+      continue;
+    }
+
+    // Read current headers from Row 1
+    let currentHeaders = [];
+    if (sheets) {
+      try {
+        const headerRes = await sheets.spreadsheets.values.get({
+          spreadsheetId: sheetId,
+          range: `'${tabName}'!1:1`
+        });
+        currentHeaders = (headerRes.data.values?.[0] || []).map(h => String(h || '').trim());
+      } catch {
+        currentHeaders = [];
+      }
+    }
+
+    const missingInTab = [];
+    expectedHeaders.forEach((expectedCol) => {
+      results.columnsVerified++;
+      const exists = currentHeaders.some(h => h.toLowerCase() === expectedCol.toLowerCase());
+      if (!exists) {
+        missingInTab.push(expectedCol);
+      }
+    });
+
+    if (missingInTab.length > 0) {
+      const startColIndex = currentHeaders.length + 1;
+      const endColIndex = currentHeaders.length + missingInTab.length;
+      const startColLetter = columnIndexToLetter(startColIndex);
+      const endColLetter = columnIndexToLetter(endColIndex);
+      const targetRange = `'${tabName}'!${startColLetter}1:${endColLetter}1`;
+
+      results.missingColumns.push({
+        tab: tabName,
+        missing: missingInTab,
+        currentHeaders,
+        suggestedPosition: targetRange,
+        startColLetter,
+        endColLetter
+      });
+
+      if (options.autoRepair && sheets) {
+        try {
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: sheetId,
+            range: targetRange,
+            valueInputOption: 'USER_ENTERED',
+            requestBody: {
+              values: [missingInTab]
+            }
+          });
+          results.repairedColumns.push({
+            tab: tabName,
+            columns: missingInTab,
+            range: targetRange
+          });
+        } catch (repairErr) {
+          console.warn(`Could not auto-repair columns in "${tabName}": ${repairErr.message}`);
+        }
+      }
+    }
+
+    // If Settings tab, check all operational setting keys
+    if (tabName === 'Settings' && tabConfig.sampleData) {
+      let currentKeys = [];
+      if (sheets) {
+        try {
+          const settingsRes = await sheets.spreadsheets.values.get({
+            spreadsheetId: sheetId,
+            range: "'Settings'!A2:A"
+          });
+          currentKeys = (settingsRes.data.values || []).map(r => String(r[0] || '').trim().toLowerCase());
+        } catch {
+          currentKeys = [];
+        }
+      }
+
+      const missingSettingRows = [];
+      for (const [key, defaultVal, desc] of tabConfig.sampleData) {
+        if (!currentKeys.includes(key.toLowerCase())) {
+          missingSettingRows.push([key, defaultVal, desc]);
+          results.missingSettings.push(key);
+        }
+      }
+
+      if (missingSettingRows.length > 0 && options.autoRepair && sheets) {
+        try {
+          await sheets.spreadsheets.values.append({
+            spreadsheetId: sheetId,
+            range: "'Settings'!A:C",
+            valueInputOption: 'USER_ENTERED',
+            requestBody: {
+              values: missingSettingRows
+            }
+          });
+          results.repairedSettings.push(...missingSettingRows.map(r => r[0]));
+        } catch (settingErr) {
+          console.warn(`Could not auto-repair settings rows: ${settingErr.message}`);
+        }
+      }
+    }
+  }
+
+  return results;
+}
 
 export async function runCampaignDiagnostics() {
   console.log('\n=============================================================');
@@ -61,9 +224,9 @@ export async function runCampaignDiagnostics() {
   }
 
   // -------------------------------------------------------------
-  // STEP 1: Google Sheets Connection & Tab Schema Verification
+  // STEP 1: Google Sheets Connection & Column Schema Verification
   // -------------------------------------------------------------
-  console.log('📋 STEP 1: Google Sheets Connection & Tab Verification');
+  console.log('📋 STEP 1: Google Sheets Connection & Column Schema Verification');
   const sheetId = process.env.SPREADSHEET_ID || process.env.SHEET_ID;
   const saJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
 
@@ -92,12 +255,38 @@ export async function runCampaignDiagnostics() {
     return finishReport(report);
   }
 
-  const existingTabNames = (spreadsheetMeta.data.sheets || []).map(s => s.properties.title);
-  for (const tab of REQUIRED_TABS) {
-    if (existingTabNames.includes(tab)) {
-      logPass(`Tab "${tab}" exists.`);
-    } else {
-      logWarn(`Tab "${tab}" is missing from spreadsheet. (Run Auto-Setup to create it)`);
+  // Audit and auto-repair every single tab, column header, and settings key
+  const schemaAudit = await auditAndRepairSheetSchema(sheets, sheetId, spreadsheetMeta, { autoRepair: true });
+
+  if (schemaAudit.missingTabs.length === 0 && schemaAudit.missingColumns.length === 0 && schemaAudit.missingSettings.length === 0) {
+    logPass(`Exhaustive Schema Audit: All ${schemaAudit.tabsChecked} tabs and ${schemaAudit.columnsVerified} required column headers verified with 100% integrity.`);
+  } else {
+    // 1. Missing Tabs
+    for (const missingTab of schemaAudit.missingTabs) {
+      if (schemaAudit.createdTabs.includes(missingTab)) {
+        logPass(`Tab "${missingTab}": Missing tab was automatically created with complete headers & sample schema! ✨`);
+      } else {
+        logWarn(`Tab "${missingTab}": Missing from spreadsheet. Run 1-Click Auto-Setup to provision it.`);
+      }
+    }
+
+    // 2. Missing Columns
+    for (const item of schemaAudit.missingColumns) {
+      const repaired = schemaAudit.repairedColumns.find(r => r.tab === item.tab);
+      if (repaired) {
+        logPass(`Tab "${item.tab}": Auto-repaired & appended missing column(s) [${item.missing.join(', ')}] at position ${item.suggestedPosition} ✨`);
+      } else {
+        logWarn(`Tab "${item.tab}": Missing column(s) [${item.missing.join(', ')}]. To add manually, insert at column ${item.startColLetter} (Row 1).`);
+      }
+    }
+
+    // 3. Missing Settings Keys
+    if (schemaAudit.missingSettings.length > 0) {
+      if (schemaAudit.repairedSettings.length > 0) {
+        logPass(`Settings Tab: Auto-repaired & appended missing operational keys [${schemaAudit.repairedSettings.join(', ')}] with default values ✨`);
+      } else {
+        logWarn(`Settings Tab: Missing key(s) [${schemaAudit.missingSettings.join(', ')}]. Add them in Column A of the "Settings" tab.`);
+      }
     }
   }
 
