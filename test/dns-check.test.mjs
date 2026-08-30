@@ -17,4 +17,10 @@ describe('DNS Check Module Unit Tests', () => {
     assert.strictEqual(res.dmarc, false);
     assert.strictEqual(res.status, 'Fail');
   });
+
+  test('checkDnsRecords is exported as an alias for checkDomainAuth', async () => {
+    const { checkDnsRecords } = await import('../src/dns-check.mjs');
+    assert.strictEqual(typeof checkDnsRecords, 'function');
+    assert.strictEqual(checkDnsRecords, checkDomainAuth);
+  });
 });
