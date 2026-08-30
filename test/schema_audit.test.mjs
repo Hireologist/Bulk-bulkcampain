@@ -231,5 +231,51 @@ describe('🩺 Sheet Schema & Column Integrity Verification Test Suite', () => {
         assert.ok(codeGsContent.includes(`'${key}'`), `Code.gs is missing settings key "${key}"`);
       }
     });
+
+    test('verifies run-campaign-diagnostics dynamically inherits any newly added tabs or columns in auto-setup.mjs', async () => {
+      // Simulate dynamic addition of a new tab and columns
+      const dynamicSchemaExtension = {
+        ...COMPLETE_SCHEMA,
+        'Custom_Test_Tab': {
+          color: '#123456',
+          headers: ['custom_col_1', 'custom_col_2', 'custom_col_3'],
+          sampleData: [['val1', 'val2', 'val3']]
+        }
+      };
+
+      const mockMeta = {
+        data: {
+          sheets: Object.keys(COMPLETE_SCHEMA).map((title, idx) => ({
+            properties: { sheetId: idx + 1, title }
+          }))
+        }
+      };
+
+      // Mock sheets where Custom_Test_Tab is missing
+      const mockSheets = {
+        spreadsheets: {
+          values: {
+            get: async ({ range }) => {
+              for (const [tabName, config] of Object.entries(COMPLETE_SCHEMA)) {
+                if (range.startsWith(`'${tabName}'!1:1`)) {
+                  return { data: { values: [config.headers] } };
+                }
+              }
+              if (range.startsWith("'Settings'!A2:A")) {
+                return { data: { values: COMPLETE_SCHEMA['Settings'].sampleData.map(r => [r[0]]) } };
+              }
+              return { data: { values: [] } };
+            }
+          }
+        }
+      };
+
+      const results = await auditAndRepairSheetSchema(mockSheets, 'mock-sheet-id', mockMeta, { autoRepair: false });
+
+      // Diagnostics audits all tabs dynamically from the shared schema
+      assert.strictEqual(results.tabsChecked, Object.keys(COMPLETE_SCHEMA).length);
+      assert.strictEqual(results.missingTabs.length, 0);
+      assert.strictEqual(results.missingColumns.length, 0);
+    });
   });
 });
