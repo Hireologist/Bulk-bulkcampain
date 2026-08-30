@@ -280,22 +280,31 @@ export function isJobUpToDate(existingJobDetails, desiredPayload) {
   return true;
 }
 
-export async function fetchExistingJobs(cronApiKey) {
-  const res = await fetch('https://api.cron-job.org/jobs', {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${cronApiKey}`,
-      'Content-Type': 'application/json',
-    },
-  });
+export async function fetchExistingJobs(cronApiKey, retries = 4) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    const res = await fetch('https://api.cron-job.org/jobs', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${cronApiKey}`,
+        'Content-Type': 'application/json',
+      },
+    });
 
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Failed to list cron-job.org jobs (${res.status}): ${errText}`);
+    if (res.status === 429 && attempt < retries) {
+      const waitMs = attempt * 2500;
+      await sleep(waitMs);
+      continue;
+    }
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Failed to list cron-job.org jobs (${res.status}): ${errText}`);
+    }
+
+    const data = await res.json();
+    return data.jobs || [];
   }
-
-  const data = await res.json();
-  return data.jobs || [];
+  return [];
 }
 
 export async function fetchJobDetails(cronApiKey, jobId, retries = 3) {
