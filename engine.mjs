@@ -476,6 +476,9 @@ export async function runColdOutreach() {
         .replace(/{{other_locations}}/gi, randomLocs)
         .replace(/{{clients}}/gi, clientStr)
         .replace(/{{Date}}/gi, getRandomFormattedDate())
+        .replace(/{{sender[-_]?name}}/gi, senderName)
+        .replace(/{{sender[-_]?first[-_]?name}}/gi, senderName.split(' ')[0] || senderName)
+        .replace(/{{sender[-_]?email}}/gi, senderEmail)
         .replace(/{{business_name}}/gi, config.settings.business_name || 'Outreach Team')
         .replace(/{{business_address}}/gi, config.settings.business_address || '');
     };
@@ -768,6 +771,9 @@ export async function runSingleLeadOutreach(singleLeadPayload = {}) {
         .replace(/{{other_locations}}/gi, randomLocs)
         .replace(/{{clients}}/gi, clientStr)
         .replace(/{{Date}}/gi, getRandomFormattedDate())
+        .replace(/{{sender[-_]?name}}/gi, senderName)
+        .replace(/{{sender[-_]?first[-_]?name}}/gi, senderName.split(' ')[0] || senderName)
+        .replace(/{{sender[-_]?email}}/gi, senderEmail)
         .replace(/{{business_name}}/gi, config.settings.business_name || 'Outreach Team')
         .replace(/{{business_address}}/gi, config.settings.business_address || '');
     };
@@ -1019,13 +1025,16 @@ export async function runFollowups() {
     const replaceTags = (txt = '') => {
       const parsedSpintax = parseSpintax(txt);
       return parsedSpintax
-        .replace(/{{full_name}}/g, fullName)
-        .replace(/{{company_name}}/g, companyName)
+        .replace(/{{full_name}}/gi, fullName)
+        .replace(/{{company_name}}/gi, companyName)
         .replace(/{{Date}}/gi, getRandomFormattedDate())
-        .replace(/{{location}}/g, location)
-        .replace(/{{other_locations}}/g, randomLocs)
-        .replace(/{{clients}}/g, clientStr)
-        .replace(/{{follow_up_number}}/g, String(nextCount))
+        .replace(/{{location}}/gi, location)
+        .replace(/{{other_locations}}/gi, randomLocs)
+        .replace(/{{clients}}/gi, clientStr)
+        .replace(/{{follow_up_number}}/gi, String(nextCount))
+        .replace(/{{sender[-_]?name}}/gi, senderName)
+        .replace(/{{sender[-_]?first[-_]?name}}/gi, senderName.split(' ')[0] || senderName)
+        .replace(/{{sender[-_]?email}}/gi, senderEmail)
         .replace(/{{business_name}}/gi, config.settings.business_name || 'Outreach Team')
         .replace(/{{business_address}}/gi, config.settings.business_address || '');
     };
