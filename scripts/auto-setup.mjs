@@ -47,7 +47,7 @@ export const COMPLETE_SCHEMA = {
       ['1. Adding Leads', 'Go to "Details" tab. Add full_name, email, company_name, location. Leave "Sent Status", "Follow up", and "Time" BLANK.', 'The bot only sends emails to rows where Sent Status is completely empty.'],
       ['2. Aliases & Senders', 'Add or remove aliases in "Aliases" tab. Assign to specific inboxes via "inbox_email" or leave blank for auto-domain matching. Toggle is_active to TRUE/FALSE.', 'The bot rotates active aliases for the "From" and "Reply-To" headers while authenticating through your mailbox.'],
       ['3. Email Inboxes & Warmup', 'Add your primary SMTP/IMAP credentials in "Inboxes" tab. Use a 16-character Google App Password (not your normal Google password). Set warmup_enabled to TRUE for automatic peer warmup.', 'Set daily_limit (e.g. 50). Note: If you change your Google password, all App Passwords revoke automatically; generate a new one at myaccount.google.com/apppasswords.'],
-      ['4. Cold Templates & Spintax', 'Edit pitches and subject lines in "Templates" tab. Use tags: {{full_name}}, {{company_name}}, {{location}}, {{other_locations}}, {{clients}}, {{Date}}, {{business_name}}, {{business_address}}.\n\nUse Spintax: {{Hi|Hey|Hello}} or {{option 1 | option 2}} for high open rates.', 'The bot automatically injects legal business details and one-click unsubscribe links.'],
+      ['4. Cold Templates & Spintax', 'Edit pitches and subject lines in "Templates" tab. Use tags: {{full_name}}, {{company_name}}, {{location}}, {{other_locations}}, {{clients}}, {{Date}}, {{sender-name}}, {{sender-first-name}}, {{sender-email}}, {{business_name}}, {{business_address}}.\n\nUse Spintax: {{Hi|Hey|Hello}} or {{option 1 | option 2}} for high open rates.', 'The bot automatically injects legal business details and one-click unsubscribe links.'],
       ['5. Multi-Touch Follow-ups', 'Configure intervals and messages in "Followup_Templates" tab (e.g. Touch 1, 2, 3 with Days_Until_Next).', 'Guaranteed to send from the exact same alias and thread. Follow-ups stop the moment a reply or bounce occurs.'],
       ['6. Campaign Active Toggle', 'In "Settings" tab: set campaign_active = "TRUE" to run outreach, or "FALSE" to pause all campaigns safely.', 'You can also pause specifically with outreach_active = "FALSE" or followup_active = "FALSE".'],
       ['7. High-Speed Bulk Mode', 'In "Settings" tab: set throttle_mode = "adaptive" (safe deliverability shield) or "bulk" (high-speed fixed delay for 1500+ blasts).', 'Adaptive mode slows down on bounces/complaints. Bulk mode ignores penalties for maximum velocity.'],
@@ -140,7 +140,7 @@ export const COMPLETE_SCHEMA = {
       [
         'Cold Pitch V1',
         'Quick question for {{company_name}} - {{Date}}',
-        'Hi {{full_name}},\n\nNoticed your rapid expansion in {{location}}. We recently helped clients like {{clients}} scale their teams across {{other_locations}}.\n\nWould you be open to a quick 5-min sync this week?\n\nBest,\nTeam'
+        'Hi {{full_name}},\n\nNoticed your rapid expansion in {{location}}. We recently helped clients like {{clients}} scale their teams across {{other_locations}}.\n\nWould you be open to a quick 5-min sync this week?\n\nBest regards,\n{{sender-name}}\n{{sender-email}}'
       ]
     ]
   },
@@ -148,9 +148,9 @@ export const COMPLETE_SCHEMA = {
     color: '#D97706',
     headers: ['Follow_Up_Number', 'Days_Until_Next', 'Subject', 'Body'],
     sampleData: [
-      ['1', '3', 'Re:', 'Hi {{full_name}},\n\nJust following up on my previous note regarding {{company_name}}. Let me know if this is relevant.\n\nBest,\nTeam'],
-      ['2', '5', 'Re:', 'Hi {{full_name}},\n\nWanted to float this back to the top of your inbox. Would love to share how we helped {{clients}}.\n\nBest,\nTeam'],
-      ['3', '7', 'Re:', 'Hi {{full_name}},\n\nChecking in one last time to see if {{company_name}} is looking for hiring support this quarter.\n\nBest,\nTeam']
+      ['1', '3', 'Re:', 'Hi {{full_name}},\n\nJust following up on my previous note regarding {{company_name}}. Let me know if this is relevant.\n\nBest,\n{{sender-first-name}}'],
+      ['2', '5', 'Re:', 'Hi {{full_name}},\n\nWanted to float this back to the top of your inbox. Would love to share how we helped {{clients}}.\n\nBest,\n{{sender-first-name}}'],
+      ['3', '7', 'Re:', 'Hi {{full_name}},\n\nChecking in one last time to see if {{company_name}} is looking for hiring support this quarter.\n\nBest,\n{{sender-first-name}}']
     ]
   },
   'Suppressed': {
