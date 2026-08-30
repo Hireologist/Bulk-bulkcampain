@@ -72,8 +72,41 @@ describe('Alerts Module Unit Tests', () => {
       });
 
       assert.strictEqual(res.success, true);
-      assert.ok(capturedPayload.content.includes('Cold Outreach'));
+      assert.ok(capturedPayload);
       assert.strictEqual(capturedPayload.embeds[0].title, '⏱️ Cron Job Schedule Auto-Synchronized');
+      assert.strictEqual(capturedPayload.embeds[0].fields[0].value, '`Sheet-bot - Cold Outreach`');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test('sendRunSummaryAlert formats execution digest embed', async () => {
+    let capturedPayload = null;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (url, opts) => {
+      capturedPayload = JSON.parse(opts.body);
+      return { ok: true };
+    };
+
+    try {
+      const { sendRunSummaryAlert } = await import('../src/alerts.mjs');
+      await sendRunSummaryAlert(
+        {
+          processed: 25,
+          sent: 24,
+          replies: 1,
+          drafts: 0,
+          failed: 0,
+          durationSeconds: 12,
+          errors: 0,
+        },
+        'https://discord.com/api/webhooks/dummy'
+      );
+
+      assert.ok(capturedPayload);
+      assert.strictEqual(capturedPayload.embeds[0].title, '📊 Sheet-bot Execution Digest');
+      assert.strictEqual(capturedPayload.embeds[0].fields[0].value, '25');
+      assert.strictEqual(capturedPayload.embeds[0].fields[1].value, '24');
     } finally {
       globalThis.fetch = originalFetch;
     }
