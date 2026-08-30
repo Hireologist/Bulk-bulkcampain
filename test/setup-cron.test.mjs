@@ -204,3 +204,4 @@ describe('Smart Cron-Job.org Synchronizer Unit Tests', () => {
     assert.strictEqual(upToDate, false);
   });
 });
+  
