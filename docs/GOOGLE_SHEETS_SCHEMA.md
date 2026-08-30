@@ -32,13 +32,16 @@ You can use dynamic placeholders and Spintax variation blocks in your email subj
 
 ### Dynamic Variables
 - `{{full_name}}` — Prospect's full name (e.g. `John Doe`)
-- `{{first_name}}` — Extracted first name (e.g. `John`)
 - `{{company_name}}` — Company name (e.g. `Acme Corp`)
 - `{{location}}` — Prospect's city or region (e.g. `San Francisco`)
-- `{{sender_name}}` — Sender's display name
+- `{{sender-name}}` (or `{{sender_name}}`) — Sender's display name from the active alias (e.g. `Neha`)
+- `{{sender-first-name}}` (or `{{sender_first_name}}`) — Sender's first name (e.g. `Neha`)
+- `{{sender-email}}` (or `{{sender_email}}`) — The active alias email address (e.g. `neha@domain.com`)
 - `{{clients}}` — Randomly picked client name from `Clients` tab
 - `{{other_locations}}` — Randomly picked city from `Locations` tab
 - `{{Date}}` — Today's formatted date
+- `{{business_name}}` — Business name from `Settings` tab
+- `{{business_address}}` — Business address from `Settings` tab
 
 ### Spintax (Spin Syntax)
 Wrap variations in `{{option1 | option2 | option3}}` to generate unique variations per lead:
