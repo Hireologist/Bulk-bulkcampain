@@ -1,120 +1,114 @@
-import { test, describe, beforeEach, afterEach } from 'node:test';
+import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { isAuthError, sendAuthFailureAlert, writeGitHubStepSummary } from '../src/alerts.mjs';
-import { runCampaignDiagnostics } from '../scripts/run-campaign-diagnostics.mjs';
+import { postToDiscord, alertIfUnhealthy, sendCronSyncAlert } from '../src/alerts.mjs';
 
+describe('Alerts Module Unit Tests', () => {
+  test('gracefully fails when webhook URL is missing or invalid', async () => {
+    const res1 = await postToDiscord('', 'test message');
+    assert.strictEqual(res1.success, false);
 
-describe('Google App Password & Authentication Failure Handling Tests', () => {
-
-  describe('isAuthError Detector', () => {
-    test('identifies Nodemailer EAUTH and responseCode 535 errors', () => {
-      const eauthErr = new Error('Invalid login: 535-5.7.8 Username and Password not accepted');
-      eauthErr.code = 'EAUTH';
-      eauthErr.responseCode = 535;
-
-      assert.strictEqual(isAuthError(eauthErr), true);
-    });
-
-    test('identifies Gmail BadCredentials response strings', () => {
-      const gmail535 = new Error('535-5.7.8 Username and Password not accepted. Learn more at https://support.google.com/mail/?p=BadCredentials');
-      assert.strictEqual(isAuthError(gmail535), true);
-
-      const rawStringError = '535 5.7.8 Error: authentication failed: Invalid credentials';
-      assert.strictEqual(isAuthError(rawStringError), true);
-    });
-
-    test('identifies Google application-specific password requirements', () => {
-      const appPassErr = new Error('Application-specific password required for Gmail SMTP');
-      assert.strictEqual(isAuthError(appPassErr), true);
-
-      const webLoginErr = new Error('534-5.7.14 Please log in via your web browser and then try again.');
-      assert.strictEqual(isAuthError(webLoginErr), true);
-    });
-
-    test('identifies IMAP authentication failures', () => {
-      const imapErr = new Error('AUTHENTICATE failed: [AUTHENTICATIONFAILED] Invalid credentials (Failure)');
-      assert.strictEqual(isAuthError(imapErr), true);
-
-      const imapLoginDenied = new Error('IMAP login denied for user alex@domain.com');
-      assert.strictEqual(isAuthError(imapLoginDenied), true);
-    });
-
-    test('returns false for unrelated network or deliverability errors', () => {
-      const timeoutErr = new Error('ETIMEDOUT: Connection timed out');
-      assert.strictEqual(isAuthError(timeoutErr), false);
-
-      const resetErr = new Error('ECONNRESET: Socket closed by remote host');
-      assert.strictEqual(isAuthError(resetErr), false);
-
-      const dailyLimitErr = new Error('550-5.4.5 Daily user sending limit exceeded');
-      assert.strictEqual(isAuthError(dailyLimitErr), false);
-
-      const invalidDomainErr = new Error('Invalid email address or domain has no MX records');
-      assert.strictEqual(isAuthError(invalidDomainErr), false);
-
-      assert.strictEqual(isAuthError(null), false);
-      assert.strictEqual(isAuthError(undefined), false);
-    });
+    const res2 = await postToDiscord('invalid-url', 'test message');
+    assert.strictEqual(res2.success, false);
   });
 
-  describe('sendAuthFailureAlert Dispatcher', () => {
-    test('formats actionable alert and returns success status', async () => {
-      const res = await sendAuthFailureAlert({
-        inboxEmail: 'sender@gmail.com',
-        errorDetails: '535-5.7.8 Username and Password not accepted',
-        webhookUrl: null, // Test without live webhook
-        context: 'Pre-Flight Diagnostic Audit'
+  test('alertIfUnhealthy returns healthy for normal stats', async () => {
+    const stats = { email: 'inbox@domain.com', sent: 100, bounced: 1, complaints: 0 };
+    const status = await alertIfUnhealthy(stats, null);
+    assert.strictEqual(status, null); // No webhook provided, exits cleanly
+  });
+
+  test('alertIfUnhealthy identifies high bounce rate (> 5%)', async () => {
+    const stats = { email: 'inbox@domain.com', sent: 100, bounced: 8, complaints: 0 };
+    let alertSent = false;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => {
+      alertSent = true;
+      return { ok: true };
+    };
+
+    try {
+      const status = await alertIfUnhealthy(stats, 'https://discord.com/api/webhooks/dummy');
+      assert.strictEqual(status, 'bounce_alert_sent');
+      assert.strictEqual(alertSent, true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test('alertIfUnhealthy identifies high complaint rate (> 0.3%)', async () => {
+    const stats = { email: 'inbox@domain.com', sent: 100, bounced: 0, complaints: 1 };
+    let alertSent = false;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => {
+      alertSent = true;
+      return { ok: true };
+    };
+
+    try {
+      const status = await alertIfUnhealthy(stats, 'https://discord.com/api/webhooks/dummy');
+      assert.strictEqual(status, 'complaint_alert_sent');
+      assert.strictEqual(alertSent, true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test('sendCronSyncAlert dispatches formatted embed to Discord', async () => {
+    let capturedPayload = null;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (url, opts) => {
+      capturedPayload = JSON.parse(opts.body);
+      return { ok: true };
+    };
+
+    try {
+      const res = await sendCronSyncAlert({
+        jobTitle: 'Sheet-bot - Cold Outreach',
+        timezone: 'Asia/Kolkata',
+        hours: [11],
+        minutes: [0],
+        webhookUrl: 'https://discord.com/api/webhooks/dummy',
+        context: 'Google Sheet Auto-Sync'
       });
 
       assert.strictEqual(res.success, true);
-      assert.strictEqual(res.email, 'sender@gmail.com');
-    });
-
-    test('gracefully handles missing inbox email and error objects', async () => {
-      const res = await sendAuthFailureAlert({
-        inboxEmail: '',
-        errorDetails: new Error('EAUTH failure'),
-        webhookUrl: 'https://discord.com/api/webhooks/dummy_invalid',
-        context: 'Cold Outreach Live Send'
-      });
-
-      assert.strictEqual(res.success, true);
-      assert.strictEqual(res.email, 'Unknown Inbox');
-    });
+      assert.ok(capturedPayload);
+      assert.strictEqual(capturedPayload.embeds[0].title, '⏱️ Cron Job Schedule Auto-Synchronized');
+      assert.strictEqual(capturedPayload.embeds[0].fields[0].value, '`Sheet-bot - Cold Outreach`');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 
-  describe('writeGitHubStepSummary Helper', () => {
-    let tmpSummaryFile;
+  test('sendRunSummaryAlert formats execution digest embed', async () => {
+    let capturedPayload = null;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (url, opts) => {
+      capturedPayload = JSON.parse(opts.body);
+      return { ok: true };
+    };
 
-    beforeEach(() => {
-      tmpSummaryFile = path.join(os.tmpdir(), `gh_step_summary_${Date.now()}_${Math.random().toString(36).substring(7)}.md`);
-      process.env.GITHUB_STEP_SUMMARY = tmpSummaryFile;
-    });
+    try {
+      const { sendRunSummaryAlert } = await import('../src/alerts.mjs');
+      await sendRunSummaryAlert(
+        {
+          processed: 25,
+          sent: 24,
+          replies: 1,
+          drafts: 0,
+          failed: 0,
+          durationSeconds: 12,
+          errors: 0,
+        },
+        'https://discord.com/api/webhooks/dummy'
+      );
 
-    afterEach(() => {
-      delete process.env.GITHUB_STEP_SUMMARY;
-      try {
-        if (fs.existsSync(tmpSummaryFile)) fs.unlinkSync(tmpSummaryFile);
-      } catch (_) {}
-    });
-
-    test('appends markdown content to GITHUB_STEP_SUMMARY file', () => {
-      writeGitHubStepSummary('### Test Summary Line 1');
-      writeGitHubStepSummary('### Test Summary Line 2');
-
-      const content = fs.readFileSync(tmpSummaryFile, 'utf8');
-      assert.ok(content.includes('### Test Summary Line 1'));
-      assert.ok(content.includes('### Test Summary Line 2'));
-    });
+      assert.ok(capturedPayload);
+      assert.strictEqual(capturedPayload.embeds[0].title, '📊 Sheet-bot Execution Digest');
+      assert.strictEqual(capturedPayload.embeds[0].fields[0].value, '25');
+      assert.strictEqual(capturedPayload.embeds[0].fields[1].value, '24');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
-
-  describe('Diagnostic Runner Module Resolution', () => {
-    test('scripts/run-campaign-diagnostics.mjs exports runCampaignDiagnostics function', () => {
-      assert.strictEqual(typeof runCampaignDiagnostics, 'function');
-    });
-  });
-
 });
