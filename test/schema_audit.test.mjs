@@ -210,5 +210,26 @@ describe('🩺 Sheet Schema & Column Integrity Verification Test Suite', () => {
       assert.ok(appendedKeyNames.includes('unsubscribe_url'));
       assert.ok(appendedKeyNames.includes('groq_api_key'));
     });
+
+    test('verifies Code.gs and auto-setup.mjs schemas are 100% synchronized', async () => {
+      const fs = await import('fs');
+      const path = await import('path');
+      const codeGsContent = fs.readFileSync(path.resolve('apps-script/Code.gs'), 'utf-8');
+
+      // Verify every tab defined in COMPLETE_SCHEMA is present in Code.gs
+      for (const [tabName, config] of Object.entries(COMPLETE_SCHEMA)) {
+        assert.ok(codeGsContent.includes(`'${tabName}'`), `Code.gs is missing tab definition for "${tabName}"`);
+        for (const header of config.headers) {
+          assert.ok(codeGsContent.includes(`'${header}'`) || codeGsContent.includes(`"${header}"`), 
+            `Code.gs is missing header "${header}" for tab "${tabName}"`);
+        }
+      }
+
+      // Verify all settings keys are present in Code.gs
+      const settingsKeys = COMPLETE_SCHEMA['Settings'].sampleData.map(r => r[0]);
+      for (const key of settingsKeys) {
+        assert.ok(codeGsContent.includes(`'${key}'`), `Code.gs is missing settings key "${key}"`);
+      }
+    });
   });
 });
