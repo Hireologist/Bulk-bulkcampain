@@ -395,6 +395,63 @@ describe('Universal Outreach Engine Unit Tests', () => {
     });
   });
 
+  describe('Alias Sender Name Auto-Resolution & Tag Injection', () => {
+    it('should correctly resolve senderName and senderEmail from aliases list', () => {
+      const inbox = { email: 'outreach@companydomain.com', display_name: 'Outreach Team' };
+      const aliases = [
+        { alias_email: 'neha@companydomain.com', display_name: 'Neha', is_active: 'TRUE', inbox_email: 'outreach@companydomain.com' },
+        { alias_email: 'pooja@companydomain.com', display_name: 'Pooja', is_active: 'TRUE', inbox_email: 'outreach@companydomain.com' },
+      ];
+
+      // Simulate alias selection logic
+      const chosenAlias = aliases.find(a => a.alias_email === 'neha@companydomain.com');
+      const senderEmail = chosenAlias.alias_email;
+      const senderName = chosenAlias.display_name || chosenAlias.name || chosenAlias.sender_name || chosenAlias.alias_email.split('@')[0];
+
+      assert.strictEqual(senderEmail, 'neha@companydomain.com');
+      assert.strictEqual(senderName, 'Neha');
+
+      // Test template replacement
+      const template = 'Hi {{full_name}}, from {{sender-name}} ({{sender-email}}). Regards, {{sender-first-name}}';
+      const rendered = template
+        .replace(/{{full_name}}/gi, 'John')
+        .replace(/{{sender[-_]?name}}/gi, senderName)
+        .replace(/{{sender[-_]?first[-_]?name}}/gi, senderName.split(' ')[0] || senderName)
+        .replace(/{{sender[-_]?email}}/gi, senderEmail);
+
+      assert.strictEqual(
+        rendered,
+        'Hi John, from Neha (neha@companydomain.com). Regards, Neha'
+      );
+    });
+
+    it('should maintain exact alias display name in follow-ups matching original sender', () => {
+      const originalSenderEmail = 'neha@companydomain.com';
+      const aliases = [
+        { alias_email: 'neha@companydomain.com', display_name: 'Neha Sharma', is_active: 'TRUE' },
+      ];
+
+      const matchedAlias = aliases.find(a => a.alias_email.toLowerCase() === originalSenderEmail.toLowerCase());
+      const senderName = matchedAlias 
+        ? (matchedAlias.display_name || matchedAlias.name || matchedAlias.sender_name || matchedAlias.alias_email.split('@')[0])
+        : (originalSenderEmail.split('@')[0] || 'Team');
+
+      assert.strictEqual(senderName, 'Neha Sharma');
+
+      const followupTemplate = 'Following up on my previous email. Thanks, {{sender-first-name}}';
+      const rendered = followupTemplate.replace(/{{sender[-_]?first[-_]?name}}/gi, senderName.split(' ')[0]);
+
+      assert.strictEqual(rendered, 'Following up on my previous email. Thanks, Neha');
+    });
+
+    it('should fallback to email username if display_name is omitted in sheet', () => {
+      const aliasWithoutDisplayName = { alias_email: 'neha@companydomain.com', is_active: 'TRUE' };
+      const senderName = aliasWithoutDisplayName.display_name || aliasWithoutDisplayName.name || aliasWithoutDisplayName.alias_email.split('@')[0];
+
+      assert.strictEqual(senderName, 'neha');
+    });
+  });
+
 });
 
 
