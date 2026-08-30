@@ -178,4 +178,29 @@ describe('Smart Cron-Job.org Synchronizer Unit Tests', () => {
     const upToDate = isJobUpToDate(existingDetails, desired);
     assert.strictEqual(upToDate, false);
   });
+
+  test('isJobUpToDate returns false when wdays (weekdays) differs', () => {
+    const jobConfig = JOBS_TO_CREATE[1]; // Mon-Sat wdays [1,2,3,4,5,6]
+    const desired = buildJobPayload(repoName, dispatchUrl, pat, jobConfig);
+
+    const existingDetails = {
+      jobDetails: {
+        url: dispatchUrl,
+        enabled: true,
+        requestMethod: 1,
+        schedule: {
+          timezone: 'Asia/Kolkata',
+          hours: [10],
+          minutes: [0],
+          wdays: [1, 2, 3, 4, 5], // Mon-Fri only!
+        },
+        extendedData: {
+          body: JSON.stringify({ ref: 'main', inputs: { action: 'outreach' } }),
+        },
+      },
+    };
+
+    const upToDate = isJobUpToDate(existingDetails, desired);
+    assert.strictEqual(upToDate, false);
+  });
 });
