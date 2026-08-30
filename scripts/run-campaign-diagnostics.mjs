@@ -653,14 +653,18 @@ export async function runCampaignDiagnostics() {
             const title = (j.title || '').toLowerCase();
             const url = (j.url || '').toLowerCase();
 
-            // Match by workflow URL if present
+            // 1. Match by specific job title first (e.g. "Cold Outreach", "Followup Engine", "Inbox Checker")
+            if (title.includes(targetTitle)) {
+              if (!repoName || title.includes(repoName.toLowerCase()) || url.includes(`/${repoName.toLowerCase()}/`)) return true;
+              return true;
+            }
+
+            // 2. Fallback match by exact workflow file in dispatch URL
             if (targetJob.workflow && url.includes(`/workflows/${targetJob.workflow.toLowerCase()}/dispatches`)) {
               if (!repoName || url.includes(`/${repoName.toLowerCase()}/`)) return true;
             }
 
-            // Match by title
-            if (repoName && title.includes(repoName.toLowerCase()) && title.includes(targetTitle)) return true;
-            return title.includes(targetTitle);
+            return false;
           });
           if (matched) {
             try {
