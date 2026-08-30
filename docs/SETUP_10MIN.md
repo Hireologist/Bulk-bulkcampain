@@ -77,9 +77,11 @@ Rotate realistic human sender names while using the same authenticated SMTP mail
 
 ### 4. 📝 Pitch Templates (`Templates` Tab)
 Compose your cold email pitch using dynamic template tags and **Spintax rotation**:
-- `{{full_name}}`: Prospect's first name
+- `{{full_name}}`: Prospect's full name
 - `{{company_name}}`: Prospect's company
 - `{{location}}`: Prospect's city
+- `{{sender-name}}` / `{{sender-first-name}}`: Active sender alias display name / first name (e.g. `Neha`)
+- `{{sender-email}}`: Active sender alias email address (e.g. `neha@domain.com`)
 - `{{other_locations}}`: Randomized other cities you operate in
 - `{{clients}}`: Randomized portfolio client references from `Clients` tab
 - `{{Date}}`: Today's localized date format
