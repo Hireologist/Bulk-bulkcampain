@@ -90,6 +90,7 @@ function createOutreachSystem(forceReset = false) {
         ['github_pat', '', 'Optional: your GitHub Personal Access Token (auto-read by setup-cron script)'],
         ['business_name', 'Outreach Team', 'Company or brand name injected into legal footer'],
         ['business_address', '123 Business St, Tech Hub', 'Physical or registered business address for CAN-SPAM compliance'],
+        ['unsubscribe_url', '', 'Optional: Custom web URL for 1-click unsubscribe (leave blank for automatic mailto unsubscribe)'],
         ['discord_alerts_enabled', 'TRUE', 'Master switch for Discord alerts (TRUE = Enabled, FALSE = Muted)'],
         ['discord_domain_alerts_enabled', 'TRUE', 'Set to TRUE to receive Discord alerts for SPF/DMARC domain failures, or FALSE to mute them'],
         ['discord_updates_webhook', 'https://discord.com/api/webhooks/...', 'Channel webhook for Start/End/Digest alerts'],
