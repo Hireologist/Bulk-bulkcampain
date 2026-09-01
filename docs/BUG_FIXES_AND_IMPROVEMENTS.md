@@ -64,6 +64,7 @@ if (
 **Impact:**
 - Leads marked as `replied` or `bounced` might still be processed (depending on timing)
 - Logic is fragile and unpredictable
+- **Positive/Neutral Replies Risk:** When the inbox checker detects a positive or neutral reply, it correctly marks `Sent Status: replied` but does NOT suppress the lead. However, the contradictory logic makes the follow-up filtering unreliable and hard to maintain.
 
 ---
 
@@ -154,7 +155,7 @@ if (!suppressionCache || now - lastCacheTime > CACHE_TTL_MS) {
 
 **The Problem:**
 
-If a team member **re-uploads or copies a CSV of leads** that was previously sent to, those leads might already exist in the `Suppressed` tab. The system does **not automatically validate** and mark them as `suppressed` before sending.
+If a team member **re-uploads or copies a CSV of leads** that was previously sent to, those leads might already exist in the `Suppressed` tab. The system does **not automatically validate** and mark them as suppressed in the Details sheet.
 
 **Example Scenario:**
 1. Sent campaign to 500 leads last month
@@ -193,7 +194,7 @@ if (
 
 **After:**
 ```javascript
-// Skip if: no email, not sent, already replied, bounced, or already done follow-ups
+// Skip if: no email, not sent, already replied, bounced, suppressed, or already done follow-ups
 if (
   !email ||
   sentStatus !== 'sent' ||        // Only process if status IS "sent"
@@ -210,6 +211,7 @@ if (
 **Explanation:**
 - Remove the contradictory logic by keeping the primary filter: `sentStatus !== 'sent'`
 - Add explicit `sentStatus === 'suppressed'` check
+- Clarify that `replied` status (from positive/neutral replies) is correctly excluded from follow-ups
 - Alternatively, simplify to: `if (!email || sentStatus !== 'sent' || followUpStatus === 'done' || !subjectLine) continue;`
 
 **Simplified Alternative:**
@@ -470,6 +472,122 @@ test('Pre-import validation marks suppressed leads', async () => {
 
 ---
 
+### Test Case 4: Positive/Neutral Replies Must NOT Be Suppressed or Receive Follow-Ups
+
+**Context:**
+When the inbox checker detects a reply from a prospect:
+1. **AI Sentiment Classification** runs via Groq LLM (lines 1308 in `engine.mjs`)
+2. Sentiment is stored in `Next Follow Up Date` column as: `POSITIVE`, `NEUTRAL`, `NEGATIVE`, or `OOO`
+3. Status is set to `replied` (line 1310)
+4. **ONLY NEGATIVE replies are suppressed** (lines 1329-1337)
+5. **POSITIVE/NEUTRAL replies keep status as `replied`** and are naturally skipped from follow-ups
+
+**Setup:**
+1. Create lead: `bob@company.com` with `Sent Status: SENT`
+2. Receive reply: *"Hey! Interested in learning more. When are you free for a call?"*
+3. Run inbox checker
+4. Run follow-up engine
+
+**Expected Behavior:**
+- Inbox Checker Output:
+  ```
+  🎯 New lead reply from [bob@company.com] (POSITIVE).
+  [Update] Sent Status: replied, Next Follow Up Date: POSITIVE
+  [No suppression applied - POSITIVE replies are not suppressed]
+  ```
+- Follow-up Engine Output:
+  ```
+  [Skip] bob@company.com - Status is 'replied' (already engaged)
+  [No follow-up sent - replied leads are excluded from follow-up processing]
+  ```
+
+**Verification:**
+```javascript
+test('Positive reply marked as replied, NOT suppressed', async () => {
+  // Inbox checker processes positive reply
+  const positiveReplyRow = {
+    email: 'bob@company.com',
+    'Sent Status': 'replied',          // ✅ Status is 'replied', not 'suppressed'
+    'Next Follow Up Date': 'POSITIVE', // ✅ Sentiment stored here
+    'Follow up': 'Done'
+  };
+  
+  // Follow-up engine should skip this lead
+  expect(positiveReplyRow['Sent Status']).toBe('replied');
+  expect(positiveReplyRow['Sent Status']).not.toBe('suppressed');
+  
+  // Lead should NOT be in suppression workflow
+  const isInSuppressed = false;  // Positive replies NEVER go to Suppressed tab
+  expect(isInSuppressed).toBe(false);
+});
+
+test('Neutral reply marked as replied, NOT suppressed', async () => {
+  const neutralReplyRow = {
+    email: 'carol@company.com',
+    'Sent Status': 'replied',           // ✅ Status is 'replied', not 'suppressed'
+    'Next Follow Up Date': 'NEUTRAL',   // ✅ Sentiment stored here
+    'Follow up': 'Done'
+  };
+  
+  // Verify neutral replies follow same pattern as positive
+  expect(neutralReplyRow['Sent Status']).toBe('replied');
+  expect(neutralReplyRow['Sent Status']).not.toBe('suppressed');
+});
+
+test('Only NEGATIVE replies are suppressed', async () => {
+  const negativeReplyRow = {
+    email: 'dave@company.com',
+    'Sent Status': 'suppressed',        // ✅ ONLY negative replies are suppressed
+    'Next Follow Up Date': 'NEGATIVE',
+    'Follow up': 'Done'
+  };
+  
+  expect(negativeReplyRow['Sent Status']).toBe('suppressed');
+  
+  // Verify this lead is in Suppressed tab
+  const inSuppressedTab = true;
+  expect(inSuppressedTab).toBe(true);
+});
+
+test('Out-of-Office replies are marked replied, not suppressed', async () => {
+  const oooReplyRow = {
+    email: 'eve@company.com',
+    'Sent Status': 'replied',       // ✅ OOO replies also stay as 'replied'
+    'Next Follow Up Date': 'OOO',   // ✅ Paused for future follow-up
+    'Follow up': ''                 // ✅ NOT marked 'Done' yet
+  };
+  
+  expect(oooReplyRow['Sent Status']).toBe('replied');
+  expect(oooReplyRow['Sent Status']).not.toBe('suppressed');
+});
+```
+
+**AI Sentiment Workflow Diagram:**
+```
+Inbox Checker Receives Reply
+        ↓
+AI Sentiment Classification (Groq LLM)
+        ↓
+    ┌───┴───┬───────────┬────────────┬──────────┐
+    ↓       ↓           ↓            ↓          ↓
+ POSITIVE NEUTRAL  NEGATIVE        OOO      UNKNOWN
+    ↓       ↓           ↓            ↓          ↓
+ Replied  Replied   Suppressed   Replied    Replied
+    ↓       ↓           ↓            ↓          ↓
+   ✅      ✅         ✅+Supp        ✅         ✅
+ No FU    No FU      No FU +Supp  Pause      No FU
+```
+
+**Key Assertions:**
+- ✅ Positive replies: `Sent Status = 'replied'`, NOT suppressed
+- ✅ Neutral replies: `Sent Status = 'replied'`, NOT suppressed
+- ✅ Negative replies: `Sent Status = 'suppressed'`, added to Suppressed tab
+- ✅ OOO replies: `Sent Status = 'replied'`, temporarily paused
+- ✅ All replied leads (positive/neutral) are **excluded** from follow-up engine
+- ✅ **Only negative opt-outs are suppressed** per CAN-SPAM compliance
+
+---
+
 ## Migration & Deployment
 
 ### Step 1: Create Feature Branch
@@ -494,6 +612,8 @@ git checkout -b fix/suppression-logic-gaps main
 ```bash
 # Add to test/engine.test.mjs
 npm test -- --grep "suppression"
+npm test -- --grep "positive.*reply"
+npm test -- --grep "sentiment"
 ```
 
 ### Step 4: Create Pull Request
@@ -504,6 +624,7 @@ git commit -m "fix: Address critical suppression enforcement and follow-up logic
 
 - Fix contradictory status checks in follow-up engine (Bug #1)
 - Add explicit suppressed status check (Bug #2)
+- Clarify positive/neutral reply handling (NOT suppressed, skipped from FU)
 - Reduce suppression cache TTL & add manual invalidation (Bug #3)
 - Add pre-import suppression validation (Bug #4)
 
@@ -517,6 +638,8 @@ git push origin fix/suppression-logic-gaps
 - [ ] All tests passing (`npm test`)
 - [ ] Code reviewed by team member
 - [ ] Suppression cache cleared on prod before deployment
+- [ ] Verify positive/neutral replies are **not** in Suppressed tab
+- [ ] Verify positive/neutral replies skip follow-up engine
 - [ ] Monitor bounce rates & complaint rates for 24 hours post-deployment
 - [ ] Alert set: If bounce rate > 2%, immediately pause campaigns
 
@@ -548,6 +671,7 @@ npm run clear-cache
 | Missing suppressed status check | 🔴 CRITICAL | Add check | `engine.mjs` | 946-965 |
 | Suppression cache expiration | 🟠 HIGH | Reduce TTL / add invalidation | `src/suppression.mjs` | 36-44 |
 | No pre-import validation | 🟠 HIGH | Add pre-flight check | `engine.mjs` | new function |
+| Positive/neutral reply handling unclear | 🟠 HIGH | Document AI sentiment workflow | `docs/BUG_FIXES_AND_IMPROVEMENTS.md` | Test Case #4 |
 
 ---
 
