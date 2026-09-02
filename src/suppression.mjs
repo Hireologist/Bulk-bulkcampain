@@ -72,6 +72,27 @@ export function clearSuppressionCache() {
 }
 
 /**
+ * Detect if an incoming email reply is an explicit unsubscribe / opt-out request
+ * (e.g. clicking the mailto unsubscribe link or explicit opt-out keywords).
+ * Standard sales objections (e.g. "not interested", "no budget") are NOT treated as opt-outs.
+ */
+export function isOptOutReply(subject = '', body = '') {
+  const combined = `${subject} ${body}`.toLowerCase();
+  const optOutPatterns = [
+    'unsubscribe',
+    'opt out',
+    'opt-out',
+    'remove me',
+    'stop emailing',
+    'take me off',
+    'do not email',
+    'dont email',
+    'leave me alone'
+  ];
+  return optOutPatterns.some((pattern) => combined.includes(pattern));
+}
+
+/**
  * Build CAN-SPAM compliant footer with business details & unsubscribe link
  */
 export function buildSenderFooter(settings = {}, lead = {}, secret = 'default-secret') {

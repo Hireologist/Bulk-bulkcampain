@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 // 🛡️ Production Hardening Modules
 import { getSendDelay, trackOutcome, checkAndResetDailyStats } from './src/throttle.mjs';
 import { sendWithRetry } from './src/retry.mjs';
-import { isSuppressed, addToSuppression, buildSenderFooter } from './src/suppression.mjs';
+import { isSuppressed, addToSuppression, buildSenderFooter, isOptOutReply } from './src/suppression.mjs';
 import { alertIfUnhealthy, sendRunSummaryAlert, postToDiscord, isAuthError, sendAuthFailureAlert } from './src/alerts.mjs';
 import { runWarmupCycle } from './src/warmup.mjs';
 import { parseSpintax } from './src/spintax.mjs';
@@ -956,11 +956,32 @@ export async function runFollowups() {
     if (
       !email ||
       sentStatus !== 'sent' ||
-      sentStatus === 'replied' ||
-      sentStatus === 'bounced' ||
       followUpStatus === 'done' ||
       !subjectLine
     ) {
+      continue;
+    }
+
+    // 🛡️ Global Suppression Check for Follow-ups
+    const suppressed = await isSuppressed(email, async () => {
+      const suppRows = await loadTab(sheets, 'Suppressed');
+      return suppRows.map(r => r.email || r.Email);
+    });
+
+    if (suppressed) {
+      console.log(`⛔ Suppressed email skipped during follow-up: ${email}`);
+      const rowNum = i + 2;
+      row[col['Sent Status']] = 'suppressed';
+      row[col['Follow up']] = 'Done';
+      if (col['Next Follow Up Date'] !== undefined) {
+        row[col['Next Follow Up Date']] = 'SUPPRESSED';
+      }
+      await sendWithRetry(() => sheets.spreadsheets.values.update({
+        spreadsheetId: sheets.spreadsheetId || SPREADSHEET_ID,
+        range: `'Details'!A${rowNum}:Z${rowNum}`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: [row] },
+      }));
       continue;
     }
 
@@ -1318,18 +1339,28 @@ export async function runInboxChecker() {
           }
           rows[rIdx][col['Time']] = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: true });
 
-          // ⛔ Automatically add to Suppression List if lead opted out or expressed negative sentiment (checking both Subject & Body)
-          const rawReplyText = `${emailSubject} ${emailBody}`.toLowerCase();
-          const isOptOut = sentiment === 'NEGATIVE' || 
-                           rawReplyText.includes('unsubscribe') || 
-                           rawReplyText.includes('opt out') || 
-                           rawReplyText.includes('remove me') || 
-                           rawReplyText.includes('stop emailing');
+          // ⛔ Check if lead explicitly requested unsubscribe / removal (via mailto link or explicit keywords)
+          const isOptOut = isOptOutReply(emailSubject, emailBody);
 
           if (isOptOut) {
             rows[rIdx][col['Sent Status']] = 'suppressed';
+            if (col['Next Follow Up Date'] !== undefined) {
+              rows[rIdx][col['Next Follow Up Date']] = 'SUPPRESSED';
+            }
             try {
-              await addToSuppression(sheets, sheets.spreadsheetId || SPREADSHEET_ID, fromAddr, 'Unsubscribed via reply');
+              await addToSuppression(fromAddr, 'Unsubscribed via reply', async (emailToSuppress, reason, timestamp) => {
+                await ensureTabExists(sheets, 'Suppressed', ['email', 'reason', 'added_at']);
+                const sheetsClient = sheets?.sheets || sheets;
+                const spreadsheetId = sheets?.spreadsheetId || SPREADSHEET_ID;
+                await sendWithRetry(() => sheetsClient.spreadsheets.values.append({
+                  spreadsheetId,
+                  range: "'Suppressed'!A:Z",
+                  valueInputOption: 'USER_ENTERED',
+                  requestBody: {
+                    values: [[emailToSuppress, reason, timestamp]],
+                  },
+                }), { retries: 2 });
+              });
               console.log(`⛔ Auto-suppressed lead [${fromAddr}] in Suppressed tab.`);
             } catch (supErr) {
               console.warn(`Could not add ${fromAddr} to Suppressed tab:`, supErr.message);
