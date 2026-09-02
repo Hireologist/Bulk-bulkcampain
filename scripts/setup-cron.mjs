@@ -210,7 +210,7 @@ export function parseScheduleFromSettings(settings = {}) {
 
 export const JOBS_TO_CREATE = parseScheduleFromSettings({});
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function buildJobPayload(repoName, defaultDispatchUrl, cleanPat, jobConfig) {
   let targetUrl = defaultDispatchUrl;
