@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import dns from 'node:dns/promises';
 import { isDailyLimitError, getRandomFormattedDate, runSingleLeadOutreach, classifyEmailWithAi, normalizeDate } from '../engine.mjs';
+import { isOptOutReply, stripQuotedReply } from '../src/suppression.mjs';
 
 describe('Universal Outreach Engine Unit Tests', () => {
 
@@ -237,15 +238,33 @@ describe('Universal Outreach Engine Unit Tests', () => {
     });
 
     it('should detect opt-outs in subject line even if email body is blank', () => {
-      const subject = 'Unsubscribe - prospect@client.com';
-      const body = '';
-      const rawReplyText = `${subject} ${body}`.toLowerCase();
-      const isOptOut = rawReplyText.includes('unsubscribe') || 
-                       rawReplyText.includes('opt out') || 
-                       rawReplyText.includes('remove me') || 
-                       rawReplyText.includes('stop emailing');
+      assert.strictEqual(isOptOutReply('Unsubscribe - prospect@client.com', ''), true);
+      assert.strictEqual(isOptOutReply('Re: Unsubscribe', ''), true);
+      assert.strictEqual(isOptOutReply('Stop emailing', ''), true);
+    });
 
-      assert.strictEqual(isOptOut, true);
+    it('should NOT detect opt-out when body quotes trail email containing unsubscribe link', () => {
+      const trailEmailBody = `Hey Neha,
+I'm attaching two profiles that need to be closed.
+On Thu, Sep 3, 2026 at 11:02 AM Neha wrote:
+> Sent by Hireologist
+> Unsubscribe from these emails.`;
+
+      assert.strictEqual(
+        isOptOutReply('Recruitment proposal | Nuuk X Hireologist || 03-09-2026', trailEmailBody),
+        false
+      );
+    });
+
+    it('should protect POSITIVE or NEUTRAL leads from being overridden by opt-out logic', () => {
+      const isLeadOptOut = (sentiment, subject, body) => {
+        return (sentiment !== 'POSITIVE' && sentiment !== 'NEUTRAL') && isOptOutReply(subject, body);
+      };
+
+      // Even if subject contains unsubscribe, genuine positive sentiment is protected
+      assert.strictEqual(isLeadOptOut('POSITIVE', 'Re: Recruitment proposal', 'Attaching 2 profiles'), false);
+      assert.strictEqual(isLeadOptOut('NEUTRAL', 'Re: Recruitment proposal', 'Reach back next quarter'), false);
+      assert.strictEqual(isLeadOptOut('NEGATIVE', 'Unsubscribe - prospect@client.com', ''), true);
     });
   });
 

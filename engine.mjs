@@ -734,6 +734,22 @@ export async function runSingleLeadOutreach(singleLeadPayload = {}) {
       continue;
     }
 
+    // 🛡️ Global Suppression Check for Single Lead Dispatch
+    const suppressed = await isSuppressed(email, async () => {
+      const suppRows = await loadTab(sheetsObj, 'Suppressed');
+      return suppRows.map(r => r.email || r.Email);
+    });
+    if (suppressed) {
+      const skipMsg = `⛔ Suppressed email skipped during single lead dispatch: ${email}`;
+      console.log(skipMsg);
+      await notifyDiscord(
+        activeWebhookUrl,
+        `⛔ **Single Lead Dispatch Skipped (Suppressed)**\nLead \`${email}\` is present in the Suppressed list. Dispatch aborted.`
+      );
+      results.push({ email, success: false, error: 'Email is suppressed' });
+      continue;
+    }
+
     // Select active inbox & template
     const inbox = config.inboxes[Math.floor(Math.random() * config.inboxes.length)];
     let senderEmail = inbox.email;
