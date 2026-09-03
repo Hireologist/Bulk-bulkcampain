@@ -238,11 +238,77 @@ async function isValidEmailDomain(email) {
 }
 
 // Check IST cutoff
-function isPastCutoff(hour = 18, minute = 30) {
+export function isPastCutoff(hour = 18, minute = 30) {
   const now = new Date();
   const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
   const totalMins = ist.getUTCHours() * 60 + ist.getUTCMinutes();
   return totalMins >= (parseInt(hour, 10) * 60 + parseInt(minute, 10));
+}
+
+/**
+ * Evaluates whether a long-running campaign runner should stop or trigger a clean auto-restart
+ * before hitting GitHub's 6-hour (360-minute) hard job cancellation ceiling.
+ */
+export function shouldRestartWorkflow({
+  elapsedMs = 0,
+  maxRuntimeMs = 315 * 60 * 1000, // 5 hours 15 minutes default (safe before 360m limit)
+  isCutoff = false,
+  remainingLeads = 0,
+  allInboxesExhausted = false,
+} = {}) {
+  if (isCutoff) {
+    return { shouldStop: true, shouldRestart: false, reason: 'Cutoff time reached (6:30 PM IST)' };
+  }
+  if (allInboxesExhausted) {
+    return { shouldStop: true, shouldRestart: false, reason: 'All inboxes hit daily limits / quotas' };
+  }
+  if (remainingLeads <= 0) {
+    return { shouldStop: true, shouldRestart: false, reason: 'No remaining leads to process' };
+  }
+  if (elapsedMs >= maxRuntimeMs) {
+    return { shouldStop: true, shouldRestart: true, reason: 'Max runner runtime reached before cutoff time' };
+  }
+  return { shouldStop: false, shouldRestart: false, reason: 'Within normal execution limits' };
+}
+
+/**
+ * Dispatch a fresh GitHub Action workflow run to continue outreach/follow-up seamlessly with a fresh 6h clock.
+ * Reads github_pat directly from Google Sheet Settings (with fallback to env).
+ */
+export async function triggerWorkflowRestart(actionName, repoFullName, pat, httpClient = axios) {
+  const token = (pat || process.env.GH_PAT || process.env.GITHUB_PAT || '').trim();
+  if (!token) {
+    console.warn(`⚠️ Cannot trigger workflow restart for [${actionName}]: No github_pat found in Google Sheet Settings or environment.`);
+    return false;
+  }
+
+  const repo = (repoFullName || process.env.GITHUB_REPOSITORY || 'Rohanpatel16/Sheet-bot').trim();
+  const url = `https://api.github.com/repos/${repo}/actions/workflows/outreach.yml/dispatches`;
+
+  try {
+    const res = await httpClient.post(
+      url,
+      {
+        ref: 'main',
+        inputs: { action: actionName }
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/vnd.github.v3+json',
+          'User-Agent': 'Sheet-bot-Engine'
+        }
+      }
+    );
+    const ok = res && (res.status === 204 || res.status === 200 || res.status === 201);
+    if (ok) {
+      console.log(`🚀 Successfully triggered fresh workflow run for action [${actionName}] on ${repo}.`);
+    }
+    return Boolean(ok);
+  } catch (err) {
+    console.error(`❌ Failed to trigger workflow restart for [${actionName}]:`, err.response?.data || err.message);
+    return false;
+  }
 }
 
 // Discord Webhook Notification
@@ -347,6 +413,8 @@ export async function runColdOutreach() {
   let draftsSavedThisRun = 0;
   const MAX_PER_RUN = parseInt(config.settings.max_emails_per_run || '1000', 10);
   const isReviewMode = (config.settings.send_mode || '').trim().toLowerCase() === 'review';
+  const runStartTime = Date.now();
+  const maxRuntimeMs = parseInt(config.settings.max_runtime_minutes || '315', 10) * 60 * 1000;
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
@@ -408,9 +476,36 @@ export async function runColdOutreach() {
       break;
     }
 
-    // Cutoff time check (6:30 PM IST)
-    if (isPastCutoff(config.settings.cutoff_hour_ist, config.settings.cutoff_minute_ist)) {
-      console.log('⏰ Cutoff time reached (6:30 PM IST). Stopping.');
+    // Cutoff time check (6:30 PM IST) & 6-Hour Runner Chaining Guard
+    const isCutoff = isPastCutoff(config.settings.cutoff_hour_ist, config.settings.cutoff_minute_ist);
+    const elapsedMs = Date.now() - runStartTime;
+    const remainingLeads = rows.slice(i).filter(r => {
+      const e = (r[col['email']] || '').trim();
+      const s = (r[col['Sent Status']] || '').trim().toLowerCase();
+      return e && !['sent', 'replied', 'bounced', 'suppressed', 'draft — pending review'].includes(s);
+    }).length;
+    const allInboxesExhausted = limitExceededInboxes.size >= config.inboxes.length;
+
+    const runtimeDecision = shouldRestartWorkflow({
+      elapsedMs,
+      maxRuntimeMs,
+      isCutoff,
+      remainingLeads,
+      allInboxesExhausted
+    });
+
+    if (runtimeDecision.shouldStop) {
+      console.log(`⏹️ Cold outreach stopping: ${runtimeDecision.reason}`);
+      if (runtimeDecision.shouldRestart) {
+        const pat = config.settings.github_pat;
+        const alertMsg = `⏳ **Runner Limit Threshold (5h 15m) Reached**\n`
+          + `📊 **Status:** Still before ${config.settings.cutoff_hour_ist || 18}:${config.settings.cutoff_minute_ist || 30} IST cutoff.\n`
+          + `📨 **Remaining Leads:** \`${remainingLeads}\`\n`
+          + `🔄 **Action:** Spawning a fresh runner to continue sending without interruption...`;
+        console.log(alertMsg);
+        await notifyDiscord(config.settings.discord_updates_webhook, alertMsg);
+        await triggerWorkflowRestart('outreach', process.env.GITHUB_REPOSITORY, pat);
+      }
       break;
     }
 
@@ -958,6 +1053,8 @@ export async function runFollowups() {
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const runStartTime = Date.now();
+  const maxRuntimeMs = parseInt(config.settings.max_runtime_minutes || '315', 10) * 60 * 1000;
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
@@ -999,6 +1096,41 @@ export async function runFollowups() {
         requestBody: { values: [row] },
       }));
       continue;
+    }
+
+    // Cutoff time check (6:30 PM IST) & 6-Hour Runner Chaining Guard
+    const isCutoff = isPastCutoff(config.settings.cutoff_hour_ist, config.settings.cutoff_minute_ist);
+    const elapsedMs = Date.now() - runStartTime;
+    const remainingLeads = rows.slice(i).filter(r => {
+      const e = (r[col['email']] || '').trim();
+      const s = (r[col['Sent Status']] || '').trim().toLowerCase();
+      const f = (r[col['Follow up']] || '').trim().toLowerCase();
+      const subj = r[col['Subject Line']];
+      return e && s === 'sent' && f !== 'done' && subj;
+    }).length;
+    const allInboxesExhausted = limitExceededInboxes.size >= config.inboxes.length;
+
+    const runtimeDecision = shouldRestartWorkflow({
+      elapsedMs,
+      maxRuntimeMs,
+      isCutoff,
+      remainingLeads,
+      allInboxesExhausted
+    });
+
+    if (runtimeDecision.shouldStop) {
+      console.log(`⏹️ Follow-up engine stopping: ${runtimeDecision.reason}`);
+      if (runtimeDecision.shouldRestart) {
+        const pat = config.settings.github_pat;
+        const alertMsg = `⏳ **Follow-up Runner Threshold (5h 15m) Reached**\n`
+          + `📊 **Status:** Still before ${config.settings.cutoff_hour_ist || 18}:${config.settings.cutoff_minute_ist || 30} IST cutoff.\n`
+          + `📨 **Remaining Leads:** \`${remainingLeads}\`\n`
+          + `🔄 **Action:** Spawning a fresh runner to continue follow-ups without interruption...`;
+        console.log(alertMsg);
+        await notifyDiscord(config.settings.discord_updates_webhook, alertMsg);
+        await triggerWorkflowRestart('followup', process.env.GITHUB_REPOSITORY, pat);
+      }
+      break;
     }
 
     if (nextDueDateStr) {
