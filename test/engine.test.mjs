@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import dns from 'node:dns/promises';
-import { isDailyLimitError, getRandomFormattedDate, runSingleLeadOutreach, classifyEmailWithAi, normalizeDate } from '../engine.mjs';
+import { isDailyLimitError, getRandomFormattedDate, runSingleLeadOutreach, classifyEmailWithAi, normalizeDate, shouldRestartWorkflow, triggerWorkflowRestart } from '../engine.mjs';
 import { isOptOutReply, stripQuotedReply } from '../src/suppression.mjs';
 
 describe('Universal Outreach Engine Unit Tests', () => {
@@ -480,6 +480,95 @@ On Thu, Sep 3, 2026 at 11:02 AM Neha wrote:
       const senderName = aliasWithoutDisplayName.display_name || aliasWithoutDisplayName.name || aliasWithoutDisplayName.alias_email.split('@')[0];
 
       assert.strictEqual(senderName, 'neha');
+    });
+  });
+
+  describe('Auto-Restart & 6-Hour Runner Chaining Logic', () => {
+    it('should NOT restart if current time is past cutoff', () => {
+      const decision = shouldRestartWorkflow({
+        elapsedMs: 5.5 * 60 * 60 * 1000,
+        maxRuntimeMs: 5.25 * 60 * 60 * 1000,
+        isCutoff: true,
+        remainingLeads: 50,
+        allInboxesExhausted: false
+      });
+      assert.strictEqual(decision.shouldStop, true);
+      assert.strictEqual(decision.shouldRestart, false);
+      assert.match(decision.reason, /cutoff/i);
+    });
+
+    it('should NOT restart if all inboxes have exhausted daily limits', () => {
+      const decision = shouldRestartWorkflow({
+        elapsedMs: 5.5 * 60 * 60 * 1000,
+        maxRuntimeMs: 5.25 * 60 * 60 * 1000,
+        isCutoff: false,
+        remainingLeads: 50,
+        allInboxesExhausted: true
+      });
+      assert.strictEqual(decision.shouldStop, true);
+      assert.strictEqual(decision.shouldRestart, false);
+      assert.match(decision.reason, /inboxes/i);
+    });
+
+    it('should NOT restart if zero leads remain', () => {
+      const decision = shouldRestartWorkflow({
+        elapsedMs: 5.5 * 60 * 60 * 1000,
+        maxRuntimeMs: 5.25 * 60 * 60 * 1000,
+        isCutoff: false,
+        remainingLeads: 0,
+        allInboxesExhausted: false
+      });
+      assert.strictEqual(decision.shouldStop, true);
+      assert.strictEqual(decision.shouldRestart, false);
+      assert.match(decision.reason, /leads/i);
+    });
+
+    it('should NOT restart if execution time is well within limits', () => {
+      const decision = shouldRestartWorkflow({
+        elapsedMs: 1 * 60 * 60 * 1000, // 1 hour
+        maxRuntimeMs: 5.25 * 60 * 60 * 1000,
+        isCutoff: false,
+        remainingLeads: 100,
+        allInboxesExhausted: false
+      });
+      assert.strictEqual(decision.shouldStop, false);
+      assert.strictEqual(decision.shouldRestart, false);
+    });
+
+    it('should RESTART if max runtime is reached before cutoff with pending leads and available inboxes', () => {
+      const decision = shouldRestartWorkflow({
+        elapsedMs: 5.3 * 60 * 60 * 1000, // 5.3 hours
+        maxRuntimeMs: 5.25 * 60 * 60 * 1000, // 5.25 hours (315 mins)
+        isCutoff: false,
+        remainingLeads: 120,
+        allInboxesExhausted: false
+      });
+      assert.strictEqual(decision.shouldStop, true);
+      assert.strictEqual(decision.shouldRestart, true);
+      assert.match(decision.reason, /runtime/i);
+    });
+
+    it('should construct correct GitHub workflow dispatch payload with PAT', async () => {
+      let capturedPost = null;
+      const mockAxios = {
+        post: async (url, body, config) => {
+          capturedPost = { url, body, config };
+          return { status: 204 };
+        }
+      };
+
+      const success = await triggerWorkflowRestart('outreach', 'Rohanpatel16/Sheet-bot', 'ghp_testToken12345', mockAxios);
+
+      assert.strictEqual(success, true);
+      assert.strictEqual(capturedPost.url, 'https://api.github.com/repos/Rohanpatel16/Sheet-bot/actions/workflows/outreach.yml/dispatches');
+      assert.strictEqual(capturedPost.body.ref, 'main');
+      assert.strictEqual(capturedPost.body.inputs.action, 'outreach');
+      assert.strictEqual(capturedPost.config.headers.Authorization, 'Bearer ghp_testToken12345');
+    });
+
+    it('should return false safely if github_pat is missing', async () => {
+      const success = await triggerWorkflowRestart('outreach', 'Rohanpatel16/Sheet-bot', '');
+      assert.strictEqual(success, false);
     });
   });
 
