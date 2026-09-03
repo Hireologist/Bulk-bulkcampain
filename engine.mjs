@@ -1340,7 +1340,8 @@ export async function runInboxChecker() {
           rows[rIdx][col['Time']] = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: true });
 
           // ⛔ Check if lead explicitly requested unsubscribe / removal (via mailto link or explicit keywords)
-          const isOptOut = isOptOutReply(emailSubject, emailBody);
+          // Positive and Neutral replies are genuine engagement and must not be treated as opt-outs
+          const isOptOut = (sentiment !== 'POSITIVE' && sentiment !== 'NEUTRAL') && isOptOutReply(emailSubject, emailBody);
 
           if (isOptOut) {
             rows[rIdx][col['Sent Status']] = 'suppressed';
@@ -1377,7 +1378,9 @@ export async function runInboxChecker() {
           const leadName = rows[rIdx][col['full_name']] || fromAddr;
           const companyName = rows[rIdx][col['company_name']] || 'Company';
 
-          if (isExistingLead) {
+          if (isOptOut) {
+            // Opt-out lead handled; no positive or re-reply notifications needed
+          } else if (isExistingLead) {
             // 💬 Existing Lead Re-reply / Follow-up Notification
             const rereplyWebhook = config.settings.discord_rereply_webhook || config.settings.discord_positive_webhook || config.settings.discord_updates_webhook;
             console.log(`🎯 Re-reply from existing lead [${fromAddr}] (${sentiment}). Notifying re-reply channel...`);

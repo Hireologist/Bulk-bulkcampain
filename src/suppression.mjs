@@ -72,14 +72,49 @@ export function clearSuppressionCache() {
 }
 
 /**
- * Detect if an incoming email reply is an explicit unsubscribe / opt-out request
- * (e.g. clicking the mailto unsubscribe link or explicit opt-out keywords).
+ * Strip quoted trail/history from an email body so we only inspect the prospect's actual reply.
+ */
+export function stripQuotedReply(body = '') {
+  if (!body) return '';
+  const quoteMarkers = [
+    /\r?\n\s*On\s+.+?wrote:\s*$/im,
+    /\r?\n\s*-+\s*Original Message\s*-+/i,
+    /\r?\n\s*From:\s+/i,
+    /\r?\n\s*Sent by\s+/i,
+    /\r?\n\s*_{10,}/,
+  ];
+
+  let cleaned = body;
+  for (const marker of quoteMarkers) {
+    const match = cleaned.search(marker);
+    if (match !== -1) {
+      cleaned = cleaned.substring(0, match);
+    }
+  }
+
+  return cleaned
+    .split(/\r?\n/)
+    .filter(line => !line.trim().startsWith('>'))
+    .join('\n')
+    .trim();
+}
+
+/**
+ * Detect if an incoming email reply is an explicit unsubscribe / opt-out request.
+ * CRITICAL FIX: "unsubscribe" MUST ONLY be checked from the subject line.
+ * Quoted thread history in the email body routinely contains "Unsubscribe from these emails."
+ * from our own outgoing footer, which caused false positive auto-suppressions of positive leads.
  * Standard sales objections (e.g. "not interested", "no budget") are NOT treated as opt-outs.
  */
 export function isOptOutReply(subject = '', body = '') {
-  const combined = `${subject} ${body}`.toLowerCase();
-  const optOutPatterns = [
-    'unsubscribe',
+  const subjectLower = (subject || '').toLowerCase();
+
+  // 1. "unsubscribe" is ONLY checked from the subject (e.g. mailto clicks or manual unsubscribe subjects)
+  if (subjectLower.includes('unsubscribe')) {
+    return true;
+  }
+
+  const explicitOptOutPatterns = [
     'opt out',
     'opt-out',
     'remove me',
@@ -89,7 +124,15 @@ export function isOptOutReply(subject = '', body = '') {
     'dont email',
     'leave me alone'
   ];
-  return optOutPatterns.some((pattern) => combined.includes(pattern));
+
+  // 2. Check other opt-out phrases in the subject
+  if (explicitOptOutPatterns.some((pattern) => subjectLower.includes(pattern))) {
+    return true;
+  }
+
+  // 3. Check explicit opt-out phrases in the actual prospect reply body (ignoring quoted trail mail)
+  const cleanedBody = stripQuotedReply(body).toLowerCase();
+  return explicitOptOutPatterns.some((pattern) => cleanedBody.includes(pattern));
 }
 
 /**
