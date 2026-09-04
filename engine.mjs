@@ -377,6 +377,59 @@ export function isCampaignActive(settings = {}, type = 'general') {
   return true;
 }
 
+// Helper for full template personalization & spintax resolution (handles nested variables inside spintax)
+export function applyTemplateVariables(text = '', {
+  fullName = 'there',
+  companyName = 'your company',
+  location = 'your city',
+  randomLocs = '',
+  clientStr = '',
+  dateStr = '',
+  senderName = 'Team',
+  senderEmail = '',
+  businessName = 'Outreach Team',
+  businessAddress = '',
+  followUpNumber = ''
+} = {}) {
+  if (!text || typeof text !== 'string') return '';
+
+  // 1. First pass: interpolate variables so any tags inside spintax choices (e.g. {{Hi {{full_name}}|Hello {{full_name}}}}) are resolved
+  let resolved = text
+    .replace(/{{full_name}}/gi, fullName)
+    .replace(/{{company_name}}/gi, companyName)
+    .replace(/{{location}}/gi, location)
+    .replace(/{{other_locations}}/gi, randomLocs)
+    .replace(/{{clients}}/gi, clientStr)
+    .replace(/{{Date}}/gi, dateStr || getRandomFormattedDate())
+    .replace(/{{follow_up_number}}/gi, String(followUpNumber))
+    .replace(/{{sender[-_]?name}}/gi, senderName)
+    .replace(/{{sender[-_]?first[-_]?name}}/gi, senderName.split(' ')[0] || senderName)
+    .replace(/{{sender[-_]?email}}/gi, senderEmail)
+    .replace(/{{business_name}}/gi, businessName)
+    .replace(/{{business_address}}/gi, businessAddress);
+
+  // 2. Parse spintax on the resolved text (handles spintax with or without variables)
+  resolved = parseSpintax(resolved);
+
+  return resolved;
+}
+
+// Helper to format follow-up subject lines without duplicate Re: prefixes
+export function formatFollowupSubject(templateSubject = 'Re:', existingSubject = '') {
+  const prefix = (templateSubject || 'Re:').trim();
+  const rawSubj = (existingSubject || '').trim();
+
+  if (/^re:\s*/i.test(rawSubj)) {
+    if (/^re:?$/i.test(prefix)) {
+      return rawSubj;
+    }
+    const cleanSubj = rawSubj.replace(/^re:\s*/i, '').trim();
+    return `${prefix} ${cleanSubj}`.trim();
+  }
+
+  return `${prefix} ${rawSubj}`.trim();
+}
+
 // ============================================================================
 // 🚀 1. COLD OUTREACH SENDER
 // ============================================================================
@@ -562,21 +615,17 @@ export async function runColdOutreach() {
     const clientStr = config.clients.sort(() => 0.5 - Math.random()).slice(0, 5)
       .map(c => c.client_name || c.name).join(', ');
 
-    const replaceTags = (txt = '') => {
-      const parsedSpintax = parseSpintax(txt);
-      return parsedSpintax
-        .replace(/{{full_name}}/gi, fullName)
-        .replace(/{{company_name}}/gi, companyName)
-        .replace(/{{location}}/gi, location)
-        .replace(/{{other_locations}}/gi, randomLocs)
-        .replace(/{{clients}}/gi, clientStr)
-        .replace(/{{Date}}/gi, getRandomFormattedDate())
-        .replace(/{{sender[-_]?name}}/gi, senderName)
-        .replace(/{{sender[-_]?first[-_]?name}}/gi, senderName.split(' ')[0] || senderName)
-        .replace(/{{sender[-_]?email}}/gi, senderEmail)
-        .replace(/{{business_name}}/gi, config.settings.business_name || 'Outreach Team')
-        .replace(/{{business_address}}/gi, config.settings.business_address || '');
-    };
+    const replaceTags = (txt = '') => applyTemplateVariables(txt, {
+      fullName,
+      companyName,
+      location,
+      randomLocs,
+      clientStr,
+      senderName,
+      senderEmail,
+      businessName: config.settings.business_name,
+      businessAddress: config.settings.business_address
+    });
 
     const subject = replaceTags(template.Subject || template['Subject line']);
     let body = replaceTags(template.Body || template.body);
@@ -873,21 +922,17 @@ export async function runSingleLeadOutreach(singleLeadPayload = {}) {
     const clientStr = config.clients.sort(() => 0.5 - Math.random()).slice(0, 5)
       .map(c => c.client_name || c.name).join(', ');
 
-    const replaceTags = (txt = '') => {
-      const parsedSpintax = parseSpintax(txt);
-      return parsedSpintax
-        .replace(/{{full_name}}/gi, fullName)
-        .replace(/{{company_name}}/gi, companyName)
-        .replace(/{{location}}/gi, location)
-        .replace(/{{other_locations}}/gi, randomLocs)
-        .replace(/{{clients}}/gi, clientStr)
-        .replace(/{{Date}}/gi, getRandomFormattedDate())
-        .replace(/{{sender[-_]?name}}/gi, senderName)
-        .replace(/{{sender[-_]?first[-_]?name}}/gi, senderName.split(' ')[0] || senderName)
-        .replace(/{{sender[-_]?email}}/gi, senderEmail)
-        .replace(/{{business_name}}/gi, config.settings.business_name || 'Outreach Team')
-        .replace(/{{business_address}}/gi, config.settings.business_address || '');
-    };
+    const replaceTags = (txt = '') => applyTemplateVariables(txt, {
+      fullName,
+      companyName,
+      location,
+      randomLocs,
+      clientStr,
+      senderName,
+      senderEmail,
+      businessName: config.settings.business_name,
+      businessAddress: config.settings.business_address
+    });
 
     const subject = replaceTags(template.Subject || template['Subject line']);
     let body = replaceTags(template.Body || template.body);
@@ -902,17 +947,17 @@ export async function runSingleLeadOutreach(singleLeadPayload = {}) {
     });
 
     try {
-      await transporter.sendMail({
+      await sendWithRetry(() => transporter.sendMail({
         from: `"${senderName}" <${senderEmail}>`,
         to: email,
         subject,
         html: body,
-      });
+      }), { retries: 2, baseDelay: 1500 });
 
       console.log(`[Sent ${idx + 1}/${leadsList.length}] "${senderName}" <${senderEmail}> -> ${email}`);
 
       // Update or Append row in 'Details' Google Sheet
-      const detailsRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Details'!A:Z" });
+      const detailsRes = await sendWithRetry(() => sheets.spreadsheets.values.get({ spreadsheetId, range: "'Details'!A:Z" }), { retries: 2 });
       const [headers, ...rows] = detailsRes.data.values || [];
       const col = Object.fromEntries((headers || []).map((h, i) => [(h || '').trim(), i]));
 
@@ -935,24 +980,38 @@ export async function runSingleLeadOutreach(singleLeadPayload = {}) {
         targetRow[col['Follow Up Count']] = 0;
         targetRow[col['Follow up']] = '';
 
-        await sheets.spreadsheets.values.update({
+        await sendWithRetry(() => sheets.spreadsheets.values.update({
           spreadsheetId,
           range: `'Details'!A${rowNum}:Z${rowNum}`,
           valueInputOption: 'USER_ENTERED',
           requestBody: { values: [targetRow] },
-        });
+        }), { retries: 2 });
       } else {
-        const newRow = [
-          fullName, email, companyName, location,
-          subject, senderEmail, 'SENT', timeStr,
-          dateStr, '', 0, ''
-        ];
-        await sheets.spreadsheets.values.append({
+        const rowData = {
+          'full_name': fullName,
+          'email': email,
+          'company_name': companyName,
+          'location': location,
+          'Subject Line': subject,
+          'Sent From': senderEmail,
+          'Sent Status': 'SENT',
+          'Time': timeStr,
+          'Date Sent': dateStr,
+          'Follow up': '',
+          'Follow Up Count': 0,
+          'Next Follow Up Date': '',
+          'Summary': ''
+        };
+        const newRow = headers && headers.length > 0
+          ? headers.map(h => rowData[(h || '').trim()] ?? '')
+          : [fullName, email, companyName, location, subject, senderEmail, 'SENT', timeStr, dateStr, '', 0, ''];
+
+        await sendWithRetry(() => sheets.spreadsheets.values.append({
           spreadsheetId,
           range: "'Details'!A:Z",
           valueInputOption: 'USER_ENTERED',
           requestBody: { values: [newRow] },
-        });
+        }), { retries: 2 });
       }
 
       results.push({ email, success: true });
@@ -1156,12 +1215,12 @@ export async function runFollowups(sheetsObj = null, customConfig = null) {
     if (config.followupTemplates.length > 0 && nextCount > config.followupTemplates.length) {
       const rowNum = i + 2;
       row[col['Follow up']] = 'Done';
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: SPREADSHEET_ID,
+      await sendWithRetry(() => sheets.spreadsheets.values.update({
+        spreadsheetId: sheets.spreadsheetId || SPREADSHEET_ID,
         range: `'Details'!A${rowNum}:Z${rowNum}`,
         valueInputOption: 'USER_ENTERED',
         requestBody: { values: [row] },
-      });
+      }), { retries: 2 });
       continue;
     }
 
@@ -1206,24 +1265,20 @@ export async function runFollowups(sheetsObj = null, customConfig = null) {
     const clientStr = config.clients.sort(() => 0.5 - Math.random()).slice(0, 5)
       .map(c => c.client_name || c.name).join(', ');
 
-    const replaceTags = (txt = '') => {
-      const parsedSpintax = parseSpintax(txt);
-      return parsedSpintax
-        .replace(/{{full_name}}/gi, fullName)
-        .replace(/{{company_name}}/gi, companyName)
-        .replace(/{{Date}}/gi, getRandomFormattedDate())
-        .replace(/{{location}}/gi, location)
-        .replace(/{{other_locations}}/gi, randomLocs)
-        .replace(/{{clients}}/gi, clientStr)
-        .replace(/{{follow_up_number}}/gi, String(nextCount))
-        .replace(/{{sender[-_]?name}}/gi, senderName)
-        .replace(/{{sender[-_]?first[-_]?name}}/gi, senderName.split(' ')[0] || senderName)
-        .replace(/{{sender[-_]?email}}/gi, senderEmail)
-        .replace(/{{business_name}}/gi, config.settings.business_name || 'Outreach Team')
-        .replace(/{{business_address}}/gi, config.settings.business_address || '');
-    };
+    const replaceTags = (txt = '') => applyTemplateVariables(txt, {
+      fullName,
+      companyName,
+      location,
+      randomLocs,
+      clientStr,
+      followUpNumber: nextCount,
+      senderName,
+      senderEmail,
+      businessName: config.settings.business_name,
+      businessAddress: config.settings.business_address
+    });
 
-    const finalSubj = `${replaceTags(template.Subject || 'Re:')} ${subjectLine}`.trim();
+    const finalSubj = formatFollowupSubject(replaceTags(template.Subject || 'Re:'), subjectLine);
     let finalBody = replaceTags(template.Body || template.body);
     const footer = buildSenderFooter(config.settings, { email, campaign: 'followup', senderEmail }, process.env.UNSUBSCRIBE_SECRET);
     finalBody = `${finalBody}${footer}`;
@@ -1236,12 +1291,12 @@ export async function runFollowups(sheetsObj = null, customConfig = null) {
     });
 
     try {
-      await transporter.sendMail({
+      await sendWithRetry(() => transporter.sendMail({
         from: `"${senderName}" <${senderEmail}>`,
         to: email,
         subject: finalSubj,
         html: finalBody,
-      });
+      }), { retries: 3, baseDelay: 2000 });
 
       console.log(`[Follow-up #${nextCount}] Sent from "${senderName}" <${senderEmail}> to: ${email}`);
 
@@ -1262,12 +1317,12 @@ export async function runFollowups(sheetsObj = null, customConfig = null) {
         row[col['Follow up']] = 'Done';
       }
 
-      await sheets.spreadsheets.values.update({
+      await sendWithRetry(() => sheets.spreadsheets.values.update({
         spreadsheetId: sheets.spreadsheetId || SPREADSHEET_ID,
         range: `'Details'!A${rowNum}:Z${rowNum}`,
         valueInputOption: 'USER_ENTERED',
         requestBody: { values: [row] },
-      });
+      }), { retries: 2 });
     } catch (e) {
       console.error(`Follow-up failed for ${email}:`, e.message);
       await recordFailedSend(sheets, email, `followup_${nextCount}`, e.message);
@@ -1310,7 +1365,12 @@ export async function runFollowups(sheetsObj = null, customConfig = null) {
       }
     }
 
-    await new Promise(r => setTimeout(r, 20000));
+    const throttleMode = String(config.settings.throttle_mode || 'adaptive').toLowerCase();
+    const isBulkMode = throttleMode === 'bulk' || throttleMode === 'fixed' || throttleMode === 'turbo';
+    const minD = Math.max(0, parseInt(config.settings.min_delay_seconds || (isBulkMode ? '1' : '15'), 10) * 1000);
+    const maxD = Math.max(minD, parseInt(config.settings.max_delay_seconds || (isBulkMode ? '3' : '30'), 10) * 1000);
+    const delay = isBulkMode ? Math.floor(Math.random() * (maxD - minD + 1)) + minD : 20000;
+    await new Promise(r => setTimeout(r, delay));
   }
 }
 
@@ -1440,8 +1500,9 @@ export async function runInboxChecker() {
       // 3. Process each message without blocking IMAP connection
       const processedFromAddrs = new Set();
       for (const msg of unseenMessages) {
-        const parsed = await simpleParser(msg.source);
-        const fromAddr = parsed.from?.value[0]?.address?.toLowerCase() || '';
+        try {
+          const parsed = await simpleParser(msg.source);
+          const fromAddr = parsed.from?.value[0]?.address?.toLowerCase() || '';
 
         if (!fromAddr || internalEmails.includes(fromAddr)) continue;
 
@@ -1574,8 +1635,11 @@ export async function runInboxChecker() {
             }
           }
         }
+      } catch (msgErr) {
+        console.warn(`⚠️ Error processing message in ${inbox.email}:`, msgErr.message);
       }
-    } catch (e) {
+    }
+  } catch (e) {
       if (isAuthError(e)) {
         console.error(`🚨 IMAP authentication failed for ${inbox.email}:`, e.message);
         await sendAuthFailureAlert({
