@@ -8,6 +8,7 @@ import {
   parseMinutesList,
   parseWeekdays,
   JOBS_TO_CREATE,
+  callCronJobApiWithRetry,
 } from '../scripts/setup-cron.mjs';
 
 describe('Smart Cron-Job.org Synchronizer Unit Tests', () => {
@@ -202,6 +203,41 @@ describe('Smart Cron-Job.org Synchronizer Unit Tests', () => {
 
     const upToDate = isJobUpToDate(existingDetails, desired);
     assert.strictEqual(upToDate, false);
+  });
+
+  test('callCronJobApiWithRetry progressively backs off on 429 (1s -> 2s -> 5s -> 10s) until completed', async () => {
+    const sleepCalls = [];
+    const mockSleep = async (ms) => {
+      sleepCalls.push(ms);
+    };
+
+    let attempts = 0;
+    const mockApi = async () => {
+      attempts++;
+      if (attempts < 5) {
+        return {
+          status: 429,
+          ok: false,
+          headers: new Map(),
+          text: async () => 'Too Many Requests'
+        };
+      }
+      return {
+        status: 200,
+        ok: true,
+        json: async () => ({ jobId: 123456 })
+      };
+    };
+
+    const res = await callCronJobApiWithRetry(mockApi, {
+      onSleep: mockSleep,
+      actionName: 'test 429 backoff'
+    });
+
+    assert.strictEqual(res.status, 200);
+    assert.strictEqual(attempts, 5);
+    // Should have backed off progressively: 1s, 2s, 5s, 10s
+    assert.deepStrictEqual(sleepCalls, [1000, 2000, 5000, 10000]);
   });
 });
   

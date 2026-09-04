@@ -280,106 +280,106 @@ export function isJobUpToDate(existingJobDetails, desiredPayload) {
   return true;
 }
 
-export async function fetchExistingJobs(cronApiKey, retries = 4) {
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    const res = await fetch('https://api.cron-job.org/jobs', {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${cronApiKey}`,
-        'Content-Type': 'application/json',
-      },
-    });
+export const DEFAULT_CRON_RETRY_DELAYS = [1000, 2000, 5000, 10000, 10000, 10000, 10000, 10000];
 
-    if (res.status === 429 && attempt < retries) {
-      const waitMs = attempt * 2500;
-      await sleep(waitMs);
-      continue;
+/**
+ * Executes a cron-job.org API request with progressive backoff on 429:
+ * 1s -> 2s -> 5s -> 10s -> 10s until done.
+ */
+export async function callCronJobApiWithRetry(apiFn, {
+  delays = DEFAULT_CRON_RETRY_DELAYS,
+  actionName = 'cron-job.org request',
+  onSleep = sleep,
+} = {}) {
+  let attempt = 0;
+  while (true) {
+    attempt++;
+    const res = await apiFn();
+
+    if (res.status === 429) {
+      if (attempt <= delays.length) {
+        const waitMs = delays[attempt - 1];
+        console.warn(`⏳ [Rate Limited 429] on ${actionName}. Waiting ${waitMs / 1000}s before retry (attempt ${attempt}/${delays.length})...`);
+        await onSleep(waitMs);
+        continue;
+      }
+      const errText = await res.text().catch(() => '');
+      throw new Error(`Failed on ${actionName} after ${attempt} attempts (429): ${errText}`);
     }
 
     if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`Failed to list cron-job.org jobs (${res.status}): ${errText}`);
+      const errText = await res.text().catch(() => '');
+      throw new Error(`Failed to ${actionName} (${res.status}): ${errText}`);
     }
 
-    const data = await res.json();
-    return data.jobs || [];
+    return res;
   }
-  return [];
 }
 
-export async function fetchJobDetails(cronApiKey, jobId, retries = 3) {
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    const res = await fetch(`https://api.cron-job.org/jobs/${jobId}`, {
+export async function fetchExistingJobs(cronApiKey, options = {}) {
+  const res = await callCronJobApiWithRetry(
+    () => fetch('https://api.cron-job.org/jobs', {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${cronApiKey}`,
         'Content-Type': 'application/json',
       },
-    });
+    }),
+    { actionName: 'list cron-job.org jobs', ...options }
+  );
 
-    if (res.status === 429 && attempt < retries) {
-      const waitMs = attempt * 2000;
-      await sleep(waitMs);
-      continue;
-    }
-
-    if (!res.ok) return null;
-    return await res.json();
-  }
-  return null;
+  const data = await res.json();
+  return data.jobs || [];
 }
 
-export async function updateCronJob(cronApiKey, jobId, payload, retries = 3) {
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    const res = await fetch(`https://api.cron-job.org/jobs/${jobId}`, {
+export async function fetchJobDetails(cronApiKey, jobId, options = {}) {
+  try {
+    const res = await callCronJobApiWithRetry(
+      () => fetch(`https://api.cron-job.org/jobs/${jobId}`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${cronApiKey}`,
+          'Content-Type': 'application/json',
+        },
+      }),
+      { actionName: `fetch details for job ${jobId}`, ...options }
+    );
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function updateCronJob(cronApiKey, jobId, payload, options = {}) {
+  await callCronJobApiWithRetry(
+    () => fetch(`https://api.cron-job.org/jobs/${jobId}`, {
       method: 'PATCH',
       headers: {
         Authorization: `Bearer ${cronApiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(payload),
-    });
-
-    if (res.status === 429 && attempt < retries) {
-      const waitMs = attempt * 2500;
-      await sleep(waitMs);
-      continue;
-    }
-
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`Failed to update cron job ${jobId} (${res.status}): ${errText}`);
-    }
-    return true;
-  }
+    }),
+    { actionName: `update cron job ${jobId}`, ...options }
+  );
   return true;
 }
 
-export async function createCronJob(cronApiKey, payload, retries = 3) {
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    const res = await fetch('https://api.cron-job.org/jobs', {
+export async function createCronJob(cronApiKey, payload, options = {}) {
+  const res = await callCronJobApiWithRetry(
+    () => fetch('https://api.cron-job.org/jobs', {
       method: 'PUT',
       headers: {
         Authorization: `Bearer ${cronApiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(payload),
-    });
+    }),
+    { actionName: `create cron job "${payload?.job?.title || 'job'}"`, ...options }
+  );
 
-    if (res.status === 429 && attempt < retries) {
-      const waitMs = attempt * 2500;
-      await sleep(waitMs);
-      continue;
-    }
-
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`Failed to create cron job (${res.status}): ${errText}`);
-    }
-
-    const data = await res.json();
-    return data.jobId;
-  }
+  const data = await res.json();
+  return data.jobId;
 }
 
 /**
@@ -447,7 +447,7 @@ export async function syncCronJobs(cronApiKey, githubPat, dispatchUrl, repoName,
       summary.failed++;
     }
 
-    await sleep(1000); // Rate limit pacing
+    await sleep(2000); // Proactive rate limit pacing between cron jobs
   }
 
   return summary;
