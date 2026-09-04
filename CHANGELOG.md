@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.1] - 2026-09-04
+
+### Security & Hardening
+- **GitHub Actions Security**: Remediated shell injection risk in `.github/workflows/outreach.yml` by mapping all untrusted client payload variables through step-level environment variables.
+- **Workflow Security Test Suite**: Added `test/workflow_security.test.mjs` to automatically guard against unsafe template interpolation in CI/CD `run:` blocks.
+
+### Fixed & Enhanced
+- **Deliverability & DNS Checking (`src/dns-check.mjs`)**:
+  - Added case-insensitive matching for DMARC and SPF tags (`v=dmarc1`).
+  - Added multi-chunk DNS TXT record concatenation to prevent split SPF/DMARC records from failing checks.
+- **Robust Spintax Resolution (`src/spintax.mjs`)**:
+  - Implemented balanced bracket parsing (`Math.min(openBraces.length, closeBraces.length)`) and stateless while condition loops to seamlessly resolve nested spintax without leaking brackets or pipe characters.
+- **Resilient Exponential Backoff (`src/retry.mjs`)**:
+  - Added `isFatal(err)` predicate support to immediately short-circuit permanent authentication failures (SMTP 535 / EAUTH) without delaying alerts.
+- **Repository Hygiene**:
+  - Removed stale duplicate `gcc_tracker.py` from root directory.
+  - Added `*.db` to `.gitignore` and untracked `scripts/gcc_leads.db` from version control.
+
 ## [2.2.0] - 2026-08-28
 
 ### Added

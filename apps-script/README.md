@@ -348,17 +348,24 @@ gantt
 #### 1. Spintax & Dynamic Variable Parser (`utils/spintax.mjs`)
 ```javascript
 /**
- * Recursively parses nested Spintax: {Hi|Hey|{Hello|Greetings}}
+ * Recursively parses single, double, and triple bracket Spintax:
+ * {{Hi|Hey|Hello}} or {{{a|b}}} or {Hi|{Hello|Greetings}}
  */
 export function parseSpintax(text = '') {
-  const spintaxRegex = /\{([^{}]+)\}/;
-  let matches;
-  while ((matches = spintaxRegex.exec(text)) !== null) {
-    const options = matches[1].split('|');
-    const randomChoice = options[Math.floor(Math.random() * options.length)];
-    text = text.replace(matches[0], randomChoice);
+  if (!text || typeof text !== 'string') return '';
+  let current = text;
+  const spintaxRegex = /(\{{1,3})([^{}]+?\|[^{}]+?)(\}{1,3})/;
+  let iterations = 0;
+  while (spintaxRegex.test(current) && iterations < 25) {
+    current = current.replace(spintaxRegex, (_, openBraces, choices, closeBraces) => {
+      const options = choices.split('|').map((c) => c.trim());
+      const chosen = options[Math.floor(Math.random() * options.length)];
+      const matchCount = Math.min(openBraces.length, closeBraces.length);
+      return openBraces.slice(matchCount) + chosen + closeBraces.slice(matchCount);
+    });
+    iterations++;
   }
-  return text;
+  return current;
 }
 ```
 
