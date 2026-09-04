@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import dns from 'node:dns/promises';
-import { isDailyLimitError, getRandomFormattedDate, runSingleLeadOutreach, classifyEmailWithAi, normalizeDate, shouldRestartWorkflow, triggerWorkflowRestart } from '../engine.mjs';
+import { isDailyLimitError, getRandomFormattedDate, runSingleLeadOutreach, classifyEmailWithAi, normalizeDate, shouldRestartWorkflow, triggerWorkflowRestart, runFollowups } from '../engine.mjs';
 import { isOptOutReply, stripQuotedReply } from '../src/suppression.mjs';
 
 describe('Universal Outreach Engine Unit Tests', () => {
@@ -569,6 +569,59 @@ On Thu, Sep 3, 2026 at 11:02 AM Neha wrote:
     it('should return false safely if github_pat is missing', async () => {
       const success = await triggerWorkflowRestart('outreach', 'Rohanpatel16/Sheet-bot', '');
       assert.strictEqual(success, false);
+    });
+  });
+
+  describe('Follow-up Engine Safety & Graceful Exits', () => {
+    it('should exit safely without error when followup campaign is paused', async () => {
+      const mockConfig = {
+        settings: { followup_active: 'FALSE' },
+        inboxes: [],
+        followupTemplates: []
+      };
+      const res = await runFollowups({}, mockConfig);
+      assert.strictEqual(res.success, true);
+      assert.match(res.message, /paused/i);
+    });
+
+    it('should exit safely without throwing when no active inboxes are configured', async () => {
+      const mockConfig = {
+        settings: { campaign_active: 'TRUE', followup_active: 'TRUE' },
+        inboxes: [],
+        followupTemplates: [{ Subject: 'Follow-up', Body: 'Checking in' }]
+      };
+      const res = await runFollowups({}, mockConfig);
+      assert.strictEqual(res.success, true);
+      assert.match(res.message, /no active inboxes/i);
+    });
+
+    it('should exit safely without throwing when no follow-up templates are found', async () => {
+      const mockConfig = {
+        settings: { campaign_active: 'TRUE', followup_active: 'TRUE' },
+        inboxes: [{ email: 'sender@domain.com' }],
+        followupTemplates: []
+      };
+      const res = await runFollowups({}, mockConfig);
+      assert.strictEqual(res.success, true);
+      assert.match(res.message, /no follow-up templates/i);
+    });
+
+    it('should exit safely without throwing when details sheet has no rows or headers', async () => {
+      const mockConfig = {
+        settings: { campaign_active: 'TRUE', followup_active: 'TRUE' },
+        inboxes: [{ email: 'sender@domain.com' }],
+        followupTemplates: [{ Subject: 'Re:', Body: 'Hi' }]
+      };
+      const mockSheets = {
+        spreadsheets: {
+          values: {
+            get: async () => ({ data: { values: [] } })
+          }
+        }
+      };
+      const res = await runFollowups(mockSheets, mockConfig);
+      assert.strictEqual(res.success, true);
+      assert.match(res.message, /no leads found/i);
     });
   });
 
