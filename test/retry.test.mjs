@@ -72,4 +72,33 @@ describe('Retry Module Unit Tests', () => {
     assert.strictEqual(retryEvents[0].attempt, 1);
     assert.strictEqual(retryEvents[0].message, 'Transient error');
   });
+
+  test('short-circuits immediately without retrying when isFatal returns true', async () => {
+    let callCount = 0;
+    const authError = new Error('535 5.7.8 Username and Password not accepted');
+    authError.responseCode = 535;
+
+    await assert.rejects(
+      async () => {
+        await sendWithRetry(
+          async () => {
+            callCount++;
+            throw authError;
+          },
+          {
+            retries: 4,
+            baseDelay: 50,
+            isFatal: (err) => err.responseCode === 535 || err.message.includes('535'),
+          }
+        );
+      },
+      {
+        message: '535 5.7.8 Username and Password not accepted',
+      }
+    );
+
+    // Verifies it failed immediately on attempt 1 without wasting time on retries
+    assert.strictEqual(callCount, 1);
+  });
 });
+

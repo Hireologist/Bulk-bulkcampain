@@ -67,4 +67,14 @@ Team`;
     // Must generate rich entropy/variations
     assert.ok(uniqueEmails.size >= 50);
   });
+
+  test('resolves deeply nested spintax without leaving unparsed pipes or brackets', () => {
+    const nested = '{{First choice | {{Nested 1 | Nested 2}}}} and {A|{B|C}}';
+    for (let i = 0; i < 50; i++) {
+      const res = parseSpintax(nested);
+      assert.strictEqual(res.includes('|'), false, `Result "${res}" should not contain pipe '|'`);
+      assert.strictEqual(res.includes('{'), false, `Result "${res}" should not contain '{'`);
+      assert.strictEqual(res.includes('}'), false, `Result "${res}" should not contain '}'`);
+    }
+  });
 });

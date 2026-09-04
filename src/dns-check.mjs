@@ -3,9 +3,10 @@ import { resolveTxt } from 'node:dns/promises';
 /**
  * Audit SPF and DMARC DNS records for a domain
  * @param {string} domain
+ * @param {Function} [resolver=resolveTxt] Optional DNS resolver function (for testing or custom lookup)
  * @returns {Promise<{domain: string, spf: boolean, dmarc: boolean, spfRecord: string, dmarcRecord: string, checkedAt: string, status: string}>}
  */
-export async function checkDomainAuth(domain) {
+export async function checkDomainAuth(domain, resolver = resolveTxt) {
   const cleanDomain = domain.trim().toLowerCase();
   const result = {
     domain: cleanDomain,
@@ -18,8 +19,11 @@ export async function checkDomainAuth(domain) {
   };
 
   try {
-    const txtRecords = (await resolveTxt(cleanDomain)).flat();
-    const foundSpf = txtRecords.find((r) => typeof r === 'string' && r.startsWith('v=spf1'));
+    const rawRecords = await resolver(cleanDomain);
+    const txtRecords = (Array.isArray(rawRecords) ? rawRecords : [])
+      .map((entry) => (Array.isArray(entry) ? entry.join('') : String(entry)));
+
+    const foundSpf = txtRecords.find((r) => typeof r === 'string' && /^v\s*=\s*spf1(?:\s|$)/i.test(r.trim()));
     if (foundSpf) {
       result.spf = true;
       result.spfRecord = foundSpf;
@@ -29,8 +33,11 @@ export async function checkDomainAuth(domain) {
   }
 
   try {
-    const dmarcRecords = (await resolveTxt(`_dmarc.${cleanDomain}`)).flat();
-    const foundDmarc = dmarcRecords.find((r) => typeof r === 'string' && r.startsWith('v=DMARC1'));
+    const rawDmarc = await resolver(`_dmarc.${cleanDomain}`);
+    const dmarcRecords = (Array.isArray(rawDmarc) ? rawDmarc : [])
+      .map((entry) => (Array.isArray(entry) ? entry.join('') : String(entry)));
+
+    const foundDmarc = dmarcRecords.find((r) => typeof r === 'string' && /^v\s*=\s*dmarc1(?:\s*;|\s*$)/i.test(r.trim()));
     if (foundDmarc) {
       result.dmarc = true;
       result.dmarcRecord = foundDmarc;
@@ -51,4 +58,3 @@ export async function checkDomainAuth(domain) {
 }
 
 export const checkDnsRecords = checkDomainAuth;
-
