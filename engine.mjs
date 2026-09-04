@@ -1031,24 +1031,37 @@ export async function runSingleLeadOutreach(singleLeadPayload = {}) {
 // ============================================================================
 // 🔁 2. FOLLOW-UP ENGINE (Guaranteed to match initial sender & alias)
 // ============================================================================
-export async function runFollowups() {
-  const sheets = await getSheets();
-  const config = await loadConfig(sheets);
+export async function runFollowups(sheetsObj = null, customConfig = null) {
+  const sheets = sheetsObj || (await getSheets());
+  const config = customConfig || (await loadConfig(sheets));
 
   // ⏸️ Master Campaign Toggle Check
   if (!isCampaignActive(config.settings, 'followup')) {
     const pauseMsg = '⏸️ **Campaign Paused Notice:** Follow-up engine is turned OFF/PAUSED in Google Sheet Settings (`campaign_active = FALSE`). Skipping run safely.';
     console.log(pauseMsg);
     await notifyDiscord(config.settings.discord_updates_webhook, pauseMsg);
-    return;
+    return { success: true, message: pauseMsg, count: 0 };
   }
 
-  if (!config.inboxes.length) throw new Error('No active Inboxes found.');
-  if (!config.followupTemplates.length) throw new Error('No Follow-up Templates found.');
+  if (!config.inboxes || !config.inboxes.length) {
+    const noInboxesMsg = 'ℹ️ No active inboxes found. Skipping follow-ups safely.';
+    console.log(noInboxesMsg);
+    return { success: true, message: noInboxesMsg, count: 0 };
+  }
+  if (!config.followupTemplates || !config.followupTemplates.length) {
+    const noTemplatesMsg = 'ℹ️ No Follow-up Templates found in "Followup_Templates" tab. Skipping follow-ups safely.';
+    console.log(noTemplatesMsg);
+    return { success: true, message: noTemplatesMsg, count: 0 };
+  }
 
   const detailsRes = await sheets.spreadsheets.values.get({ spreadsheetId: sheets.spreadsheetId || SPREADSHEET_ID, range: "'Details'!A:Z" });
-  const [headers, ...rows] = detailsRes.data.values || [];
-  const col = Object.fromEntries(headers.map((h, i) => [h.trim(), i]));
+  const [headers, ...rows] = detailsRes?.data?.values || [];
+  if (!headers || !headers.length || !rows.length) {
+    const noRowsMsg = 'ℹ️ No leads found in Details sheet. Skipping follow-ups safely.';
+    console.log(noRowsMsg);
+    return { success: true, message: noRowsMsg, count: 0 };
+  }
+  const col = Object.fromEntries(headers.map((h, i) => [(h || '').trim(), i]));
   const limitExceededInboxes = new Set();
 
   const today = new Date();
@@ -1140,7 +1153,7 @@ export async function runFollowups() {
     }
 
     const nextCount = currentCount + 1;
-    if (nextCount > config.followupTemplates.length) {
+    if (config.followupTemplates.length > 0 && nextCount > config.followupTemplates.length) {
       const rowNum = i + 2;
       row[col['Follow up']] = 'Done';
       await sheets.spreadsheets.values.update({
