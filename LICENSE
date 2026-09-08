@@ -1,21 +1,42 @@
-MIT License
+PolyForm Noncommercial License 1.0.0
 
-Copyright (c) 2026 Rohan Patel
+Copyright (c) 2026 Rohan Patel (https://www.linkedin.com/in/iamrohanpatel/)
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+<https://polyformproject.org/licenses/noncommercial/1.0.0>
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+## Purpose
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+This license allows each user to run, copy, distribute, make available, import, and make derivative works of this software for noncommercial purposes only.
+
+## Agreement
+
+In order to receive this license, you must agree to its rules. The rules of this license are both obligations under that agreement and conditions to your license. You must not do anything with this software that triggers a rule that you cannot or will not follow.
+
+## Notices
+
+Each time you reproduce this software, you must retain all copyright notices and this license.
+
+## Noncommercial Purposes
+
+Any purpose is a noncommercial purpose except for business purposes:
+
+1. for which any fee, charge, or other consideration is paid or received, including without limitation for hosting, consulting, service, support, or training; or
+
+2. in connection with a revenue-generating product, service, or commercial activity, including without limitation generating commercial leads, client marketing, or executing commercial cold email outreach campaigns.
+
+## Permitted Import & Evaluation
+
+You may import, test, study, and integrate this software as a dependency in development, staging, or academic environments solely for noncommercial evaluation and research.
+
+## Commercial Licensing
+
+For commercial deployment, agency client campaigns, revenue-generating outreach, or exemptions, you must obtain a commercial license by contacting Rohan Patel at:
+👉 https://www.linkedin.com/in/iamrohanpatel/
+
+## Defensive Termination
+
+If you make any claim against any licensor for infringement of any patent or copyright you claim is infringed by this software, your license to this software ends immediately.
+
+## No Warranty
+
+As far as the law allows, this software comes as is, without any warranty or condition, and no licensor will be liable to you for any damages whatsoever.

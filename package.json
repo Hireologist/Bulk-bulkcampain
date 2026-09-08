@@ -2,6 +2,7 @@
   "name": "universal-cold-outreach",
   "version": "2.2.0",
   "type": "module",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "scripts": {
     "start": "node engine.mjs outreach",
     "test": "node --test",

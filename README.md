@@ -4,7 +4,7 @@
 [![Serverless Engine](https://img.shields.io/badge/Architecture-100%25%20Serverless-blue.svg?logo=github-actions)](https://github.com/features/actions)
 [![100% Free](https://img.shields.io/badge/Cost-100%25%20Free-brightgreen.svg)](#)
 [![Tests Passing](https://img.shields.io/badge/Tests-82%2F82%20Passing-success.svg)](#)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+[![License: PolyForm Noncommercial](https://img.shields.io/badge/License-PolyForm%20Noncommercial-blue.svg)](./LICENSE)
 
 An automated, 100% free, production-ready serverless cold outreach platform built with **Node.js**, **Google Sheets API**, **IMAP/SMTP**, **GitHub Actions**, **Groq AI**, **Discord Webhooks**, and an **Online GitHub Pages Dashboard**.
 
