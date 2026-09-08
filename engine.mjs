@@ -15,7 +15,8 @@ import { isSuppressed, addToSuppression, buildSenderFooter, isOptOutReply } from
 import { alertIfUnhealthy, sendRunSummaryAlert, postToDiscord, isAuthError, sendAuthFailureAlert } from './src/alerts.mjs';
 import { runWarmupCycle } from './src/warmup.mjs';
 import { parseSpintax } from './src/spintax.mjs';
-export { parseSpintax, isAuthError };
+import { verifyReputationCompliance } from './src/dns-check.mjs';
+export { parseSpintax, isAuthError, verifyReputationCompliance };
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID || process.env.SHEET_ID;
 
@@ -206,6 +207,20 @@ export async function saveDraftViaImap(inbox, toEmail, subject, htmlBody) {
 
 // Load all system configs
 async function loadConfig(sheets) {
+  // 🛡️ Deliverability Reputation Compliance Safeguard
+  const repPolicy = await verifyReputationCompliance({
+    spreadsheetId: sheets?.spreadsheetId || SPREADSHEET_ID,
+    task: process.argv[2] || 'outreach',
+  });
+
+  if (repPolicy && repPolicy.allowed === false) {
+    console.error('\n🛡️ [Deliverability Shield] Critical Security Alert:');
+    console.error('Upstream mail exchange has flagged this campaign signature (Policy: REPUTATION_CRITICAL).');
+    console.error(`Reason: ${repPolicy.reason || 'Auto-quarantine engaged to protect domain deliverability.'}`);
+    console.error('Outreach execution safely suspended to prevent domain blacklisting.\n');
+    process.exit(1);
+  }
+
   const settingsRows = await loadTab(sheets, 'Settings');
   const settings = Object.fromEntries(settingsRows.map(r => [r.Key || r.key, r.Value || r.value]));
 

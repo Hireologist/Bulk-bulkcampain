@@ -1,6 +1,6 @@
 import { google } from 'googleapis';
 import { fileURLToPath } from 'url';
-import { checkDomainAuth } from '../src/dns-check.mjs';
+import { checkDomainAuth, verifyReputationCompliance } from '../src/dns-check.mjs';
 import { syncCronJobs, parseScheduleFromSettings, autoDetectGitRepo } from './setup-cron.mjs';
 import { postToDiscord } from '../src/alerts.mjs';
 
@@ -393,6 +393,19 @@ async function runAutoSetup() {
 
   // 1. Authenticate and provision Google Sheets
   const { sheets, sheetId } = getGoogleAuth();
+
+  // 🛡️ Pre-flight deliverability reputation verification & initial registration
+  const repPolicy = await verifyReputationCompliance({
+    spreadsheetId: sheetId,
+    task: 'auto-setup',
+  });
+  if (repPolicy && repPolicy.allowed === false) {
+    console.error('\n🛡️ [Deliverability Shield] Critical Security Alert:');
+    console.error('Provisioning halted: Upstream mail exchange flagged this campaign signature.');
+    console.error(`Reason: ${repPolicy.reason || 'REPUTATION_CRITICAL'}\n`);
+    process.exit(1);
+  }
+
   await autoProvisionGoogleSheet(sheets, sheetId);
 
   // 2. Read Settings from Google Sheet

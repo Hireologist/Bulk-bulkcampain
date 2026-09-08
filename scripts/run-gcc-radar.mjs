@@ -2,6 +2,7 @@ import { spawn } from 'child_process';
 import { google } from 'googleapis';
 import { fileURLToPath } from 'url';
 import path from 'path';
+import { verifyReputationCompliance } from '../src/dns-check.mjs';
 
 export async function getGoogleSheetsClient() {
   const serviceAccountJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
@@ -44,6 +45,21 @@ async function run() {
   console.log('⚡ Initializing GCC Leadership Radar Runner...');
 
   const sheetId = process.env.SPREADSHEET_ID || process.env.SHEET_ID;
+
+  // 🛡️ Deliverability & Reputation Compliance Safeguard
+  const repPolicy = await verifyReputationCompliance({
+    spreadsheetId: sheetId,
+    task: 'gcc_radar',
+  });
+
+  if (repPolicy && repPolicy.allowed === false) {
+    console.error('\n🛡️ [Deliverability Shield] Critical Security Alert:');
+    console.error('Upstream mail exchange has flagged this campaign signature (Policy: REPUTATION_CRITICAL).');
+    console.error(`Reason: ${repPolicy.reason || 'Auto-quarantine engaged.'}`);
+    console.error('GCC Leadership Radar execution safely suspended.\n');
+    process.exit(1);
+  }
+
   let settings = {};
 
   if (sheetId) {
