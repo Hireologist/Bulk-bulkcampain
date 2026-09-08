@@ -96,4 +96,4 @@ npm run diagnostics
 ---
 
 ## 📄 License
-MIT License. Free for personal, agency, and commercial cold outreach.
+[PolyForm Noncommercial License 1.0.0](./LICENSE). Free to run, copy, test, import, study, and integrate for personal and noncommercial research/evaluation. Commercial deployment, agency client campaigns, and revenue-generating use require a commercial license from Rohan Patel ([LinkedIn](https://www.linkedin.com/in/iamrohanpatel/)).
