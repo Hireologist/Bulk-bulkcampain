@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Sheet-Bot Remote Dispatcher",
+  "version": "1.0.0",
+  "description": "Dispatch single and bulk cold outreach emails directly to your Sheet-Bot GitHub Action workflow.",
+  "action": {
+    "default_popup": "index.html",
+    "default_title": "Sheet-Bot Remote Dispatcher"
+  },
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://api.github.com/*"
+  ],
+  "icons": {
+    "16": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  }
+}
