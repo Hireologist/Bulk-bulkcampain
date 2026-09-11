@@ -1,6 +1,6 @@
 # 📊 Google Sheets Schema & Architecture Guide
 
-The cold outreach engine is powered by a structured, 11-tab Google Spreadsheet. All tabs, colors, column headers, and formulas are automatically provisioned when running the **`🚀 1-Click Complete Auto-Setup & Provisioning`** workflow (`scripts/auto-setup.mjs`).
+The cold outreach engine is powered by a structured, 16-tab Google Spreadsheet. All tabs, colors, column headers, and formulas are automatically provisioned when running the **`🚀 1-Click Complete Auto-Setup & Provisioning`** workflow (`scripts/auto-setup.mjs`), and kept synchronized daily via the **Non-Destructive Morning Auto-Update System** (`scripts/run-campaign-diagnostics.mjs`).
 
 ---
 
@@ -11,18 +11,30 @@ The cold outreach engine is powered by a structured, 11-tab Google Spreadsheet. 
 | **`📖 Setup_Guide`** | Documentation & status rules for team members. | *Instructions, cheat sheet, tag references* |
 | **`Details`** | Prospect lead database and email dispatch queue. | `full_name`, `email`, `company_name`, `location`, `Sent Status`, `Sent From`, `Reply Status`, `Sentiment` |
 | **`Inboxes`** | SMTP/IMAP credentials and daily limits per mailbox. | `email`, `display_name`, `smtp_host`, `smtp_port`, `smtp_user`, `smtp_pass`, `imap_host`, `imap_port`, `daily_limit`, `is_active`, `warmup_enabled` |
-| **`Aliases`** | Virtual alias emails for random `From:` header rotation. | `alias_email`, `display_name` |
+| **`Aliases`** | Virtual alias emails for random `From:` header rotation. | `alias_email`, `display_name`, `is_active`, `inbox_email` |
 | **`Settings`** | Global engine delays, cutoffs, webhooks, and AI keys. | `key`, `value`, `description` |
 | **`Templates`** | Initial cold outreach email subject lines and bodies. | `Subject`, `Body` |
-| **`Followup_Templates`** | Sequential drip follow-ups with wait intervals. | `Step`, `Days_Until_Next`, `Subject`, `Body` |
-| **`Suppressed`** | Unsubscribed contacts and suppressed domains. | `Email`, `Reason`, `Date_Added` |
-| **`Inbox_Stats`** | Daily tracking of sent volume, bounces, complaints. | `Date`, `Inbox_Email`, `Sent_Today`, `Bounces`, `Complaints` |
-| **`Domain_Health`** | Automated DNS audits (SPF, DKIM, DMARC records). | `Domain`, `SPF_Status`, `DMARC_Status`, `MX_Status`, `Last_Checked` |
-| **`Failed_Sends`** | Audit trail for failed SMTP deliveries. | `Timestamp`, `Recipient`, `Sender`, `Error_Reason` |
+| **`Followup_Templates`** | Sequential drip follow-ups with wait intervals. | `Follow_Up_Number`, `Days_Until_Next`, `Subject`, `Body` |
+| **`Suppressed`** | Unsubscribed contacts and suppressed domains. | `email`, `reason`, `added_at` |
+| **`Inbox_Stats`** | Daily tracking of sent volume, bounces, complaints. | `inbox_email`, `sent`, `bounced`, `complaints`, `sentToday`, `lastReset` |
+| **`Domain_Health`** | Automated DNS audits (SPF, DKIM, DMARC records). | `Domain`, `SPF Status`, `DMARC Status`, `SPF Record`, `DMARC Record`, `Last Checked`, `Overall Health` |
+| **`Failed_Sends`** | Audit trail for failed SMTP deliveries. | `lead_email`, `campaign`, `error`, `attempted_at` |
 | **`Locations`** | Random city tags used for dynamic placeholders. | `location_name` |
-| **`Clients`** | Portfolio / social proof client names for pitch. | `client_name` |
+| **`Clients`** | Portfolio / social proof client names for pitch. | `client_name`, `industry` |
 | **`📊 Email_Analytics`** | Real-time formula calculating sender conversion rates. | `=LET(...)` automated formulas |
-| **`📈 ChartData`** | Sentiment distribution and status aggregates. | Formula-driven visual aggregates |
+| **`📈 ChartData`** | Sentiment distribution and status aggregates. | `=COUNTIF(...)` visual aggregates |
+| **`GCC_Radar`** | Global Capability Centers intelligence tracker & deduplication history. | `brand_key`, `company_name`, `stage_type`, `amount_scale`, `city`, `vc_lead`, `url`, `date_added` |
+
+---
+
+## 🛡️ Non-Destructive Morning Auto-Update System
+
+Every morning at 09:00 AM IST (`.github/workflows/test_campaign.yml`), the pre-flight campaign diagnostic runs and auto-heals any schema drift:
+- **Auto-Creates Missing Tabs**: Any new tab introduced in `COMPLETE_SCHEMA` is automatically created and formatted.
+- **Auto-Appends Missing Columns**: Any new header column is appended at the end of Row 1 without altering existing columns.
+- **Auto-Appends New Settings Keys**: New operational settings keys are added with default values at the bottom of the `Settings` tab.
+- **Auto-Restores Dynamic Formulas**: Restores `=LET(...)` in `📊 Email_Analytics` and `=COUNTIF(...)` in `📈 ChartData` if cleared.
+- **100% Non-Destructive Guarantee**: Leads in `Details`, inbox credentials in `Inboxes`, templates, and customized settings values are **strictly preserved and never overwritten**.
 
 ---
 

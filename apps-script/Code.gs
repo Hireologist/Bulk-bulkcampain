@@ -166,6 +166,11 @@ function createOutreachSystem(forceReset = false) {
         ['Turing', 'IT'], ['NP Digital', 'Digital Marketing'], ['KENT RO', 'Manufacturing'],
         ['Physics Wallah', 'Edtech'], ['Ditto', 'Insurance'], ['Mapro Foods', 'Foods']
       ]
+    },
+    'GCC_Radar': {
+      color: '#0D9488',
+      headers: ['brand_key', 'company_name', 'stage_type', 'amount_scale', 'city', 'vc_lead', 'url', 'date_added'],
+      sampleData: []
     }
   };
 

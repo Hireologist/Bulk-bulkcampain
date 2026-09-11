@@ -58,7 +58,7 @@ export const COMPLETE_SCHEMA = {
       ['12. Suppression & Unsubscribe', 'Check "Suppressed" tab. Contains all unsubscribed and negative reply leads.', 'Suppressed leads are permanently blocked from all future campaigns.'],
       ['13. Dead-Letter Failed Sends', 'Check "Failed_Sends" tab. Captures any send that failed after 3 exponential backoff attempts with exact error and campaign tag.', 'Helps you troubleshoot mailbox or network issues.'],
       ['14. Status Legend', 'SENT = Cold email sent\nreplied = Prospect replied (Sequence paused)\nbounced = Invalid email (Sequence paused)\nsuppressed = Unsubscribed / Blocked\nDone = Follow-up sequence completed', 'Updated automatically by the bot in real time.'],
-      ['15. GCC Leadership Radar', 'In "Settings" tab: set gcc_radar_enabled = "TRUE" to run radar, and discord_gcc_radar_webhook to your separate Discord webhook URL.', 'Monitors GCC setups, office space leases, and startup funding daily at 09:00 AM IST via cron-job.org.']
+      ['15. GCC Leadership Radar', 'In "Settings" tab: set gcc_radar_enabled = "TRUE" to run radar, and discord_gcc_radar_webhook to your separate Discord webhook URL.', 'Monitors GCC setups, office space leases, and startup funding daily at 09:00 AM IST via cron-job.org. Processed leads and persistent deduplication history are stored in the "GCC_Radar" tab.']
     ]
   },
   'Details': {
@@ -214,8 +214,24 @@ export const COMPLETE_SCHEMA = {
       ['NEUTRAL', '=COUNTIF(Details!L:L, A3)'],
       ['NEGATIVE', '=COUNTIF(Details!L:L, A4)']
     ]
+  },
+  'GCC_Radar': {
+    color: '#0D9488',
+    headers: ['brand_key', 'company_name', 'stage_type', 'amount_scale', 'city', 'vc_lead', 'url', 'date_added'],
+    sampleData: []
   }
 };
+
+export function columnIndexToLetter(colIndex) {
+  let temp = colIndex;
+  let letter = '';
+  while (temp > 0) {
+    let mod = (temp - 1) % 26;
+    letter = String.fromCharCode(65 + mod) + letter;
+    temp = Math.floor((temp - mod) / 26);
+  }
+  return letter;
+}
 
 export function hexToRgb(hex = '#1A73E8') {
   const clean = hex.replace('#', '');
@@ -309,7 +325,7 @@ async function autoProvisionGoogleSheet(sheets, sheetId) {
       const values = [config.headers, ...(config.sampleData || [])];
       await sheets.spreadsheets.values.update({
         spreadsheetId: sheetId,
-        range: `'${title}'!A1:${String.fromCharCode(64 + config.headers.length)}${values.length}`,
+        range: `'${title}'!A1:${columnIndexToLetter(config.headers.length)}${values.length}`,
         valueInputOption: 'USER_ENTERED',
         requestBody: { values },
       });
@@ -319,16 +335,17 @@ async function autoProvisionGoogleSheet(sheets, sheetId) {
       // 2. Safe non-destructive check for missing headers & settings
       const res = await sheets.spreadsheets.values.get({
         spreadsheetId: sheetId,
-        range: `'${title}'!A1:Z1`,
+        range: `'${title}'!1:1`,
       });
       const existingHeaders = (res.data.values?.[0] || []).map((h) => String(h).trim());
 
       const missingHeaders = config.headers.filter((h) => !existingHeaders.includes(h));
       if (missingHeaders.length > 0) {
         const startColIdx = existingHeaders.length + 1;
+        const endColIdx = existingHeaders.length + missingHeaders.length;
         await sheets.spreadsheets.values.update({
           spreadsheetId: sheetId,
-          range: `'${title}'!${String.fromCharCode(64 + startColIdx)}1:${String.fromCharCode(64 + startColIdx + missingHeaders.length - 1)}1`,
+          range: `'${title}'!${columnIndexToLetter(startColIdx)}1:${columnIndexToLetter(endColIdx)}1`,
           valueInputOption: 'USER_ENTERED',
           requestBody: { values: [missingHeaders] },
         });
@@ -347,13 +364,58 @@ async function autoProvisionGoogleSheet(sheets, sheetId) {
         if (missingRows.length > 0) {
           await sheets.spreadsheets.values.append({
             spreadsheetId: sheetId,
-            range: `'Settings'!A:Z`,
+            range: `'Settings'!A:C`,
             valueInputOption: 'USER_ENTERED',
             requestBody: { values: missingRows },
           });
           console.log(`🔄 Appended ${missingRows.length} missing setting key(s) to "Settings"`);
           updatedCount++;
         }
+      }
+
+      // Safe check for Analytics formula
+      if (title === '📊 Email_Analytics') {
+        try {
+          const analyticsRes = await sheets.spreadsheets.values.get({
+            spreadsheetId: sheetId,
+            range: "'📊 Email_Analytics'!A2:A2",
+          });
+          const curVal = analyticsRes?.data?.values?.[0]?.[0];
+          if (!curVal || !String(curVal).trim().startsWith('=')) {
+            const f = config.sampleData?.[0]?.[0];
+            if (f) {
+              await sheets.spreadsheets.values.update({
+                spreadsheetId: sheetId,
+                range: "'📊 Email_Analytics'!A2",
+                valueInputOption: 'USER_ENTERED',
+                requestBody: { values: [[f]] },
+              });
+              console.log('🔄 Restored dynamic analytics formula in "📊 Email_Analytics"');
+              updatedCount++;
+            }
+          }
+        } catch (_) {}
+      }
+
+      // Safe check for Setup Guide synchronization
+      if (title === '📖 Setup_Guide') {
+        try {
+          const guideRes = await sheets.spreadsheets.values.get({
+            spreadsheetId: sheetId,
+            range: "'📖 Setup_Guide'!A2:C",
+          });
+          const rows = guideRes?.data?.values || [];
+          if (rows.length < (config.sampleData || []).length) {
+            await sheets.spreadsheets.values.update({
+              spreadsheetId: sheetId,
+              range: `'📖 Setup_Guide'!A2:C${(config.sampleData || []).length + 1}`,
+              valueInputOption: 'USER_ENTERED',
+              requestBody: { values: config.sampleData },
+            });
+            console.log('🔄 Synchronized instructions in "📖 Setup_Guide"');
+            updatedCount++;
+          }
+        } catch (_) {}
       }
     }
   }

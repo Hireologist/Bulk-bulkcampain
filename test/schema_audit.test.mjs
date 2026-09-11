@@ -277,5 +277,191 @@ describe('🩺 Sheet Schema & Column Integrity Verification Test Suite', () => {
       assert.strictEqual(results.missingTabs.length, 0);
       assert.strictEqual(results.missingColumns.length, 0);
     });
+
+    test('auto-heals missing formulas in Email_Analytics and ChartData when repairFormulas is enabled', async () => {
+      const mockMeta = {
+        data: {
+          sheets: Object.keys(COMPLETE_SCHEMA).map((title, idx) => ({
+            properties: { sheetId: idx + 1, title }
+          }))
+        }
+      };
+
+      const formulaUpdates = [];
+      const mockSheets = {
+        spreadsheets: {
+          values: {
+            get: async ({ range }) => {
+              for (const [tabName, config] of Object.entries(COMPLETE_SCHEMA)) {
+                if (range.startsWith(`'${tabName}'!1:1`)) {
+                  return { data: { values: [config.headers] } };
+                }
+              }
+              if (range.startsWith("'Settings'!A2:A")) {
+                return { data: { values: COMPLETE_SCHEMA['Settings'].sampleData.map(r => [r[0]]) } };
+              }
+              // Email_Analytics A2 is empty / corrupted
+              if (range.startsWith("'📊 Email_Analytics'!A2:A2")) {
+                return { data: { values: [['']] } };
+              }
+              // ChartData has missing formulas
+              if (range.startsWith("'📈 ChartData'!A2:B4")) {
+                return { data: { values: [['POSITIVE', ''], ['NEUTRAL', ''], ['NEGATIVE', '']] } };
+              }
+              return { data: { values: [] } };
+            },
+            update: async (payload) => {
+              formulaUpdates.push(payload);
+              return { data: {} };
+            }
+          }
+        }
+      };
+
+      const results = await auditAndRepairSheetSchema(mockSheets, 'mock-sheet-id', mockMeta, {
+        autoRepair: true,
+        repairFormulas: true
+      });
+
+      assert.ok(results.repairedFormulas.length >= 2);
+      const emailAnalyticsRepair = results.repairedFormulas.find(f => f.tab === '📊 Email_Analytics');
+      assert.ok(emailAnalyticsRepair);
+      assert.strictEqual(emailAnalyticsRepair.cell, 'A2');
+
+      const chartRepair = results.repairedFormulas.find(f => f.tab === '📈 ChartData');
+      assert.ok(chartRepair);
+
+      // Verify the formula update was written with USER_ENTERED
+      const eaUpdate = formulaUpdates.find(u => u.range === "'📊 Email_Analytics'!A2");
+      assert.ok(eaUpdate);
+      assert.strictEqual(eaUpdate.valueInputOption, 'USER_ENTERED');
+      assert.ok(eaUpdate.requestBody.values[0][0].startsWith('=LET'));
+    });
+
+    test('synchronizes Setup_Guide documentation when syncSetupGuide is enabled', async () => {
+      const mockMeta = {
+        data: {
+          sheets: Object.keys(COMPLETE_SCHEMA).map((title, idx) => ({
+            properties: { sheetId: idx + 1, title }
+          }))
+        }
+      };
+
+      const guideUpdates = [];
+      const mockSheets = {
+        spreadsheets: {
+          values: {
+            get: async ({ range }) => {
+              for (const [tabName, config] of Object.entries(COMPLETE_SCHEMA)) {
+                if (range.startsWith(`'${tabName}'!1:1`)) {
+                  return { data: { values: [config.headers] } };
+                }
+              }
+              if (range.startsWith("'Settings'!A2:A")) {
+                return { data: { values: COMPLETE_SCHEMA['Settings'].sampleData.map(r => [r[0]]) } };
+              }
+              // Setup guide only has 2 steps instead of the full guide
+              if (range.startsWith("'📖 Setup_Guide'!A2:C")) {
+                return { data: { values: [['1', 'Step 1', 'Desc 1'], ['2', 'Step 2', 'Desc 2']] } };
+              }
+              return { data: { values: [] } };
+            },
+            update: async (payload) => {
+              guideUpdates.push(payload);
+              return { data: {} };
+            }
+          }
+        }
+      };
+
+      const results = await auditAndRepairSheetSchema(mockSheets, 'mock-sheet-id', mockMeta, {
+        autoRepair: true,
+        syncSetupGuide: true
+      });
+
+      assert.strictEqual(results.updatedSetupGuide, true);
+      assert.strictEqual(guideUpdates.length, 1);
+      assert.ok(guideUpdates[0].range.startsWith("'📖 Setup_Guide'!A2:C"));
+      assert.strictEqual(guideUpdates[0].requestBody.values.length, COMPLETE_SCHEMA['📖 Setup_Guide'].sampleData.length);
+    });
+
+    test('strictly preserves existing user leads, inboxes, and custom settings without destroying or modifying anything (Non-Destructive Guarantee)', async () => {
+      const mockMeta = {
+        data: {
+          sheets: Object.keys(COMPLETE_SCHEMA).map((title, idx) => ({
+            properties: { sheetId: idx + 1, title }
+          }))
+        }
+      };
+
+      // Custom settings where the user changed min_delay_seconds to 45 and business_name to "My Agency"
+      const userCustomSettings = [
+        ['min_delay_seconds', '45', 'Customized by user'],
+        ['business_name', 'My Agency', 'Customized by user'],
+        ['campaign_active', 'TRUE', 'Customized by user']
+      ];
+
+      const capturedUpdates = [];
+      const capturedAppends = [];
+
+      const mockSheets = {
+        spreadsheets: {
+          values: {
+            get: async ({ range }) => {
+              // Row 1 headers for all tabs
+              for (const [tabName, config] of Object.entries(COMPLETE_SCHEMA)) {
+                if (range.startsWith(`'${tabName}'!1:1`)) {
+                  return { data: { values: [config.headers] } };
+                }
+              }
+              if (range.startsWith("'Settings'!A2:A")) {
+                return { data: { values: userCustomSettings.map(r => [r[0]]) } };
+              }
+              if (range.startsWith("'📊 Email_Analytics'!A2:A2")) {
+                return { data: { values: [['=LET(...)']] } };
+              }
+              if (range.startsWith("'📈 ChartData'!A2:B4")) {
+                return { data: { values: [['POSITIVE', '=COUNTIF(...)'], ['NEUTRAL', '=COUNTIF(...)'], ['NEGATIVE', '=COUNTIF(...)']] } };
+              }
+              if (range.startsWith("'📖 Setup_Guide'!A2:C")) {
+                return { data: { values: COMPLETE_SCHEMA['📖 Setup_Guide'].sampleData } };
+              }
+              return { data: { values: [] } };
+            },
+            update: async (payload) => {
+              capturedUpdates.push(payload);
+              return { data: {} };
+            },
+            append: async (payload) => {
+              capturedAppends.push(payload);
+              return { data: {} };
+            }
+          }
+        }
+      };
+
+      const results = await auditAndRepairSheetSchema(mockSheets, 'mock-sheet-id', mockMeta, {
+        autoRepair: true,
+        repairFormulas: true,
+        syncSetupGuide: true
+      });
+
+      // 1. Zero destructive updates to lead data rows in Details
+      const detailsRowUpdates = capturedUpdates.filter(u => u.range.startsWith("'Details'!") && !u.range.includes('1:'));
+      assert.strictEqual(detailsRowUpdates.length, 0, 'Details lead rows must NEVER be overwritten');
+
+      // 2. Zero destructive updates to Inboxes credentials
+      const inboxesRowUpdates = capturedUpdates.filter(u => u.range.startsWith("'Inboxes'!") && !u.range.includes('1:'));
+      assert.strictEqual(inboxesRowUpdates.length, 0, 'Inboxes credentials must NEVER be overwritten');
+
+      // 3. User customized settings are strictly preserved
+      // Only missing keys are appended to Settings!A:C
+      assert.strictEqual(capturedAppends.length, 1);
+      assert.strictEqual(capturedAppends[0].range, "'Settings'!A:C");
+      const appendedKeys = capturedAppends[0].requestBody.values.map(r => r[0]);
+      assert.ok(!appendedKeys.includes('min_delay_seconds'), 'Existing custom key min_delay_seconds must NOT be overwritten');
+      assert.ok(!appendedKeys.includes('business_name'), 'Existing custom key business_name must NOT be overwritten');
+      assert.ok(appendedKeys.includes('groq_api_key'), 'Missing key groq_api_key must be safely appended');
+    });
   });
 });

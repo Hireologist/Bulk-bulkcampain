@@ -3,7 +3,7 @@
 [![Node.js CI](https://img.shields.io/badge/Node.js-v22+-green.svg?logo=node.js)](https://nodejs.org/)
 [![Serverless Engine](https://img.shields.io/badge/Architecture-100%25%20Serverless-blue.svg?logo=github-actions)](https://github.com/features/actions)
 [![100% Free](https://img.shields.io/badge/Cost-100%25%20Free-brightgreen.svg)](#)
-[![Tests Passing](https://img.shields.io/badge/Tests-82%2F82%20Passing-success.svg)](#)
+[![Tests Passing](https://img.shields.io/badge/Tests-147%2F147%20Passing-success.svg)](#)
 [![License: PolyForm Noncommercial](https://img.shields.io/badge/License-PolyForm%20Noncommercial-blue.svg)](./LICENSE)
 
 An automated, 100% free, production-ready serverless cold outreach platform built with **Node.js**, **Google Sheets API**, **IMAP/SMTP**, **GitHub Actions**, **Groq AI**, **Discord Webhooks**, and an **Online GitHub Pages Dashboard**.
@@ -16,7 +16,7 @@ An automated, 100% free, production-ready serverless cold outreach platform buil
  ┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
  │ 1. Blank Sheet  │ ────► │ 2. Add 2 Secrets│ ────► │ 3. Run Auto-    │
  │ (sheets.new)    │       │ (ID & Service   │       │    Provisioning │
- │                 │       │  Account JSON)  │       │ (All 11 Tabs)   │
+ │                 │       │  Account JSON)  │       │ (All 16 Tabs)   │
  └─────────────────┘       └─────────────────┘       └─────────────────┘
 ```
 
@@ -41,7 +41,7 @@ All in-depth technical guides, schemas, and walkthroughs are organized into dedi
 | 💬 [**Discord Server & Webhook Setup**](./docs/DISCORD_WEBHOOK_SETUP.md) | How to create a Discord server, channels, and real-time alert webhooks. |
 | 📄 [**Google Service Account Key Setup**](./docs/GOOGLE_SERVICE_ACCOUNT_SETUP.md) | Step-by-step 60-second guide to generate `GOOGLE_SERVICE_ACCOUNT_JSON`. |
 | 📁 [**Multi-Campaign Strategy**](./docs/MULTI_CAMPAIGN_GUIDE.md) | How to scale to multiple clients & campaigns using the 1-Repo architecture. |
-| 📊 [**Google Sheets Schema & Tabs**](./docs/GOOGLE_SHEETS_SCHEMA.md) | Details on all 11 tabs, formulas, Spintax syntax, and custom settings. |
+| 📊 [**Google Sheets Schema & Tabs**](./docs/GOOGLE_SHEETS_SCHEMA.md) | Details on all 16 tabs, formulas, Spintax syntax, and custom settings. |
 | ⏰ [**Automated Cron Scheduling**](./docs/CRON_SETUP.md) | Automated `cron-job.org` dispatch for 100% on-time execution. |
 | 🧩 [**Chrome Extension User Guide**](./docs/CHROME_EXTENSION_GUIDE.md) | 1-click browser lead extraction and queueing extension. |
 | 🔐 [**Google App Passwords Guide**](./docs/GOOGLE_APP_PASSWORD_SETUP.md) | Generating and configuring Gmail / Workspace SMTP App Passwords. |
@@ -53,13 +53,14 @@ All in-depth technical guides, schemas, and walkthroughs are organized into dedi
 
 ## ✨ Key Capabilities
 
+- **🔄 Non-Destructive Morning Auto-Update & Self-Healing**: Daily morning diagnostics automatically syncs newly added tabs, columns, settings keys, and formulas from code updates without ever touching, altering, or overwriting existing leads, credentials, or custom settings.
 - **🎲 Spintax Randomization**: Dynamic variations like `{{Hi|Hey|Hello}}` across subject lines and bodies to maximize deliverability.
 - **🛡️ Adaptive Deliverability Shield**: Auto-adjusts sending delays (60s on spam complaints, 15s on bounces, 8s ramp-up, 3s steady state).
 - **⚡ High-Speed Bulk Mode**: Toggle `throttle_mode = bulk` in Google Sheet `Settings` for high-speed sending blasts (1500+ emails).
 - **📝 IMAP Draft-Review Mode**: Toggle `send_mode = review` in your sheet to generate and save Touch-1 emails directly into your inbox **Drafts** folder for review.
 - **🔥 Peer-to-Peer Free Warmup**: Built-in synthetic inbox warmup engine between enabled inboxes with progressive daily volume ramp-up.
 - **🤖 Groq AI Reply Sentiment**: Classifies prospect responses (`POSITIVE`, `NEUTRAL`, `NEGATIVE`, `OOO`) and fires dedicated Discord alerts.
-- **📡 GCC Leadership Radar**: Automated daily intelligence tracker monitoring new GCC office launches, funding deals, and leadership hiring in India.
+- **📡 GCC Leadership Radar**: Automated daily intelligence tracker monitoring new GCC office launches, funding deals, and leadership hiring in India, with persistent deduplication recorded in the `GCC_Radar` tab and GitHub Actions/SQLite caching.
 - **🔍 Automated DNS Auditing**: Weekly automated SPF, DKIM, and DMARC health checks recorded to `Domain_Health`.
 
 ---
@@ -83,13 +84,13 @@ You only need **2 repository secrets** to run the complete platform:
 # Install dependencies
 npm ci
 
-# Run all 82 unit test suites
+# Run all 147 unit tests across 19 test suites
 npm test
 
 # Start local web dashboard
 npm start
 
-# Run pre-flight campaign diagnostics
+# Run pre-flight campaign diagnostics (with non-destructive auto-repair)
 npm run diagnostics
 ```
 

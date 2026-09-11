@@ -25,6 +25,14 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
+      - name: Cache GCC Leads Database
+        uses: actions/cache@v4
+        with:
+          path: scripts/gcc_leads.db
+          key: gcc-leads-db-${{ github.run_id }}
+          restore-keys: |
+            gcc-leads-db-
+
       - name: Install Python Dependencies
         run: |
           python -m pip install --upgrade pip

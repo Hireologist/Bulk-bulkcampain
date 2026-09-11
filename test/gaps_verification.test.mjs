@@ -59,7 +59,7 @@ describe('TDD Gap & Limitation Empirical Verification', () => {
       };
 
       const mockConfig = {
-        settings: { campaign_active: 'TRUE', followup_active: 'TRUE' },
+        settings: { campaign_active: 'TRUE', followup_active: 'TRUE', cutoff_hour_ist: '23', cutoff_minute_ist: '59' },
         inboxes: [{ email: 'outreach@test.com' }],
         followupTemplates: [
           { Follow_Up_Number: '1', Days_Until_Next: '3' },

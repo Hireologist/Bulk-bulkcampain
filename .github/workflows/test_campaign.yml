@@ -1,6 +1,8 @@
 name: 🩺 Campaign Health & Pre-Flight Diagnostic
 
 on:
+  schedule:
+    - cron: '30 3 * * *' # Every morning at 09:00 AM IST (03:30 UTC)
   workflow_dispatch:
 
 permissions:

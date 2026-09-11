@@ -64,6 +64,21 @@ if not existing_columns or "brand_key" not in existing_columns:
     """)
     conn.commit()
 
+# Load external persistent cache (e.g. synced from Google Sheets)
+seen_cache_path = os.getenv("GCC_SEEN_CACHE_FILE") or os.path.join(db_dir, "seen_gcc_brands.json")
+if os.path.exists(seen_cache_path):
+    try:
+        with open(seen_cache_path, "r", encoding="utf-8") as f:
+            cached_keys = json.load(f)
+            if isinstance(cached_keys, list):
+                for bk in cached_keys:
+                    if bk:
+                        cursor.execute("INSERT OR IGNORE INTO seen_gccs (brand_key, company_name, city) VALUES (?, ?, ?)", (str(bk).strip().lower(), str(bk), "Google Sheets"))
+                conn.commit()
+                print(f"📥 Loaded {len(cached_keys)} historical seen companies from persistent storage into SQLite.")
+    except Exception as e:
+        print(f"⚠️ Warning loading seen cache: {e}")
+
 # 3. Direct Website Scraping (NO /feed/ URLs)
 WEBSITES_TO_SCRAPE = [
     {
@@ -446,6 +461,7 @@ def run_gcc_radar():
 
     verified_leads = []
     seen_in_run = set()
+    new_leads_to_persist = []
 
     for art in raw_articles:
         title = art["title"]
@@ -474,6 +490,24 @@ def run_gcc_radar():
             verified_leads.append(analysis)
             print(f"✅ Added to Hitlist: {company} ({analysis.get('stage_type')})")
             mark_brand_processed(brand_key, company, analysis.get("city", "India"))
+            new_leads_to_persist.append({
+                "brand_key": brand_key,
+                "company_name": company,
+                "stage_type": analysis.get("stage_type", "GCC Expansion"),
+                "amount_scale": analysis.get("amount_scale", "Undisclosed"),
+                "city": analysis.get("city", "India"),
+                "vc_lead": analysis.get("vc_lead", "Undisclosed"),
+                "url": analysis.get("url", ""),
+                "date_added": datetime.now(timezone.utc).isoformat()
+            })
+
+    # Save newly verified leads for Google Sheets synchronization
+    new_leads_file = os.getenv("GCC_NEW_LEADS_FILE") or os.path.join(db_dir, "new_gcc_leads.json")
+    try:
+        with open(new_leads_file, "w", encoding="utf-8") as f:
+            json.dump(new_leads_to_persist, f, indent=2)
+    except Exception as e:
+        print(f"⚠️ Warning saving new leads output file: {e}")
 
     send_consolidated_discord_hitlist(verified_leads)
     print(f"🏁 Finished. Handled {len(verified_leads)} leads.")
