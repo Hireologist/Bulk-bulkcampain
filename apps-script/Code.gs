@@ -34,10 +34,10 @@ function createOutreachSystem(forceReset = false) {
       headers: [
         'full_name', 'email', 'company_name', 'location', 
         'Subject Line', 'Sent From', 'Sent Status', 'Time', 
-        'Date Sent', 'Follow up', 'Follow Up Count', 'Next Follow Up Date', 'Summary'
+        'Date Sent', 'Follow up', 'Follow Up Count', 'Next Follow Up Date', 'Summary', 'Phone'
       ],
       sampleData: [
-        ['John Doe', 'john@example.com', 'Acme Corp', 'Bengaluru', '', '', '', '', '', '', '', '', '']
+        ['John Doe', 'john@example.com', 'Acme Corp', 'Bengaluru', '', '', '', '', '', '', '', '', '', '']
       ]
     },
     'Aliases': {
@@ -178,10 +178,10 @@ function createOutreachSystem(forceReset = false) {
         'full_name', 'email', 'company_name', 'location',
         'Subject Line', 'Sent From', 'Sent Status', 'Time',
         'Date Sent', 'Follow up', 'Follow Up Count', 'Next Follow Up Date',
-        'Summary'
+        'Summary', 'Phone'
       ],
       sampleData: [
-        ['=IFERROR(FILTER(Details!A2:M, ISNUMBER(SEARCH("POSITIVE", Details!L2:L))), "No positive leads recorded yet")', '', '', '', '', '', '', '', '', '', '', '', '']
+        ['=IFERROR(FILTER(Details!A2:N, ISNUMBER(SEARCH("POSITIVE", Details!L2:L))), "No positive leads recorded yet")', '', '', '', '', '', '', '', '', '', '', '', '', '']
       ]
     }
   };
@@ -267,6 +267,15 @@ function createOutreachSystem(forceReset = false) {
       if (sheetName === '📖 Setup_Guide') {
         sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
         sheet.getRange(2, 1, sampleData.length, sampleData[0].length).setValues(sampleData);
+      }
+
+      // D. Safe check for Positive_Leads formula
+      if (sheetName === 'Positive_Leads') {
+        const formulaCell = sheet.getRange(2, 1);
+        const curFormula = formulaCell.getFormula();
+        if (!curFormula || curFormula.indexOf('Details!A2:M') !== -1) {
+          formulaCell.setFormula('=IFERROR(FILTER(Details!A2:N, ISNUMBER(SEARCH("POSITIVE", Details!L2:L))), "No positive leads recorded yet")');
+        }
       }
 
       sheet.setFrozenRows(1);

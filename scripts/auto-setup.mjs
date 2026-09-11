@@ -66,10 +66,10 @@ export const COMPLETE_SCHEMA = {
     headers: [
       'full_name', 'email', 'company_name', 'location', 
       'Subject Line', 'Sent From', 'Sent Status', 'Time', 
-      'Date Sent', 'Follow up', 'Follow Up Count', 'Next Follow Up Date', 'Summary'
+      'Date Sent', 'Follow up', 'Follow Up Count', 'Next Follow Up Date', 'Summary', 'Phone'
     ],
     sampleData: [
-      ['John Doe', 'john@example.com', 'Acme Corp', 'Bengaluru', '', '', '', '', '', '', '', '', '']
+      ['John Doe', 'john@example.com', 'Acme Corp', 'Bengaluru', '', '', '', '', '', '', '', '', '', '']
     ]
   },
   'Aliases': {
@@ -226,10 +226,10 @@ export const COMPLETE_SCHEMA = {
       'full_name', 'email', 'company_name', 'location',
       'Subject Line', 'Sent From', 'Sent Status', 'Time',
       'Date Sent', 'Follow up', 'Follow Up Count', 'Next Follow Up Date',
-      'Summary'
+      'Summary', 'Phone'
     ],
     sampleData: [
-      ['=IFERROR(FILTER(Details!A2:M, ISNUMBER(SEARCH("POSITIVE", Details!L2:L))), "No positive leads recorded yet")', '', '', '', '', '', '', '', '', '', '', '', '']
+      ['=IFERROR(FILTER(Details!A2:N, ISNUMBER(SEARCH("POSITIVE", Details!L2:L))), "No positive leads recorded yet")', '', '', '', '', '', '', '', '', '', '', '', '', '']
     ]
   }
 };
@@ -417,7 +417,7 @@ async function autoProvisionGoogleSheet(sheets, sheetId) {
             range: "'Positive_Leads'!A2:A2",
           });
           const curVal = posRes?.data?.values?.[0]?.[0];
-          if (!curVal || !String(curVal).trim().startsWith('=')) {
+          if (!curVal || !String(curVal).trim().startsWith('=') || String(curVal).includes('Details!A2:M')) {
             const f = config.sampleData?.[0]?.[0];
             if (f) {
               await sheets.spreadsheets.values.update({

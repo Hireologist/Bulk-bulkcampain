@@ -9,7 +9,7 @@ The cold outreach engine is powered by a structured, 17-tab Google Spreadsheet. 
 | Tab Name | Role & Purpose | Key Columns |
 | :--- | :--- | :--- |
 | **`📖 Setup_Guide`** | Documentation & status rules for team members. | *Instructions, cheat sheet, tag references* |
-| **`Details`** | Prospect lead database and email dispatch queue. | `full_name`, `email`, `company_name`, `location`, `Sent Status`, `Sent From`, `Reply Status`, `Sentiment` |
+| **`Details`** | Prospect lead database, email dispatch queue, and signature phone numbers. | `full_name`, `email`, `company_name`, `location`, `Subject Line`, `Sent From`, `Sent Status`, `Time`, `Date Sent`, `Follow up`, `Follow Up Count`, `Next Follow Up Date`, `Summary`, `Phone` |
 | **`Inboxes`** | SMTP/IMAP credentials and daily limits per mailbox. | `email`, `display_name`, `smtp_host`, `smtp_port`, `smtp_user`, `smtp_pass`, `imap_host`, `imap_port`, `daily_limit`, `is_active`, `warmup_enabled` |
 | **`Aliases`** | Virtual alias emails for random `From:` header rotation. | `alias_email`, `display_name`, `is_active`, `inbox_email` |
 | **`Settings`** | Global engine delays, cutoffs, webhooks, and AI keys. | `key`, `value`, `description` |
@@ -24,7 +24,7 @@ The cold outreach engine is powered by a structured, 17-tab Google Spreadsheet. 
 | **`📊 Email_Analytics`** | Real-time formula calculating sender conversion rates. | `=LET(...)` automated formulas |
 | **`📈 ChartData`** | Sentiment distribution and status aggregates. | `=COUNTIF(...)` visual aggregates |
 | **`GCC_Radar`** | Global Capability Centers intelligence tracker & deduplication history. | `brand_key`, `company_name`, `stage_type`, `amount_scale`, `city`, `vc_lead`, `url`, `date_added` |
-| **`Positive_Leads`** | Live automated filter of all hot prospect replies & AI summaries. | `=IFERROR(FILTER(Details!A2:M, ISNUMBER(SEARCH("POSITIVE", Details!L2:L))), ...)` |
+| **`Positive_Leads`** | Live automated filter of all hot prospect replies, AI summaries & extracted phone numbers. | `=IFERROR(FILTER(Details!A2:N, ISNUMBER(SEARCH("POSITIVE", Details!L2:L))), ...)` |
 
 ---
 

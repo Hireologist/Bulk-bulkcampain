@@ -1389,14 +1389,75 @@ export async function runFollowups(sheetsObj = null, customConfig = null) {
   }
 }
 
-// Helper for AI Email Sentiment Classification & Summarization (Resilient Fallback)
+/**
+ * Deterministic fallback regex extractor for phone numbers from email text / signatures.
+ * Extracts direct phone, mobile, cell, WhatsApp, or telephone numbers.
+ */
+export function extractPhoneNumberFallback(text = '') {
+  if (!text || typeof text !== 'string') return '';
+
+  const cleanText = text.replace(/\r\n/g, '\n');
+
+  // Pattern 1: Explicitly labeled numbers (e.g. Phone:, Mob:, Mobile:, Cell:, Tel:, WhatsApp:, Call:)
+  const labeledRegex = /(?:phone|mobile|mob|cell|tel|telephone|direct|call|whatsapp|contact|ph|m|o)\s*[:#–-]?\s*([+]?[(]?[0-9]{1,4}[)]?[-\s./]?(?:[(]?[0-9]{1,5}[)]?[-\s./]?){1,5}[0-9]{2,6})/i;
+  const labeledMatch = cleanText.match(labeledRegex);
+  if (labeledMatch && labeledMatch[1]) {
+    const candidate = cleanCandidateNumber(labeledMatch[1]);
+    if (isValidPhoneNumber(candidate)) return candidate;
+  }
+
+  // Pattern 2: International formatted numbers (+XX ...)
+  const intlRegex = /(?:^|[\s,;:(])(\+[1-9]\d{0,3}[-\s.]?\(?\d{1,4}\)?[-\s.]?\d{2,5}[-\s.]?\d{2,6})(?=[\s,;:).!?]|$)/gm;
+  let match;
+  while ((match = intlRegex.exec(cleanText)) !== null) {
+    const candidate = cleanCandidateNumber(match[1]);
+    if (isValidPhoneNumber(candidate)) return candidate;
+  }
+
+  // Pattern 3: Standard North American / UK / Indian domestic formatted numbers:
+  // e.g., (555) 123-4567, 555-123-4567, 98800 82711, 07123 456789
+  const domesticRegex = /(?:^|[\s,;:(])(\(?\d{3,5}\)?[-.\s]\d{3,4}[-.\s]\d{3,5})(?=[\s,;:).!?]|$)/gm;
+  while ((match = domesticRegex.exec(cleanText)) !== null) {
+    const candidate = cleanCandidateNumber(match[1]);
+    if (isValidPhoneNumber(candidate)) return candidate;
+  }
+
+  return '';
+}
+
+function cleanCandidateNumber(raw) {
+  if (!raw) return '';
+  return raw
+    .trim()
+    .replace(/[.,;:"'`*~]+$/, '') // remove trailing punctuation
+    .replace(/^[:\-–#\s]+/, '')    // remove leading delimiters
+    .replace(/\s+/g, ' ');        // normalize multiple spaces
+}
+
+function isValidPhoneNumber(num) {
+  if (!num) return false;
+  const digits = num.replace(/\D/g, '');
+  if (digits.length < 7 || digits.length > 15) return false;
+
+  // Reject date patterns (e.g., 2026/08/22, 22-08-2026)
+  if (/^\d{1,4}[/\-.]\d{1,2}[/\-.]\d{2,4}$/.test(num)) return false;
+  // Reject times (e.g. 15:30:00)
+  if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(num)) return false;
+  // Reject IP addresses (e.g., 192.168.1.1)
+  if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(num)) return false;
+
+  return true;
+}
+
+// Helper for AI Email Sentiment Classification, Summarization & Phone Extraction (Resilient Fallback)
 export async function classifyEmailWithAi(groq, emailText = '') {
   let sentiment = 'REPLIED';
   let summary = (emailText || '').trim().replace(/\s+/g, ' ').substring(0, 150);
   if (summary.length === 150) summary += '...';
+  let phone = extractPhoneNumberFallback(emailText);
 
   if (!groq || !emailText) {
-    return { sentiment, summary };
+    return { sentiment, summary, phone };
   }
 
   const modelsToTry = [
@@ -1412,10 +1473,11 @@ export async function classifyEmailWithAi(groq, emailText = '') {
         messages: [
           {
             role: 'system',
-            content: `You are an expert sales email assistant. Analyze the incoming lead reply and respond ONLY with a raw, valid JSON object containing exactly 2 keys:
+            content: `You are an expert sales email assistant. Analyze the incoming lead reply and respond ONLY with a raw, valid JSON object containing exactly 3 keys:
 {
   "sentiment": "POSITIVE" | "NEUTRAL" | "NEGATIVE" | "OOO",
-  "summary": "1-2 sentence summary of the lead's message, questions, or objections"
+  "summary": "1-2 sentence summary of the lead's message, questions, or objections",
+  "phone": "Extracted phone, mobile, WhatsApp, or direct contact number from the email body or signature, or empty string \\"\\" if not found"
 }
 
 Definitions:
@@ -1423,6 +1485,11 @@ Definitions:
 - "NEUTRAL": Forwarded to another person, ask to reach back in a few months, generic reply.
 - "NEGATIVE": Not interested, asking to unsubscribe/remove, angry, not relevant.
 - "OOO": Automated Out of Office / Vacation auto-responder.
+
+Phone Extraction Guidance:
+- Look in the email body, closing, and signature block for contact numbers (e.g., "Mobile: +91 9880082711", "Call me at (555) 123-4567", "Tel: +1-800-555-0199", "WhatsApp: +44 7911 123456", "Phone: 9876543210").
+- Clean the phone number (preserve leading +, country code, digits, standard separators like space or dash).
+- If no phone number is found, return "".
 
 Do NOT include markdown backticks or any conversational text. Return only the JSON.`
           },
@@ -1440,13 +1507,19 @@ Do NOT include markdown backticks or any conversational text. Return only the JS
       if (parsedObj.summary) {
         summary = String(parsedObj.summary).trim();
       }
-      return { sentiment, summary };
+      if (parsedObj.phone !== undefined && parsedObj.phone !== null) {
+        const aiPhone = cleanCandidateNumber(String(parsedObj.phone));
+        if (isValidPhoneNumber(aiPhone)) {
+          phone = aiPhone;
+        }
+      }
+      return { sentiment, summary, phone };
     } catch (e) {
       console.warn(`Groq AI classification with ${model} failed (${e.message}), trying fallback model...`);
     }
   }
 
-  return { sentiment: 'unknown', summary };
+  return { sentiment: 'unknown', summary, phone };
 }
 
 // ============================================================================
@@ -1563,7 +1636,7 @@ export async function runInboxChecker() {
           const emailBody = parsed.text || '';
           const combinedEmailContent = emailSubject ? `Subject: ${emailSubject}\n\n${emailBody}` : emailBody;
 
-          const { sentiment, summary } = await classifyEmailWithAi(groq, combinedEmailContent);
+          const { sentiment, summary, phone } = await classifyEmailWithAi(groq, combinedEmailContent);
 
           rows[rIdx][col['Sent Status']] = 'replied';
           rows[rIdx][col['Follow up']] = 'Done';
@@ -1571,8 +1644,14 @@ export async function runInboxChecker() {
           if (col['Next Follow Up Date'] !== undefined) {
             rows[rIdx][col['Next Follow Up Date']] = sentiment;
           }
+          const phoneColIdx = col['Phone'] ?? col['phone'] ?? col['Phone Number'] ?? col['phone_number'];
+          if (phoneColIdx !== undefined && phone) {
+            rows[rIdx][phoneColIdx] = phone;
+          }
           if (col['Summary'] !== undefined) {
-            rows[rIdx][col['Summary']] = summary;
+            rows[rIdx][col['Summary']] = (phoneColIdx === undefined && phone)
+              ? `${summary}${summary ? ' | ' : ''}Phone: ${phone}`
+              : summary;
           }
           rows[rIdx][col['Time']] = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: true });
 
@@ -1628,7 +1707,7 @@ export async function runInboxChecker() {
 **From:** ${leadName} (\`${fromAddr}\`)
 **Company:** ${companyName}
 **Subject:** ${parsed.subject || 'No Subject'}
-**Inbox:** ${inbox.email}
+**Inbox:** ${inbox.email}${phone ? `\n**Phone:** ${phone}` : ''}
 **Summary:** ${summary}`;
               await notifyDiscord(rereplyWebhook, msgContent);
             }
@@ -1643,7 +1722,7 @@ export async function runInboxChecker() {
 **From:** ${leadName} (\`${fromAddr}\`)
 **Company:** ${companyName}
 **Subject:** ${parsed.subject || 'No Subject'}
-**Inbox:** ${inbox.email}
+**Inbox:** ${inbox.email}${phone ? `\n**Phone:** ${phone}` : ''}
 **Summary:** ${summary}`;
                 await notifyDiscord(positiveWebhook, msgContent);
               }

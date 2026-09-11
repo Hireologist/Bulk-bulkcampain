@@ -266,7 +266,7 @@ export async function auditAndRepairSheetSchema(sheets, sheetId, spreadsheetMeta
           range: "'Positive_Leads'!A2:A2"
         });
         const curVal = posRes?.data?.values?.[0]?.[0];
-        if (!curVal || !String(curVal).trim().startsWith('=')) {
+        if (!curVal || !String(curVal).trim().startsWith('=') || String(curVal).includes('Details!A2:M')) {
           const expectedFormula = COMPLETE_SCHEMA['Positive_Leads']?.sampleData?.[0]?.[0];
           if (expectedFormula) {
             await sheets.spreadsheets.values.update({

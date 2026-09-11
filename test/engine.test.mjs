@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import dns from 'node:dns/promises';
-import { isDailyLimitError, getRandomFormattedDate, runSingleLeadOutreach, classifyEmailWithAi, normalizeDate, shouldRestartWorkflow, triggerWorkflowRestart, runFollowups } from '../engine.mjs';
+import { isDailyLimitError, getRandomFormattedDate, runSingleLeadOutreach, classifyEmailWithAi, extractPhoneNumberFallback, normalizeDate, shouldRestartWorkflow, triggerWorkflowRestart, runFollowups } from '../engine.mjs';
 import { isOptOutReply, stripQuotedReply } from '../src/suppression.mjs';
 
 describe('Universal Outreach Engine Unit Tests', () => {
@@ -55,16 +55,17 @@ describe('Universal Outreach Engine Unit Tests', () => {
     });
   });
 
-  describe('AI Email Sentiment & Summary Classification', () => {
-    it('should fall back to text snippet summary when Groq instance is not provided', async () => {
-      const emailBody = 'Hi Team, We are interested in setting up a meeting next Tuesday to discuss rates.';
+  describe('AI Email Sentiment, Summary & Phone Classification', () => {
+    it('should fall back to text snippet summary and regex phone extraction when Groq instance is not provided', async () => {
+      const emailBody = `Hi Team,\nWe are interested in setting up a meeting next Tuesday to discuss rates.\n\nBest regards,\nSarah Jenkins\nDirector of Talent\nMobile: +91 98800 82711`;
       const res = await classifyEmailWithAi(null, emailBody);
 
       assert.strictEqual(res.sentiment, 'REPLIED');
-      assert.strictEqual(res.summary, 'Hi Team, We are interested in setting up a meeting next Tuesday to discuss rates.');
+      assert.ok(res.summary.includes('We are interested'));
+      assert.strictEqual(res.phone, '+91 98800 82711');
     });
 
-    it('should parse valid AI JSON response containing sentiment and summary', async () => {
+    it('should parse valid AI JSON response containing sentiment, summary, and phone', async () => {
       const mockGroq = {
         chat: {
           completions: {
@@ -72,7 +73,7 @@ describe('Universal Outreach Engine Unit Tests', () => {
               choices: [
                 {
                   message: {
-                    content: '```json\n{"sentiment": "POSITIVE", "summary": "Prospect wants to schedule a demo next Tuesday."}\n```'
+                    content: '```json\n{"sentiment": "POSITIVE", "summary": "Prospect wants to schedule a demo next Tuesday.", "phone": "+1 (555) 234-5678"}\n```'
                   }
                 }
               ]
@@ -81,9 +82,32 @@ describe('Universal Outreach Engine Unit Tests', () => {
         }
       };
 
-      const res = await classifyEmailWithAi(mockGroq, 'Yes, let us talk!');
+      const res = await classifyEmailWithAi(mockGroq, 'Yes, let us talk! Call me at +1 (555) 234-5678');
       assert.strictEqual(res.sentiment, 'POSITIVE');
       assert.strictEqual(res.summary, 'Prospect wants to schedule a demo next Tuesday.');
+      assert.strictEqual(res.phone, '+1 (555) 234-5678');
+    });
+
+    it('should extract lead phone numbers accurately across various signature formats', () => {
+      // 1. Explicit Indian Mobile label
+      const sig1 = "Thanks,\nRahul Sharma\nVP Engineering\nMob: +91 9880082711\nAcme Technologies";
+      assert.strictEqual(extractPhoneNumberFallback(sig1), '+91 9880082711');
+
+      // 2. US format with parentheses and dots
+      const sig2 = "Looking forward to connecting.\n\nJane Doe\nCall: (555) 123-4567.\nAustin, TX";
+      assert.strictEqual(extractPhoneNumberFallback(sig2), '(555) 123-4567');
+
+      // 3. WhatsApp contact
+      const sig3 = "Reach me on WhatsApp: +44 7911 123456 anytime.";
+      assert.strictEqual(extractPhoneNumberFallback(sig3), '+44 7911 123456');
+
+      // 4. Standalone international number in signature without label
+      const sig4 = "Regards,\nAlex\n+1 415 555 2671\nSan Francisco";
+      assert.strictEqual(extractPhoneNumberFallback(sig4), '+1 415 555 2671');
+
+      // 5. Must NOT extract dates, times, or email timestamps
+      const sig5 = "Sent on 22/08/2026 at 15:30:12\nNo phone provided";
+      assert.strictEqual(extractPhoneNumberFallback(sig5), '');
     });
   });
 

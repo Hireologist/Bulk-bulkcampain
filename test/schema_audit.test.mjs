@@ -104,9 +104,10 @@ describe('🩺 Sheet Schema & Column Integrity Verification Test Suite', () => {
       assert.ok(detailsIssue);
       assert.ok(detailsIssue.missing.includes('Next Follow Up Date'));
       assert.ok(detailsIssue.missing.includes('Summary'));
+      assert.ok(detailsIssue.missing.includes('Phone'));
       assert.strictEqual(detailsIssue.startColLetter, 'L');
-      assert.strictEqual(detailsIssue.endColLetter, 'M');
-      assert.strictEqual(detailsIssue.suggestedPosition, "'Details'!L1:M1");
+      assert.strictEqual(detailsIssue.endColLetter, 'N');
+      assert.strictEqual(detailsIssue.suggestedPosition, "'Details'!L1:N1");
     });
 
     test('auto-repairs missing columns by appending them to Row 1', async () => {
