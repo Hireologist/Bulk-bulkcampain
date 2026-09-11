@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 // 🛡️ Production Hardening Modules
 import { getSendDelay, trackOutcome, checkAndResetDailyStats } from './src/throttle.mjs';
 import { sendWithRetry } from './src/retry.mjs';
-import { isSuppressed, addToSuppression, buildSenderFooter, isOptOutReply } from './src/suppression.mjs';
+import { isSuppressed, addToSuppression, buildSenderFooter, isOptOutReply, stripQuotedReply } from './src/suppression.mjs';
 import { alertIfUnhealthy, sendRunSummaryAlert, postToDiscord, isAuthError, sendAuthFailureAlert } from './src/alerts.mjs';
 import { runWarmupCycle } from './src/warmup.mjs';
 import { parseSpintax } from './src/spintax.mjs';
@@ -1396,7 +1396,13 @@ export async function runFollowups(sheetsObj = null, customConfig = null) {
 export function extractPhoneNumberFallback(text = '') {
   if (!text || typeof text !== 'string') return '';
 
-  const cleanText = text.replace(/\r\n/g, '\n');
+  // 🛡️ SENDER PHONE NUMBER SAFEGUARD:
+  // Strip quoted reply threads and email history first so we NEVER extract the sender's own
+  // phone number or company contact info that was part of the original outreach email signature!
+  const replyOnlyText = stripQuotedReply(text);
+  if (!replyOnlyText) return '';
+
+  const cleanText = replyOnlyText.replace(/\r\n/g, '\n');
 
   // Pattern 1: Explicitly labeled numbers (e.g. Phone:, Mob:, Mobile:, Cell:, Tel:, WhatsApp:, Call:)
   const labeledRegex = /(?:phone|mobile|mob|cell|tel|telephone|direct|call|whatsapp|contact|ph|m|o)\s*[:#–-]?\s*([+]?[(]?[0-9]{1,4}[)]?[-\s./]?(?:[(]?[0-9]{1,5}[)]?[-\s./]?){1,5}[0-9]{2,6})/i;
@@ -1451,12 +1457,16 @@ function isValidPhoneNumber(num) {
 
 // Helper for AI Email Sentiment Classification, Summarization & Phone Extraction (Resilient Fallback)
 export async function classifyEmailWithAi(groq, emailText = '') {
+  // 🛡️ SENDER PHONE NUMBER SAFEGUARD:
+  // Strip quoted reply history first so AI only analyzes the lead's new reply,
+  // preventing false classification and preventing sender phone number extraction.
+  const cleanEmailText = stripQuotedReply(emailText);
   let sentiment = 'REPLIED';
-  let summary = (emailText || '').trim().replace(/\s+/g, ' ').substring(0, 150);
+  let summary = (cleanEmailText || emailText || '').trim().replace(/\s+/g, ' ').substring(0, 150);
   if (summary.length === 150) summary += '...';
-  let phone = extractPhoneNumberFallback(emailText);
+  let phone = extractPhoneNumberFallback(cleanEmailText);
 
-  if (!groq || !emailText) {
+  if (!groq || !cleanEmailText) {
     return { sentiment, summary, phone };
   }
 
@@ -1477,7 +1487,7 @@ export async function classifyEmailWithAi(groq, emailText = '') {
 {
   "sentiment": "POSITIVE" | "NEUTRAL" | "NEGATIVE" | "OOO",
   "summary": "1-2 sentence summary of the lead's message, questions, or objections",
-  "phone": "Extracted phone, mobile, WhatsApp, or direct contact number from the email body or signature, or empty string \\"\\" if not found"
+  "phone": "Extracted phone, mobile, WhatsApp, or direct contact number from the lead's new reply or signature, or empty string \\"\\" if not found"
 }
 
 Definitions:
@@ -1487,13 +1497,14 @@ Definitions:
 - "OOO": Automated Out of Office / Vacation auto-responder.
 
 Phone Extraction Guidance:
-- Look in the email body, closing, and signature block for contact numbers (e.g., "Mobile: +91 9880082711", "Call me at (555) 123-4567", "Tel: +1-800-555-0199", "WhatsApp: +44 7911 123456", "Phone: 9876543210").
+- Look ONLY in the lead's current message, closing, and signature block for contact numbers (e.g., "Mobile: +91 9880082711", "Call me at (555) 123-4567", "Tel: +1-800-555-0199", "WhatsApp: +44 7911 123456", "Phone: 9876543210").
+- CRITICAL SENDER PROTECTION: NEVER extract the sender's outreach phone number, company number, or numbers from quoted email history or footers.
 - Clean the phone number (preserve leading +, country code, digits, standard separators like space or dash).
-- If no phone number is found, return "".
+- If no phone number is found in the lead's reply, return "".
 
 Do NOT include markdown backticks or any conversational text. Return only the JSON.`
           },
-          { role: 'user', content: emailText.substring(0, 3000) }
+          { role: 'user', content: cleanEmailText.substring(0, 3000) }
         ],
       }), { retries: 2, baseDelay: 1000 });
 
@@ -1634,7 +1645,8 @@ export async function runInboxChecker() {
 
           const emailSubject = parsed.subject || '';
           const emailBody = parsed.text || '';
-          const combinedEmailContent = emailSubject ? `Subject: ${emailSubject}\n\n${emailBody}` : emailBody;
+          const cleanBody = stripQuotedReply(emailBody);
+          const combinedEmailContent = emailSubject ? `Subject: ${emailSubject}\n\n${cleanBody}` : cleanBody;
 
           const { sentiment, summary, phone } = await classifyEmailWithAi(groq, combinedEmailContent);
 

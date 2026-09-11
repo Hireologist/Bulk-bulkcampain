@@ -75,11 +75,12 @@ export function clearSuppressionCache() {
  * Strip quoted trail/history from an email body so we only inspect the prospect's actual reply.
  */
 export function stripQuotedReply(body = '') {
-  if (!body) return '';
+  if (!body || typeof body !== 'string') return '';
   const quoteMarkers = [
-    /\r?\n\s*On\s+.+?wrote:\s*$/im,
+    /\r?\n\s*On\s+[\s\S]+?wrote:\s*$/im,
+    /\r?\n\s*On\s+.*wrote:.*$/im,
     /\r?\n\s*-+\s*Original Message\s*-+/i,
-    /\r?\n\s*From:\s+/i,
+    /\r?\n\s*From:\s+[^\n]+@/i,
     /\r?\n\s*Sent by\s+/i,
     /\r?\n\s*_{10,}/,
   ];
@@ -94,10 +95,11 @@ export function stripQuotedReply(body = '') {
 
   return cleaned
     .split(/\r?\n/)
-    .filter(line => !line.trim().startsWith('>'))
+    .filter(line => !line.trim().startsWith('>') && !line.trim().startsWith('&gt;'))
     .join('\n')
     .trim();
 }
+
 
 /**
  * Detect if an incoming email reply is an explicit unsubscribe / opt-out request.

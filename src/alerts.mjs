@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import { execSync } from 'node:child_process';
 
 function getRepoSlug() {
@@ -77,6 +78,10 @@ export function writeGitHubStepSummary(markdownText) {
   const summaryPath = process.env.GITHUB_STEP_SUMMARY;
   if (!summaryPath) return;
   try {
+    const dir = path.dirname(summaryPath);
+    if (dir && !fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
     fs.appendFileSync(summaryPath, `${markdownText}\n\n`, 'utf8');
   } catch (err) {
     console.warn(`[GitHub Step Summary] Could not write summary: ${err.message}`);

@@ -109,6 +109,39 @@ describe('Universal Outreach Engine Unit Tests', () => {
       const sig5 = "Sent on 22/08/2026 at 15:30:12\nNo phone provided";
       assert.strictEqual(extractPhoneNumberFallback(sig5), '');
     });
+
+    it('should strictly ignore and never extract the sender phone number from quoted email trail history', async () => {
+      // Scenario A: Lead replied without giving a phone number, but original email trail contains sender's phone
+      const emailWithQuotedSenderPhone = `Hi Neha,\nYes, we are interested in learning more. Please share your deck.\n\n` +
+        `On Fri, 11 Sep 2026 at 15:30:00 +0530, Neha <neha@hireologist.co.in> wrote:\n` +
+        `> Hi Rahul,\n` +
+        `> Looking to hire top vetted talent?\n` +
+        `> Best,\n` +
+        `> Neha Sharma\n` +
+        `> Phone: +91 99999 88888\n` +
+        `> Click here to unsubscribe`;
+
+      // Fallback regex must ignore quoted trail and return empty string
+      assert.strictEqual(extractPhoneNumberFallback(emailWithQuotedSenderPhone), '');
+
+      // AI fallback classifier must also return empty string
+      const classification = await classifyEmailWithAi(null, emailWithQuotedSenderPhone);
+      assert.strictEqual(classification.phone, '');
+      assert.ok(!classification.summary.includes('99999 88888'), 'Summary must not contain sender phone');
+
+      // Scenario B: Lead gives their own phone number, and email trail also has sender's phone number
+      const emailWithBothPhones = `Sounds great, please give me a call at +1 (415) 889-2910.\n\n` +
+        `Best regards,\nMark\n\n` +
+        `-----Original Message-----\n` +
+        `From: Neha Sharma [mailto:neha@hireologist.co.in]\n` +
+        `Sent: Friday, September 11, 2026 3:30 PM\n` +
+        `To: mark@clientdomain.com\n` +
+        `Subject: Quick question\n\n` +
+        `> Phone: +91 99999 88888`;
+
+      // Must extract ONLY the lead's phone number (+1 (415) 889-2910), NEVER the sender's (+91 99999 88888)
+      assert.strictEqual(extractPhoneNumberFallback(emailWithBothPhones), '+1 (415) 889-2910');
+    });
   });
 
   describe('New Lead vs Existing Lead Re-reply Channel Router', () => {

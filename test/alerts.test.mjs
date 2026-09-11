@@ -1,4 +1,4 @@
-import { test, describe, beforeEach, afterEach } from 'node:test';
+import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -6,22 +6,6 @@ import os from 'node:os';
 import { isAuthError, sendAuthFailureAlert, writeGitHubStepSummary } from '../src/alerts.mjs';
 
 describe('Google App Password & Auth Alerting Unit Tests', () => {
-  let tempSummaryFile;
-
-  beforeEach(() => {
-    tempSummaryFile = path.join(os.tmpdir(), `test-step-summary-${Date.now()}.md`);
-    process.env.GITHUB_STEP_SUMMARY = tempSummaryFile;
-  });
-
-  afterEach(() => {
-    delete process.env.GITHUB_STEP_SUMMARY;
-    try {
-      if (fs.existsSync(tempSummaryFile)) {
-        fs.unlinkSync(tempSummaryFile);
-      }
-    } catch {}
-  });
-
   describe('isAuthError Pattern Matching', () => {
     test('identifies error code EAUTH and responseCode 535', () => {
       assert.strictEqual(isAuthError({ code: 'EAUTH', message: 'Auth failed' }), true);
@@ -63,22 +47,49 @@ describe('Google App Password & Auth Alerting Unit Tests', () => {
 
   describe('writeGitHubStepSummary', () => {
     test('writes markdown content to GITHUB_STEP_SUMMARY file', () => {
-      writeGitHubStepSummary('### Test Markdown Step Summary');
-      assert.ok(fs.existsSync(tempSummaryFile));
-      const content = fs.readFileSync(tempSummaryFile, 'utf8');
-      assert.ok(content.includes('### Test Markdown Step Summary'));
+      const tempSummaryFile = path.join(os.tmpdir(), `test-step-summary-${Date.now()}-${Math.random().toString(36).slice(2)}.md`);
+      const originalEnv = process.env.GITHUB_STEP_SUMMARY;
+      process.env.GITHUB_STEP_SUMMARY = tempSummaryFile;
+
+      try {
+        writeGitHubStepSummary('### Test Markdown Step Summary');
+        assert.ok(fs.existsSync(tempSummaryFile), 'Step summary file should be created');
+        const content = fs.readFileSync(tempSummaryFile, 'utf8');
+        assert.ok(content.includes('### Test Markdown Step Summary'));
+      } finally {
+        if (originalEnv !== undefined) {
+          process.env.GITHUB_STEP_SUMMARY = originalEnv;
+        } else {
+          delete process.env.GITHUB_STEP_SUMMARY;
+        }
+        try {
+          if (fs.existsSync(tempSummaryFile)) fs.unlinkSync(tempSummaryFile);
+        } catch {}
+      }
     });
 
     test('gracefully ignores when GITHUB_STEP_SUMMARY is unset', () => {
+      const originalEnv = process.env.GITHUB_STEP_SUMMARY;
       delete process.env.GITHUB_STEP_SUMMARY;
-      assert.doesNotThrow(() => {
-        writeGitHubStepSummary('Some content');
-      });
+
+      try {
+        assert.doesNotThrow(() => {
+          writeGitHubStepSummary('Some content');
+        });
+      } finally {
+        if (originalEnv !== undefined) {
+          process.env.GITHUB_STEP_SUMMARY = originalEnv;
+        }
+      }
     });
   });
 
   describe('sendAuthFailureAlert', () => {
     test('dispatches Discord embed, writes step summary, and returns success', async () => {
+      const tempSummaryFile = path.join(os.tmpdir(), `test-step-summary-alert-${Date.now()}-${Math.random().toString(36).slice(2)}.md`);
+      const originalEnv = process.env.GITHUB_STEP_SUMMARY;
+      process.env.GITHUB_STEP_SUMMARY = tempSummaryFile;
+
       let capturedPayload = null;
       const originalFetch = globalThis.fetch;
       globalThis.fetch = async (url, opts) => {
@@ -105,12 +116,20 @@ describe('Google App Password & Auth Alerting Unit Tests', () => {
         assert.strictEqual(capturedPayload.embeds[0].fields[1].value, 'Pre-Flight Diagnostic SMTP Test');
 
         // Check Step Summary written
-        assert.ok(fs.existsSync(tempSummaryFile));
+        assert.ok(fs.existsSync(tempSummaryFile), 'Alert step summary file should exist');
         const summaryContent = fs.readFileSync(tempSummaryFile, 'utf8');
         assert.ok(summaryContent.includes('outreach@companydomain.com'));
         assert.ok(summaryContent.includes('Google App Passwords'));
       } finally {
         globalThis.fetch = originalFetch;
+        if (originalEnv !== undefined) {
+          process.env.GITHUB_STEP_SUMMARY = originalEnv;
+        } else {
+          delete process.env.GITHUB_STEP_SUMMARY;
+        }
+        try {
+          if (fs.existsSync(tempSummaryFile)) fs.unlinkSync(tempSummaryFile);
+        } catch {}
       }
     });
 
@@ -125,3 +144,4 @@ describe('Google App Password & Auth Alerting Unit Tests', () => {
     });
   });
 });
+
