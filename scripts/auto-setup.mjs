@@ -219,6 +219,18 @@ export const COMPLETE_SCHEMA = {
     color: '#0D9488',
     headers: ['brand_key', 'company_name', 'stage_type', 'amount_scale', 'city', 'vc_lead', 'url', 'date_added'],
     sampleData: []
+  },
+  'Positive_Leads': {
+    color: '#10B981',
+    headers: [
+      'full_name', 'email', 'company_name', 'location',
+      'Subject Line', 'Sent From', 'Sent Status', 'Time',
+      'Date Sent', 'Follow up', 'Follow Up Count', 'Next Follow Up Date',
+      'Summary'
+    ],
+    sampleData: [
+      ['=IFERROR(FILTER(Details!A2:M, ISNUMBER(SEARCH("POSITIVE", Details!L2:L))), "No positive leads recorded yet")', '', '', '', '', '', '', '', '', '', '', '', '']
+    ]
   }
 };
 
@@ -391,6 +403,30 @@ async function autoProvisionGoogleSheet(sheets, sheetId) {
                 requestBody: { values: [[f]] },
               });
               console.log('🔄 Restored dynamic analytics formula in "📊 Email_Analytics"');
+              updatedCount++;
+            }
+          }
+        } catch (_) {}
+      }
+
+      // Safe check for Positive_Leads formula
+      if (title === 'Positive_Leads') {
+        try {
+          const posRes = await sheets.spreadsheets.values.get({
+            spreadsheetId: sheetId,
+            range: "'Positive_Leads'!A2:A2",
+          });
+          const curVal = posRes?.data?.values?.[0]?.[0];
+          if (!curVal || !String(curVal).trim().startsWith('=')) {
+            const f = config.sampleData?.[0]?.[0];
+            if (f) {
+              await sheets.spreadsheets.values.update({
+                spreadsheetId: sheetId,
+                range: "'Positive_Leads'!A2",
+                valueInputOption: 'USER_ENTERED',
+                requestBody: { values: [[f]] },
+              });
+              console.log('🔄 Restored dynamic filter formula in "Positive_Leads"');
               updatedCount++;
             }
           }

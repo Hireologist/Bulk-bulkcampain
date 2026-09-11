@@ -171,6 +171,18 @@ function createOutreachSystem(forceReset = false) {
       color: '#0D9488',
       headers: ['brand_key', 'company_name', 'stage_type', 'amount_scale', 'city', 'vc_lead', 'url', 'date_added'],
       sampleData: []
+    },
+    'Positive_Leads': {
+      color: '#10B981',
+      headers: [
+        'full_name', 'email', 'company_name', 'location',
+        'Subject Line', 'Sent From', 'Sent Status', 'Time',
+        'Date Sent', 'Follow up', 'Follow Up Count', 'Next Follow Up Date',
+        'Summary'
+      ],
+      sampleData: [
+        ['=IFERROR(FILTER(Details!A2:M, ISNUMBER(SEARCH("POSITIVE", Details!L2:L))), "No positive leads recorded yet")', '', '', '', '', '', '', '', '', '', '', '', '']
+      ]
     }
   };
 

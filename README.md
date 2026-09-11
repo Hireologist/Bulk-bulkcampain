@@ -16,7 +16,7 @@ An automated, 100% free, production-ready serverless cold outreach platform buil
  ┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
  │ 1. Blank Sheet  │ ────► │ 2. Add 2 Secrets│ ────► │ 3. Run Auto-    │
  │ (sheets.new)    │       │ (ID & Service   │       │    Provisioning │
- │                 │       │  Account JSON)  │       │ (All 16 Tabs)   │
+ │                 │       │  Account JSON)  │       │ (All 17 Tabs)   │
  └─────────────────┘       └─────────────────┘       └─────────────────┘
 ```
 
@@ -41,7 +41,7 @@ All in-depth technical guides, schemas, and walkthroughs are organized into dedi
 | 💬 [**Discord Server & Webhook Setup**](./docs/DISCORD_WEBHOOK_SETUP.md) | How to create a Discord server, channels, and real-time alert webhooks. |
 | 📄 [**Google Service Account Key Setup**](./docs/GOOGLE_SERVICE_ACCOUNT_SETUP.md) | Step-by-step 60-second guide to generate `GOOGLE_SERVICE_ACCOUNT_JSON`. |
 | 📁 [**Multi-Campaign Strategy**](./docs/MULTI_CAMPAIGN_GUIDE.md) | How to scale to multiple clients & campaigns using the 1-Repo architecture. |
-| 📊 [**Google Sheets Schema & Tabs**](./docs/GOOGLE_SHEETS_SCHEMA.md) | Details on all 16 tabs, formulas, Spintax syntax, and custom settings. |
+| 📊 [**Google Sheets Schema & Tabs**](./docs/GOOGLE_SHEETS_SCHEMA.md) | Details on all 17 tabs, formulas, Spintax syntax, and custom settings. |
 | ⏰ [**Automated Cron Scheduling**](./docs/CRON_SETUP.md) | Automated `cron-job.org` dispatch for 100% on-time execution. |
 | 🧩 [**Chrome Extension User Guide**](./docs/CHROME_EXTENSION_GUIDE.md) | 1-click browser lead extraction and queueing extension. |
 | 🔐 [**Google App Passwords Guide**](./docs/GOOGLE_APP_PASSWORD_SETUP.md) | Generating and configuring Gmail / Workspace SMTP App Passwords. |

@@ -258,6 +258,30 @@ export async function auditAndRepairSheetSchema(sheets, sheetId, spreadsheetMeta
         console.warn(`Could not auto-repair ChartData formula: ${err.message}`);
       }
     }
+
+    if (existingTabMap.has('Positive_Leads')) {
+      try {
+        const posRes = await sheets.spreadsheets.values.get({
+          spreadsheetId: sheetId,
+          range: "'Positive_Leads'!A2:A2"
+        });
+        const curVal = posRes?.data?.values?.[0]?.[0];
+        if (!curVal || !String(curVal).trim().startsWith('=')) {
+          const expectedFormula = COMPLETE_SCHEMA['Positive_Leads']?.sampleData?.[0]?.[0];
+          if (expectedFormula) {
+            await sheets.spreadsheets.values.update({
+              spreadsheetId: sheetId,
+              range: "'Positive_Leads'!A2",
+              valueInputOption: 'USER_ENTERED',
+              requestBody: { values: [[expectedFormula]] }
+            });
+            results.repairedFormulas.push({ tab: 'Positive_Leads', cell: 'A2' });
+          }
+        }
+      } catch (err) {
+        console.warn(`Could not auto-repair Positive_Leads formula: ${err.message}`);
+      }
+    }
   }
 
   // Synchronize Setup Guide documentation steps non-destructively
