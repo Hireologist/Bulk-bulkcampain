@@ -1472,14 +1472,14 @@ export async function classifyEmailWithAi(groq, emailText = '') {
 
   const modelsToTry = [
     'openai/gpt-oss-120b',
-    'llama-3.3-70b-versatile',
-    'llama-3.1-8b-instant'
+    'openai/gpt-oss-20b'
   ];
 
   for (const model of modelsToTry) {
     try {
       const aiRes = await sendWithRetry(() => groq.chat.completions.create({
         model,
+        max_tokens: 300,
         messages: [
           {
             role: 'system',
@@ -1509,7 +1509,12 @@ Do NOT include markdown backticks or any conversational text. Return only the JS
       }), { retries: 2, baseDelay: 1000 });
 
       const rawText = aiRes.choices[0]?.message?.content?.trim() || '';
-      const cleanJsonText = rawText.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/\s*```$/, '').trim();
+      const cleanJsonText = rawText
+        .replace(/<think>[\s\S]*?<\/think>/gi, '')
+        .replace(/^```json\s*/i, '')
+        .replace(/^```\s*/, '')
+        .replace(/\s*```$/, '')
+        .trim();
       const parsedObj = JSON.parse(cleanJsonText);
 
       if (parsedObj.sentiment) {
