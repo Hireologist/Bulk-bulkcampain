@@ -1036,12 +1036,12 @@ export async function runSingleLeadOutreach(singleLeadPayload = {}) {
 
       if (isAuthError(err)) {
         await sendAuthFailureAlert({
-          inboxEmail: inboxToUse.email,
+          inboxEmail: inbox.email,
           errorDetails: err.message,
           webhookUrl: activeWebhookUrl,
           context: 'Single Lead Outreach Send'
         });
-        throw new Error(`Google App Password authentication failed for [${inboxToUse.email}]: ${err.message}. Please update smtp_pass in Inboxes tab.`);
+        throw new Error(`Google App Password authentication failed for [${inbox.email}]: ${err.message}. Please update smtp_pass in Inboxes tab.`);
       }
 
       const errLower = (err.message || '').toLowerCase();

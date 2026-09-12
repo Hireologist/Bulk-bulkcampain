@@ -437,6 +437,21 @@ On Thu, Sep 3, 2026 at 11:02 AM Alex wrote:
         /Invalid email address or domain has no MX records/
       );
     });
+
+    it('should not reference undefined inboxToUse in runSingleLeadOutreach error handlers', async () => {
+      const fs = await import('node:fs');
+      const path = await import('node:path');
+      const engineContent = fs.readFileSync(path.resolve('engine.mjs'), 'utf8');
+      
+      const singleLeadFnMatch = engineContent.match(/export async function runSingleLeadOutreach[\s\S]*?\r?\n}\r?\n/);
+      assert.ok(singleLeadFnMatch, 'runSingleLeadOutreach function should be found in engine.mjs');
+      const fnBody = singleLeadFnMatch[0];
+      
+      assert.ok(
+        !fnBody.includes('inboxToUse'),
+        'runSingleLeadOutreach should not reference undefined variable "inboxToUse"; it must use "inbox"'
+      );
+    });
   });
 
   describe('Master Campaign Active & Pause Toggle', () => {

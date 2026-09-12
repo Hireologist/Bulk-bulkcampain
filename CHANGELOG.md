@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.2] - 2026-09-12
+
+### Fixed & Enhanced
+- **Single Lead Authentication Error Handling (`engine.mjs`)**:
+  - Fixed a `ReferenceError` where `inboxToUse.email` was referenced instead of `inbox.email` in `runSingleLeadOutreach()`, ensuring Discord authentication failure alerts and Step Summaries are reliably dispatched.
+  - Added regression test in `test/engine.test.mjs` verifying clean error variable scoping.
+- **Documentation**:
+  - Updated test badges and metrics in `README.md` to reflect 156 passing tests across 28 test suites.
+
 ## [2.2.1] - 2026-09-04
 
 ### Security & Hardening

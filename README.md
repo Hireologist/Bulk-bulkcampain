@@ -3,7 +3,7 @@
 [![Node.js CI](https://img.shields.io/badge/Node.js-v22+-green.svg?logo=node.js)](https://nodejs.org/)
 [![Serverless Engine](https://img.shields.io/badge/Architecture-100%25%20Serverless-blue.svg?logo=github-actions)](https://github.com/features/actions)
 [![100% Free](https://img.shields.io/badge/Cost-100%25%20Free-brightgreen.svg)](#)
-[![Tests Passing](https://img.shields.io/badge/Tests-147%2F147%20Passing-success.svg)](#)
+[![Tests Passing](https://img.shields.io/badge/Tests-156%2F156%20Passing-success.svg)](#)
 [![License: PolyForm Noncommercial](https://img.shields.io/badge/License-PolyForm%20Noncommercial-blue.svg)](./LICENSE)
 
 An automated, 100% free, production-ready serverless cold outreach platform built with **Node.js**, **Google Sheets API**, **IMAP/SMTP**, **GitHub Actions**, **Groq AI**, **Discord Webhooks**, and an **Online GitHub Pages Dashboard**.
@@ -84,7 +84,7 @@ You only need **2 repository secrets** to run the complete platform:
 # Install dependencies
 npm ci
 
-# Run all 147 unit tests across 19 test suites
+# Run all 156 unit tests across 28 test suites
 npm test
 
 # Start local web dashboard
