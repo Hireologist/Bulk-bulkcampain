@@ -345,25 +345,6 @@ export async function formatSheetTab(sheets, spreadsheetId, sheetNumericId, titl
           },
           fields: 'userEnteredFormat.numberFormat',
         },
-      },
-      {
-        repeatCell: {
-          range: {
-            sheetId: sheetNumericId,
-            startRowIndex: 1, // Data rows below header
-            startColumnIndex: 11, // Column L (Next Follow Up Date)
-            endColumnIndex: 12,
-          },
-          cell: {
-            userEnteredFormat: {
-              numberFormat: {
-                type: 'DATE',
-                pattern: 'dd/mm/yyyy',
-              },
-            },
-          },
-          fields: 'userEnteredFormat.numberFormat',
-        },
       }
     );
   } else if (title === 'Positive_Leads') {

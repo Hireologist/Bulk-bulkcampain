@@ -344,13 +344,6 @@ export async function auditAndRepairSheetSchema(sheets, sheetId, spreadsheetMeta
               cell: { userEnteredFormat: { numberFormat: { type: 'DATE', pattern: 'dd/mm/yyyy' } } },
               fields: 'userEnteredFormat.numberFormat',
             },
-          },
-          {
-            repeatCell: {
-              range: { sheetId: detailsId, startRowIndex: 1, startColumnIndex: 11, endColumnIndex: 12 },
-              cell: { userEnteredFormat: { numberFormat: { type: 'DATE', pattern: 'dd/mm/yyyy' } } },
-              fields: 'userEnteredFormat.numberFormat',
-            },
           }
         );
       }
