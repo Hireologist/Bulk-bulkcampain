@@ -1,0 +1,11 @@
+title = "Gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Allow test fixtures and scratch directories"
+paths = [
+  '''test/''',
+  '''scratch/'''
+]

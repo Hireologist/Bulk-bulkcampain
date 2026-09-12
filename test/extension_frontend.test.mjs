@@ -241,14 +241,14 @@ test('Multi-Master Token Routing: resolveTokenForCampaign matches accurately', (
   const pool = [
     {
       id: 'tok_demo_org',
-      token: 'pat_demo_12345',
+      token: 'dummy', // gitleaks:allow
       username: 'demo-org',
       name: 'Demo Admin',
       isDefault: false
     },
     {
       id: 'tok_demo_corp',
-      token: 'pat_corp_67890',
+      token: 'dummy', // gitleaks:allow
       username: 'demo-corp',
       name: 'Demo Corp Global',
       isDefault: true // Default master
