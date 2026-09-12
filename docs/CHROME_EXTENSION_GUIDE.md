@@ -21,9 +21,9 @@ It allows you to prospect anywhere on the web, parse emails on the fly, and trig
 ## ⚡ Key Capabilities
 
 * **🧠 Smart Auto-Parsing**:
-  * **Name Extraction**: Converts `rohan.patel@hireologist.in` ➔ `Rohan`.
+  * **Name Extraction**: Converts `alex.hunter@acme-corp.com` ➔ `Alex`.
   * **Role-Based Fallback**: Auto-detects generic roles (`hr@`, `careers@`, `talent@`, `info@`, `sales@`, `support@`) ➔ `Team`.
-  * **Company Extraction**: Cleans email domains (strips corporate suffixes like `technologies`, `solutions`, `group`, `ltd`, `consulting`) ➔ `Hireologist`.
+  * **Company Extraction**: Cleans email domains (strips corporate suffixes like `technologies`, `solutions`, `group`, `ltd`, `consulting`) ➔ `Acme Corp`.
   * **Public Provider Detection**: Normalizes `gmail.com`, `yahoo.com`, etc. ➔ `Your Company`.
 * **📂 Multi-Campaign Switcher**: Switch between different client spreadsheets or campaign profiles in 1 click from the header dropdown.
 * **🚀 Cloud Trigger via GitHub API**: Zero local mail software needed; sends encrypted dispatches to your GitHub runner with automated alias rotation, spintax rendering, and unsubscribe injection.
@@ -76,7 +76,7 @@ If you manage multiple outreach campaigns or different Google Sheets:
 
 1. Open **⚙️ Settings** ➔ Scroll to **Multi-Campaign & Webhook Profiles**.
 2. Enter your profile details:
-   * **Campaign Profile Name**: e.g., `Hireologist Main Campaign` or `SaaS Founders`.
+   * **Campaign Profile Name**: e.g., `Global Outreach Campaign` or `SaaS Founders`.
    * **Google Sheet ID**: The 44-character ID from your Google Sheet URL.
    * **Webhook URL Override** *(Optional)*: Leave blank to auto-use your Sheet's Discord webhook.
    * **Default Location Fallback**: e.g., `Mumbai` or `India`.
@@ -91,9 +91,9 @@ Use this whenever you are browsing LinkedIn, company websites, or directory list
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  Recipient Email:  [ rohan.patel@hireologist.in        ] │
-│  Full Name:        [ Rohan                             ] │
-│  Company Name:     [ Hireologist                       ] │
+│  Recipient Email:  [ alex.hunter@acme-corp.com          ] │
+│  Full Name:        [ Alex                               ] │
+│  Company Name:     [ Acme Corp                          ] │
 │  Location:         [ Mumbai                            ] │
 │                                                          │
 │  [  🚀 Send Instant Email  ]                             │
@@ -116,7 +116,7 @@ Use this when you have a list of raw email addresses copied from an export, CSV,
 1. Click the extension icon and select the **Bulk Batch** tab.
 2. Paste the list into the textarea (one email per line or comma-separated):
    ```text
-   rohan.patel@hireologist.in
+   alex.hunter@acme-corp.com
    hr@acme-technologies.com
    priya.sharma@fintechcorp.io
    ```

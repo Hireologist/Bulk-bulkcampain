@@ -108,32 +108,32 @@ test('Frontend CSS: production design tokens and layout rules', () => {
 test('Smart Repo Parser: extractRepoDetails handles diverse input formats', () => {
   // Full HTTPS URL
   assert.deepEqual(
-    extractRepoDetails('https://github.com/Hireologist/Bulk-bulkcampain'),
-    { owner: 'Hireologist', repo: 'Bulk-bulkcampain', full_name: 'Hireologist/Bulk-bulkcampain' }
+    extractRepoDetails('https://github.com/demo-org/outreach-campaign'),
+    { owner: 'demo-org', repo: 'outreach-campaign', full_name: 'demo-org/outreach-campaign' }
   );
 
   // Full URL with trailing slash and .git
   assert.deepEqual(
-    extractRepoDetails('https://github.com/rkhrmanagement/Bulk-campain.git/'),
-    { owner: 'rkhrmanagement', repo: 'Bulk-campain', full_name: 'rkhrmanagement/Bulk-campain' }
+    extractRepoDetails('https://github.com/demo-corp/lead-campaign.git/'),
+    { owner: 'demo-corp', repo: 'lead-campaign', full_name: 'demo-corp/lead-campaign' }
   );
 
   // SSH clone format
   assert.deepEqual(
-    extractRepoDetails('git@github.com:Rohanpatel16/Sheet-bot.git'),
-    { owner: 'Rohanpatel16', repo: 'Sheet-bot', full_name: 'Rohanpatel16/Sheet-bot' }
+    extractRepoDetails('git@github.com:demo-team/Sheet-bot.git'),
+    { owner: 'demo-team', repo: 'Sheet-bot', full_name: 'demo-team/Sheet-bot' }
   );
 
   // Short format
   assert.deepEqual(
-    extractRepoDetails('Hireologist/Bulk-bulkcampain'),
-    { owner: 'Hireologist', repo: 'Bulk-bulkcampain', full_name: 'Hireologist/Bulk-bulkcampain' }
+    extractRepoDetails('demo-org/outreach-campaign'),
+    { owner: 'demo-org', repo: 'outreach-campaign', full_name: 'demo-org/outreach-campaign' }
   );
 
   // Whitespace padded
   assert.deepEqual(
-    extractRepoDetails('   rkhrmanagement/Bulk-campain   '),
-    { owner: 'rkhrmanagement', repo: 'Bulk-campain', full_name: 'rkhrmanagement/Bulk-campain' }
+    extractRepoDetails('   demo-corp/lead-campaign   '),
+    { owner: 'demo-corp', repo: 'lead-campaign', full_name: 'demo-corp/lead-campaign' }
   );
 
   // Invalid inputs
@@ -192,7 +192,7 @@ test('Token Sanitization: sanitizeToken removes prefixes, whitespace, and format
 
 test('Lead Detail Extraction: names and companies from email', () => {
   // First name extraction
-  assert.equal(extractNameFromEmail('rohan.patel@hireologist.in'), 'Rohan');
+  assert.equal(extractNameFromEmail('alex.hunter@demo-corp.com'), 'Alex');
   assert.equal(extractNameFromEmail('alexander_smith@corp.com'), 'Alexander');
 
   // Generic roles should default to 'Team'
@@ -202,7 +202,7 @@ test('Lead Detail Extraction: names and companies from email', () => {
   assert.equal(extractNameFromEmail('hello@stripe.com'), 'Team');
 
   // Company extraction
-  assert.equal(extractCompanyFromEmail('rohan.patel@hireologist.in'), 'Hireologist');
+  assert.equal(extractCompanyFromEmail('alex.hunter@demo-corp.com'), 'Demo Corp');
   assert.equal(extractCompanyFromEmail('hr@acme-technologies.com'), 'Acme');
   assert.equal(extractCompanyFromEmail('contact@quantum-software-solutions.com'), 'Quantum Software');
 
@@ -214,7 +214,7 @@ test('Lead Detail Extraction: names and companies from email', () => {
 
 test('Bulk Lead Parser: parseBulkLines handles multiline emails and CSV entries', () => {
   const rawInput = `
-    rohan.patel@hireologist.in
+    alex.hunter@demo-corp.com
     hr@acme-technologies.com
     john.doe@techflow.io, Johnathan Doe, TechFlow Inc.
     invalid-email-line-to-skip
@@ -223,9 +223,9 @@ test('Bulk Lead Parser: parseBulkLines handles multiline emails and CSV entries'
   const leads = parseBulkLines(rawInput, 'India');
   assert.equal(leads.length, 3, 'Should parse exactly 3 valid email leads');
 
-  assert.equal(leads[0].email, 'rohan.patel@hireologist.in');
-  assert.equal(leads[0].full_name, 'Rohan');
-  assert.equal(leads[0].company_name, 'Hireologist');
+  assert.equal(leads[0].email, 'alex.hunter@demo-corp.com');
+  assert.equal(leads[0].full_name, 'Alex');
+  assert.equal(leads[0].company_name, 'Demo Corp');
   assert.equal(leads[0].location, 'India');
 
   assert.equal(leads[1].email, 'hr@acme-technologies.com');
@@ -240,41 +240,41 @@ test('Bulk Lead Parser: parseBulkLines handles multiline emails and CSV entries'
 test('Multi-Master Token Routing: resolveTokenForCampaign matches accurately', () => {
   const pool = [
     {
-      id: 'tok_hireologist',
-      token: 'pat_hireologist_12345',
-      username: 'Hireologist',
-      name: 'Hireologist Admin',
+      id: 'tok_demo_org',
+      token: 'pat_demo_12345',
+      username: 'demo-org',
+      name: 'Demo Admin',
       isDefault: false
     },
     {
-      id: 'tok_rkhr',
-      token: 'pat_rkhr_67890',
-      username: 'rkhrmanagement',
-      name: 'RK HR Global',
+      id: 'tok_demo_corp',
+      token: 'pat_corp_67890',
+      username: 'demo-corp',
+      name: 'Demo Corp Global',
       isDefault: true // Default master
     }
   ];
 
   // 1. Explicit token binding
   const explicitCamp = {
-    owner: 'Hireologist',
-    repo: 'Bulk-bulkcampain',
-    tokenId: 'tok_hireologist'
+    owner: 'demo-org',
+    repo: 'outreach-campaign',
+    tokenId: 'tok_demo_org'
   };
   assert.equal(
     resolveTokenForCampaign(explicitCamp, pool)?.id,
-    'tok_hireologist'
+    'tok_demo_org'
   );
 
   // 2. Auto-match by repo owner (case-insensitive)
   const autoMatchCamp = {
-    owner: 'hireologist',
-    repo: 'Bulk-bulkcampain',
+    owner: 'DEMO-ORG',
+    repo: 'outreach-campaign',
     tokenId: 'auto'
   };
   assert.equal(
     resolveTokenForCampaign(autoMatchCamp, pool)?.id,
-    'tok_hireologist'
+    'tok_demo_org'
   );
 
   // 3. Auto-match fallback to Default Master when owner does not match any token username
@@ -285,14 +285,14 @@ test('Multi-Master Token Routing: resolveTokenForCampaign matches accurately', (
   };
   assert.equal(
     resolveTokenForCampaign(unknownOwnerCamp, pool)?.id,
-    'tok_rkhr' // Falls back to default master
+    'tok_demo_corp' // Falls back to default master
   );
 
   // 4. Fallback to first available if no default is explicitly marked
   const noDefaultPool = pool.map(t => ({ ...t, isDefault: false }));
   assert.equal(
     resolveTokenForCampaign(unknownOwnerCamp, noDefaultPool)?.id,
-    'tok_hireologist'
+    'tok_demo_org'
   );
 
   // 5. Empty pool or null campaign returns null safely

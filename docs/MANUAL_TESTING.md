@@ -140,7 +140,7 @@ This guide shows you how to manually test, verify, and monitor every feature of 
 *Verify that SPF and DMARC records are audited for all mailboxes.*
 
 ### Steps:
-1. Add your sending mailbox in the **`Inboxes`** tab (e.g. `Abhishek@hireologist.co.in`).
+1. Add your sending mailbox in the **`Inboxes`** tab (e.g. `sender@demo.com`).
 2. Go to **Actions** > **Weekly Domain Health Check** > click **Run workflow**.
 3. **Expected Result**:
    - The workflow runs `scripts/run-domain-health.mjs`.

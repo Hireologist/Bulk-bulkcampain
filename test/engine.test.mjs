@@ -112,12 +112,12 @@ describe('Universal Outreach Engine Unit Tests', () => {
 
     it('should strictly ignore and never extract the sender phone number from quoted email trail history', async () => {
       // Scenario A: Lead replied without giving a phone number, but original email trail contains sender's phone
-      const emailWithQuotedSenderPhone = `Hi Neha,\nYes, we are interested in learning more. Please share your deck.\n\n` +
-        `On Fri, 11 Sep 2026 at 15:30:00 +0530, Neha <neha@hireologist.co.in> wrote:\n` +
+      const emailWithQuotedSenderPhone = `Hi Alex,\nYes, we are interested in learning more. Please share your deck.\n\n` +
+        `On Fri, 11 Sep 2026 at 15:30:00 +0530, Alex <sender@demo.com> wrote:\n` +
         `> Hi Rahul,\n` +
         `> Looking to hire top vetted talent?\n` +
         `> Best,\n` +
-        `> Neha Sharma\n` +
+        `> Alex Morgan\n` +
         `> Phone: +91 99999 88888\n` +
         `> Click here to unsubscribe`;
 
@@ -133,7 +133,7 @@ describe('Universal Outreach Engine Unit Tests', () => {
       const emailWithBothPhones = `Sounds great, please give me a call at +1 (415) 889-2910.\n\n` +
         `Best regards,\nMark\n\n` +
         `-----Original Message-----\n` +
-        `From: Neha Sharma [mailto:neha@hireologist.co.in]\n` +
+        `From: Alex Morgan [mailto:sender@demo.com]\n` +
         `Sent: Friday, September 11, 2026 3:30 PM\n` +
         `To: mark@clientdomain.com\n` +
         `Subject: Quick question\n\n` +
@@ -301,14 +301,14 @@ describe('Universal Outreach Engine Unit Tests', () => {
     });
 
     it('should NOT detect opt-out when body quotes trail email containing unsubscribe link', () => {
-      const trailEmailBody = `Hey Neha,
+      const trailEmailBody = `Hey Alex,
 I'm attaching two profiles that need to be closed.
-On Thu, Sep 3, 2026 at 11:02 AM Neha wrote:
-> Sent by Hireologist
+On Thu, Sep 3, 2026 at 11:02 AM Alex wrote:
+> Sent by Demo Company
 > Unsubscribe from these emails.`;
 
       assert.strictEqual(
-        isOptOutReply('Recruitment proposal | Nuuk X Hireologist || 03-09-2026', trailEmailBody),
+        isOptOutReply('Recruitment proposal | Nuuk X Demo Company || 03-09-2026', trailEmailBody),
         false
       );
     });

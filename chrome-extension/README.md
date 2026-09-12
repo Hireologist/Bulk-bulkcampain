@@ -7,10 +7,10 @@ A modern, Manifest V3 Chrome Extension that lets you send **Single** and **Bulk*
 ## ⚡ Key Features
 
 1. **Auto Name Extractor**:
-   - Converts `rohan.patel@hireologist.in` ➔ `Rohan`.
+   - Converts `alex.hunter@acme-corp.com` ➔ `Alex`.
    - Identifies role emails (`hr@`, `careers@`, `sales@`, `info@`, `support@`, etc.) ➔ `Team`.
 2. **Auto Company Extractor**:
-   - Converts `rohan@hireologist.in` ➔ `Hireologist`.
+   - Converts `alex@acme-corp.com` ➔ `Acme Corp`.
    - Cleans hyphens, adds space between letters & numbers, and strips common corporate/generic suffixes (`solutions`, `technologies`, `consulting`, `group`, `ltd`, etc.).
    - Detects public providers (`gmail.com`, `yahoo.com`, etc.) ➔ `Your Company`.
 3. **Single Lead Email Dispatch**:
@@ -54,15 +54,15 @@ A modern, Manifest V3 Chrome Extension that lets you send **Single** and **Bulk*
 
 ### A. Sending a Single Instant Email:
 1. Open the extension and select **Single Email** tab.
-2. Type or paste any recipient email address (e.g. `rohan.patel@hireologist.in`).
-3. Notice the **Parsed Name** (`Rohan`) and **Parsed Company** (`Hireologist`) fill automatically!
+2. Type or paste any recipient email address (e.g. `alex.hunter@acme-corp.com`).
+3. Notice the **Parsed Name** (`Alex`) and **Parsed Company** (`Acme Corp`) fill automatically!
 4. Edit the location if needed, and click **Send Instant Email**.
 
 ### B. Sending a Bulk Email Batch:
 1. Open the extension and select **Bulk Batch** tab.
 2. Paste a list of emails (one per line):
    ```text
-   rohan.patel@hireologist.in
+   alex.hunter@acme-corp.com
    hr@acme-technologies.com
    john.doe@techflow.io
    ```

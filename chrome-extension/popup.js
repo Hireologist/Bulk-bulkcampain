@@ -283,8 +283,8 @@ function loadAllData() {
     // 2. Load or migrate Campaigns
     campaigns = res.sheet_bot_campaigns || [];
     if (campaigns.length === 0) {
-      const fallbackOwner = res.sheet_bot_owner || 'Hireologist';
-      const fallbackRepo = res.sheet_bot_repo || 'Bulk-bulkcampain';
+      const fallbackOwner = res.sheet_bot_owner || 'demo-org';
+      const fallbackRepo = res.sheet_bot_repo || 'outreach-campaign';
       campaigns = [
         {
           id: 'default',
@@ -301,7 +301,7 @@ function loadAllData() {
       // Ensure all campaigns have owner & repo
       campaigns = campaigns.map(c => {
         if (!c.owner || !c.repo) {
-          const parsed = extractRepoDetails(c.name) || { owner: res.sheet_bot_owner || 'Hireologist', repo: res.sheet_bot_repo || 'Bulk-bulkcampain' };
+          const parsed = extractRepoDetails(c.name) || { owner: res.sheet_bot_owner || 'demo-org', repo: res.sheet_bot_repo || 'outreach-campaign' };
           return { ...c, owner: parsed.owner, repo: parsed.repo, tokenId: c.tokenId || 'auto' };
         }
         return c;
@@ -508,9 +508,9 @@ function updateStatusTag() {
 function getActiveCampaign() {
   return campaigns.find(c => c.id === activeCampaignId) || campaigns[0] || {
     id: 'default',
-    name: 'Hireologist / Bulk-bulkcampain',
-    owner: 'Hireologist',
-    repo: 'Bulk-bulkcampain',
+    name: 'Demo Campaign / Main',
+    owner: 'demo-org',
+    repo: 'outreach-campaign',
     sheetId: '',
     webhookUrl: '',
     location: 'India',
@@ -1008,7 +1008,7 @@ function setupSettingsEvents() {
 
       const repoDetails = extractRepoDetails(rawRepo);
       if (!repoDetails) {
-        showAlert('Please enter a valid GitHub Repository (e.g. Hireologist/Bulk-bulkcampain or full URL).', 'error');
+        showAlert('Please enter a valid GitHub Repository (e.g. demo-org/outreach-campaign or full URL).', 'error');
         campRepoInput?.focus();
         return;
       }

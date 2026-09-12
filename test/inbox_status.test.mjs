@@ -42,18 +42,18 @@ describe('Inbox Reply Classification & Suppression Enforcement Tests', () => {
     });
 
     test('does NOT flag replies quoting original email containing unsubscribe link as opt-outs', () => {
-      const trailEmailBody = `Hey Neha,
+      const trailEmailBody = `Hey Alex,
 I'm attaching two profiles that need to be closed. Please check and see if you can support in these.
-Best Regards,Dushyant Singh
-On Thu, Sep 3, 2026 at 11:02 AM Neha <rohan@hireologist.co.in> wrote:
-Hi Dushyant,
-Neha reaching out from Hireologist, a dedicated Talent Partner.
-Sent by Hireologist
-Jaipur, Rajasthan
+Best Regards,John Doe
+On Thu, Sep 3, 2026 at 11:02 AM Alex <sender@demo.com> wrote:
+Hi John,
+Alex reaching out from Demo Company, a dedicated Talent Partner.
+Sent by Demo Company
+San Francisco, CA
 Unsubscribe from these emails.`;
 
       assert.strictEqual(
-        isOptOutReply('Recruitment proposal | Nuuk X Hireologist || 03-09-2026', trailEmailBody),
+        isOptOutReply('Recruitment proposal | Nuuk X Demo Company || 03-09-2026', trailEmailBody),
         false
       );
       assert.strictEqual(
@@ -72,9 +72,9 @@ Unsubscribe from these emails.`;
     });
     test('stripQuotedReply cleans quoted history correctly', () => {
       const raw = `Sounds great, sending over the documents now.
-On Thu, Sep 3, 2026 at 11:02 AM Neha <rohan@hireologist.co.in> wrote:
-> Hi Dushyant,
-> Sent by Hireologist
+On Thu, Sep 3, 2026 at 11:02 AM Alex <sender@demo.com> wrote:
+> Hi John,
+> Sent by Demo Company
 > Unsubscribe from these emails.`;
 
       assert.strictEqual(stripQuotedReply(raw), 'Sounds great, sending over the documents now.');
