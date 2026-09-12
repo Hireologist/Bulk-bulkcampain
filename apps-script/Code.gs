@@ -291,6 +291,10 @@ function createOutreachSystem(forceReset = false) {
         if (String(l1Cell.getValue()).trim().toLowerCase() === 'next follow up date') {
           l1Cell.setValue('Sentiment');
         }
+        const o1Cell = sheet.getRange(1, 15);
+        if (String(o1Cell.getValue()).trim().toLowerCase() === 'sentiment') {
+          o1Cell.clearContent();
+        }
       }
 
       // Ensure Time and Date formatting on Details & Positive_Leads

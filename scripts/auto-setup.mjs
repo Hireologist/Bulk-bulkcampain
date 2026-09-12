@@ -475,6 +475,34 @@ async function autoProvisionGoogleSheet(sheets, sheetId) {
       });
       const existingHeaders = (res.data.values?.[0] || []).map((h) => String(h).trim());
 
+      // Special migration for Positive_Leads: Column L (index 11) was renamed from 'Next Follow Up Date' to 'Sentiment'
+      if (title === 'Positive_Leads') {
+        if (existingHeaders[11] && String(existingHeaders[11]).trim().toLowerCase() === 'next follow up date') {
+          existingHeaders[11] = 'Sentiment';
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: sheetId,
+            range: "'Positive_Leads'!L1",
+            valueInputOption: 'USER_ENTERED',
+            requestBody: { values: [['Sentiment']] },
+          });
+          console.log('🔄 Updated Column L header in "Positive_Leads" to "Sentiment"');
+          updatedCount++;
+        }
+        if (existingHeaders.length > 14) {
+          for (let c = 14; c < existingHeaders.length; c++) {
+            if (existingHeaders[c] && String(existingHeaders[c]).trim().toLowerCase() === 'sentiment') {
+              const colLetter = columnIndexToLetter(c + 1);
+              await sheets.spreadsheets.values.clear({
+                spreadsheetId: sheetId,
+                range: `'Positive_Leads'!${colLetter}1`,
+              });
+              existingHeaders.splice(c, 1);
+              c--;
+            }
+          }
+        }
+      }
+
       const missingHeaders = config.headers.filter((h) => !existingHeaders.includes(h));
       if (missingHeaders.length > 0) {
         const startColIdx = existingHeaders.length + 1;

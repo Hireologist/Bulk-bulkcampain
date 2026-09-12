@@ -114,6 +114,42 @@ export async function auditAndRepairSheetSchema(sheets, sheetId, spreadsheetMeta
       }
     }
 
+    // Special migration for Positive_Leads: Column L (index 11) was renamed from 'Next Follow Up Date' to 'Sentiment'
+    if (tabName === 'Positive_Leads') {
+      if (currentHeaders[11] && String(currentHeaders[11]).trim().toLowerCase() === 'next follow up date') {
+        currentHeaders[11] = 'Sentiment';
+        if (options.autoRepair && sheets) {
+          try {
+            await sheets.spreadsheets.values.update({
+              spreadsheetId: sheetId,
+              range: "'Positive_Leads'!L1",
+              valueInputOption: 'USER_ENTERED',
+              requestBody: { values: [['Sentiment']] }
+            });
+            results.repairedFormulas.push({ tab: 'Positive_Leads', cell: 'L1' });
+          } catch {}
+        }
+      }
+      // If an extra duplicate 'Sentiment' header was previously appended to Column O or beyond, clean it up
+      if (currentHeaders.length > 14) {
+        for (let c = 14; c < currentHeaders.length; c++) {
+          if (currentHeaders[c] && String(currentHeaders[c]).trim().toLowerCase() === 'sentiment') {
+            const colLetter = columnIndexToLetter(c + 1);
+            if (options.autoRepair && sheets) {
+              try {
+                await sheets.spreadsheets.values.clear({
+                  spreadsheetId: sheetId,
+                  range: `'Positive_Leads'!${colLetter}1`
+                });
+              } catch {}
+            }
+            currentHeaders.splice(c, 1);
+            c--;
+          }
+        }
+      }
+    }
+
     const missingInTab = [];
     expectedHeaders.forEach((expectedCol) => {
       results.columnsVerified++;
