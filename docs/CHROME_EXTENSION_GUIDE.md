@@ -55,12 +55,12 @@ Before your first send, connect the extension to your GitHub repository:
 2. Navigate to the **⚙️ Settings** tab.
 3. Fill in the **GitHub API Connection** fields:
    * **GitHub PAT Token**: Your Personal Access Token (starts with `ghp_` or `github_pat_`).
-   * **GitHub Repo Owner**: Your GitHub username or organization (e.g., `Rohanpatel16`).
+   * **GitHub Repo Owner**: Your GitHub username or organization (e.g., `itsrohanpatel`).
    * **GitHub Repository Name**: Your repository name (e.g., `Sheet-bot`).
 4. Click **💾 Save Credentials**.
 5. Click **🔌 Test Connection** — you will see a green confirmation badge:
    ```text
-   ✅ Connection Success! Token has access to repository "Rohanpatel16/Sheet-bot".
+   ✅ Connection Success! Token has access to repository "itsrohanpatel/Sheet-bot".
    ```
 
 > [!TIP]
@@ -164,7 +164,7 @@ sequenceDiagram
 |---|---|---|
 | `❌ GitHub Permission Error (403)` | PAT Token lacks workflow permissions. | Edit token on GitHub ➔ Grant `Contents: Read & write` and `Workflows: Read & write` (or check `repo` for classic tokens). |
 | `❌ GitHub Authentication Error (401)` | Token is expired or mistyped. | Generate a fresh token at [github.com/settings/tokens](https://github.com/settings/tokens) and paste into Settings. |
-| `❌ GitHub Repository Error (404)` | Owner or repo name mistyped. | Verify **Owner** (`Rohanpatel16`) and **Repo** (`Sheet-bot`) match your exact GitHub repository URL. |
+| `❌ GitHub Repository Error (404)` | Owner or repo name mistyped. | Verify **Owner** (`itsrohanpatel`) and **Repo** (`Sheet-bot`) match your exact GitHub repository URL. |
 | `⚠️ Extension Icons look blank / green` | Browser cache has not reloaded icons. | Go to `chrome://extensions` ➔ Click 🔄 **Reload** next to Sheet-Bot. |
 
 ---

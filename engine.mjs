@@ -297,7 +297,7 @@ export async function triggerWorkflowRestart(actionName, repoFullName, pat, http
     return false;
   }
 
-  const repo = (repoFullName || process.env.GITHUB_REPOSITORY || 'Rohanpatel16/Sheet-bot').trim();
+  const repo = (repoFullName || process.env.GITHUB_REPOSITORY || 'itsrohanpatel/Sheet-bot').trim();
   const url = `https://api.github.com/repos/${repo}/actions/workflows/outreach.yml/dispatches`;
 
   try {

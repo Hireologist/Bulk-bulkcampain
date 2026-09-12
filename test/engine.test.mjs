@@ -629,17 +629,17 @@ On Thu, Sep 3, 2026 at 11:02 AM Alex wrote:
         }
       };
 
-      const success = await triggerWorkflowRestart('outreach', 'Rohanpatel16/Sheet-bot', 'ghp_testToken12345', mockAxios);
+      const success = await triggerWorkflowRestart('outreach', 'itsrohanpatel/Sheet-bot', 'ghp_testToken12345', mockAxios);
 
       assert.strictEqual(success, true);
-      assert.strictEqual(capturedPost.url, 'https://api.github.com/repos/Rohanpatel16/Sheet-bot/actions/workflows/outreach.yml/dispatches');
+      assert.strictEqual(capturedPost.url, 'https://api.github.com/repos/itsrohanpatel/Sheet-bot/actions/workflows/outreach.yml/dispatches');
       assert.strictEqual(capturedPost.body.ref, 'main');
       assert.strictEqual(capturedPost.body.inputs.action, 'outreach');
       assert.strictEqual(capturedPost.config.headers.Authorization, 'Bearer ghp_testToken12345');
     });
 
     it('should return false safely if github_pat is missing', async () => {
-      const success = await triggerWorkflowRestart('outreach', 'Rohanpatel16/Sheet-bot', '');
+      const success = await triggerWorkflowRestart('outreach', 'itsrohanpatel/Sheet-bot', '');
       assert.strictEqual(success, false);
     });
   });
