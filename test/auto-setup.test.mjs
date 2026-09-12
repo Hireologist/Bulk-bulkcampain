@@ -94,4 +94,50 @@ describe('🚀 New User Onboarding & Auto-Provisioning Simulation Test', () => {
     assert.strictEqual(isCampaignActive(pausedSettings, 'followup'), false);
     assert.strictEqual(isCampaignActive(pausedSettings, 'single_lead'), false);
   });
+
+  test('Positive_Leads schema specifies Sentiment as Column 12 (replacing Next Follow Up Date)', () => {
+    const positiveTab = COMPLETE_SCHEMA['Positive_Leads'];
+    assert.ok(positiveTab, 'Positive_Leads tab must exist in schema');
+    assert.strictEqual(positiveTab.headers[11], 'Sentiment', 'Column 12 of Positive_Leads must be labeled Sentiment');
+  });
+
+  test('normalizeDate converts Google Sheets numeric serial dates, DD/MM/YYYY, and YYYY-MM-DD', async () => {
+    const { normalizeDate } = await import('../engine.mjs');
+    // 46335 = 2026-11-09 (or Google Sheets serial date)
+    assert.strictEqual(normalizeDate('46335'), '09/11/2026');
+    // Standard formats
+    assert.strictEqual(normalizeDate('11/09/2026'), '11/09/2026');
+    assert.strictEqual(normalizeDate('11-09-2026'), '11/09/2026');
+    assert.strictEqual(normalizeDate('2026-09-11'), '11/09/2026');
+    assert.strictEqual(normalizeDate(''), '');
+    assert.strictEqual(normalizeDate(null), '');
+  });
+
+  test('parseDueDate safely parses serial dates, DD/MM/YYYY, and ignores sentiment strings', async () => {
+    const { parseDueDate } = await import('../engine.mjs');
+    // Serial date
+    const dSerial = parseDueDate('46335');
+    assert.ok(dSerial instanceof Date);
+    assert.strictEqual(dSerial.getUTCFullYear(), 2026);
+    assert.strictEqual(dSerial.getUTCMonth(), 10); // Nov = 10 in 0-indexed month
+    assert.strictEqual(dSerial.getUTCDate(), 9);
+
+    // Standard DD/MM/YYYY
+    const dStr = parseDueDate('15/09/2026');
+    assert.ok(dStr instanceof Date);
+    assert.strictEqual(dStr.getFullYear(), 2026);
+    assert.strictEqual(dStr.getMonth(), 8); // Sep = 8 in 0-indexed month
+    assert.strictEqual(dStr.getDate(), 15);
+
+    // Sentiment tags & non-date statuses must return null
+    assert.strictEqual(parseDueDate('POSITIVE'), null);
+    assert.strictEqual(parseDueDate('positive'), null);
+    assert.strictEqual(parseDueDate('NEUTRAL'), null);
+    assert.strictEqual(parseDueDate('NEGATIVE'), null);
+    assert.strictEqual(parseDueDate('Done'), null);
+    assert.strictEqual(parseDueDate('SUPPRESSED'), null);
+    assert.strictEqual(parseDueDate(''), null);
+    assert.strictEqual(parseDueDate(null), null);
+  });
 });
+

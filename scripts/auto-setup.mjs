@@ -225,7 +225,7 @@ export const COMPLETE_SCHEMA = {
     headers: [
       'full_name', 'email', 'company_name', 'location',
       'Subject Line', 'Sent From', 'Sent Status', 'Time',
-      'Date Sent', 'Follow up', 'Follow Up Count', 'Next Follow Up Date',
+      'Date Sent', 'Follow up', 'Follow Up Count', 'Sentiment',
       'Summary', 'Phone'
     ],
     sampleData: [
@@ -304,6 +304,50 @@ export async function formatSheetTab(sheets, spreadsheetId, sheetNumericId, titl
       },
     },
   ];
+
+  // Apply explicit Time and Date number formatting to Details and Positive_Leads
+  if (title === 'Details' || title === 'Positive_Leads') {
+    requests.push(
+      {
+        repeatCell: {
+          range: {
+            sheetId: sheetNumericId,
+            startRowIndex: 1, // Data rows below header
+            startColumnIndex: 7, // Column H (Time)
+            endColumnIndex: 8,
+          },
+          cell: {
+            userEnteredFormat: {
+              numberFormat: {
+                type: 'TIME',
+                pattern: 'hh:mm:ss am/pm',
+              },
+            },
+          },
+          fields: 'userEnteredFormat.numberFormat',
+        },
+      },
+      {
+        repeatCell: {
+          range: {
+            sheetId: sheetNumericId,
+            startRowIndex: 1, // Data rows below header
+            startColumnIndex: 8, // Column I (Date Sent)
+            endColumnIndex: 9,
+          },
+          cell: {
+            userEnteredFormat: {
+              numberFormat: {
+                type: 'DATE',
+                pattern: 'dd/mm/yyyy',
+              },
+            },
+          },
+          fields: 'userEnteredFormat.numberFormat',
+        },
+      }
+    );
+  }
 
   try {
     await sheets.spreadsheets.batchUpdate({

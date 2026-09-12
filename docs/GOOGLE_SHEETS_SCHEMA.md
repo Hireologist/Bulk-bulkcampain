@@ -24,7 +24,7 @@ The cold outreach engine is powered by a structured, 17-tab Google Spreadsheet. 
 | **`📊 Email_Analytics`** | Real-time formula calculating sender conversion rates. | `=LET(...)` automated formulas |
 | **`📈 ChartData`** | Sentiment distribution and status aggregates. | `=COUNTIF(...)` visual aggregates |
 | **`GCC_Radar`** | Global Capability Centers intelligence tracker & deduplication history. | `brand_key`, `company_name`, `stage_type`, `amount_scale`, `city`, `vc_lead`, `url`, `date_added` |
-| **`Positive_Leads`** | Live automated filter of all hot prospect replies, AI summaries & extracted phone numbers. | `=IFERROR(FILTER(Details!A2:N, ISNUMBER(SEARCH("POSITIVE", Details!L2:L))), ...)` |
+| **`Positive_Leads`** | Live automated filter of all hot prospect replies, AI summaries & extracted phone numbers. | Columns A-N (`full_name` ... `Sentiment`, `Summary`, `Phone`), Formula: `=IFERROR(FILTER(Details!A2:N, ISNUMBER(SEARCH("POSITIVE", Details!L2:L))), ...)` |
 
 ---
 

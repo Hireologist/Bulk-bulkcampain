@@ -177,7 +177,7 @@ function createOutreachSystem(forceReset = false) {
       headers: [
         'full_name', 'email', 'company_name', 'location',
         'Subject Line', 'Sent From', 'Sent Status', 'Time',
-        'Date Sent', 'Follow up', 'Follow Up Count', 'Next Follow Up Date',
+        'Date Sent', 'Follow up', 'Follow Up Count', 'Sentiment',
         'Summary', 'Phone'
       ],
       sampleData: [
@@ -210,6 +210,12 @@ function createOutreachSystem(forceReset = false) {
       }
       sheet.setFrozenRows(1);
       for (let c = 1; c <= headers.length; c++) sheet.autoResizeColumn(c);
+      
+      // Auto-format Time and Date columns
+      if (sheetName === 'Details' || sheetName === 'Positive_Leads') {
+        sheet.getRange('H2:H').setNumberFormat('hh:mm:ss am/pm');
+        sheet.getRange('I2:I').setNumberFormat('dd/mm/yyyy');
+      }
       newSheetsCount++;
     } else if (forceReset) {
       // 2. Hard reset only if explicitly requested
@@ -226,6 +232,11 @@ function createOutreachSystem(forceReset = false) {
       }
       sheet.setFrozenRows(1);
       for (let c = 1; c <= headers.length; c++) sheet.autoResizeColumn(c);
+
+      if (sheetName === 'Details' || sheetName === 'Positive_Leads') {
+        sheet.getRange('H2:H').setNumberFormat('hh:mm:ss am/pm');
+        sheet.getRange('I2:I').setNumberFormat('dd/mm/yyyy');
+      }
       updatedSheetsCount++;
     } else {
       // 3. 🛡️ SMART NON-DESTRUCTIVE SYNC: Keep all existing data and append only missing columns/keys!
@@ -269,13 +280,23 @@ function createOutreachSystem(forceReset = false) {
         sheet.getRange(2, 1, sampleData.length, sampleData[0].length).setValues(sampleData);
       }
 
-      // D. Safe check for Positive_Leads formula
+      // D. Safe check for Positive_Leads formula and header
       if (sheetName === 'Positive_Leads') {
         const formulaCell = sheet.getRange(2, 1);
         const curFormula = formulaCell.getFormula();
         if (!curFormula || curFormula.indexOf('Details!A2:M') !== -1) {
           formulaCell.setFormula('=IFERROR(FILTER(Details!A2:N, ISNUMBER(SEARCH("POSITIVE", Details!L2:L))), "No positive leads recorded yet")');
         }
+        const l1Cell = sheet.getRange(1, 12);
+        if (String(l1Cell.getValue()).trim().toLowerCase() === 'next follow up date') {
+          l1Cell.setValue('Sentiment');
+        }
+      }
+
+      // Ensure Time and Date formatting on Details & Positive_Leads
+      if (sheetName === 'Details' || sheetName === 'Positive_Leads') {
+        sheet.getRange('H2:H').setNumberFormat('hh:mm:ss am/pm');
+        sheet.getRange('I2:I').setNumberFormat('dd/mm/yyyy');
       }
 
       sheet.setFrozenRows(1);

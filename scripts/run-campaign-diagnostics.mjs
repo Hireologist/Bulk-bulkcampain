@@ -278,8 +278,78 @@ export async function auditAndRepairSheetSchema(sheets, sheetId, spreadsheetMeta
             results.repairedFormulas.push({ tab: 'Positive_Leads', cell: 'A2' });
           }
         }
+        // Ensure Column L header in Positive_Leads is labeled 'Sentiment'
+        const headRes = await sheets.spreadsheets.values.get({
+          spreadsheetId: sheetId,
+          range: "'Positive_Leads'!L1:L1"
+        });
+        const l1Val = headRes?.data?.values?.[0]?.[0];
+        if (l1Val && String(l1Val).trim().toLowerCase() === 'next follow up date') {
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: sheetId,
+            range: "'Positive_Leads'!L1",
+            valueInputOption: 'USER_ENTERED',
+            requestBody: { values: [['Sentiment']] }
+          });
+          results.repairedFormulas.push({ tab: 'Positive_Leads', cell: 'L1' });
+        }
       } catch (err) {
-        console.warn(`Could not auto-repair Positive_Leads formula: ${err.message}`);
+        console.warn(`Could not auto-repair Positive_Leads: ${err.message}`);
+      }
+    }
+
+    // Auto-heal Time (Col H) and Date (Col I) formatting on Details & Positive_Leads
+    const formatSheets = ['Details', 'Positive_Leads'].filter(t => existingTabMap.has(t));
+    if (formatSheets.length > 0) {
+      try {
+        const formatReqs = [];
+        for (const t of formatSheets) {
+          const sheetNumericId = existingTabMap.get(t);
+          if (sheetNumericId !== undefined) {
+            formatReqs.push(
+              {
+                repeatCell: {
+                  range: {
+                    sheetId: sheetNumericId,
+                    startRowIndex: 1,
+                    startColumnIndex: 7,
+                    endColumnIndex: 8,
+                  },
+                  cell: {
+                    userEnteredFormat: {
+                      numberFormat: { type: 'TIME', pattern: 'hh:mm:ss am/pm' },
+                    },
+                  },
+                  fields: 'userEnteredFormat.numberFormat',
+                },
+              },
+              {
+                repeatCell: {
+                  range: {
+                    sheetId: sheetNumericId,
+                    startRowIndex: 1,
+                    startColumnIndex: 8,
+                    endColumnIndex: 9,
+                  },
+                  cell: {
+                    userEnteredFormat: {
+                      numberFormat: { type: 'DATE', pattern: 'dd/mm/yyyy' },
+                    },
+                  },
+                  fields: 'userEnteredFormat.numberFormat',
+                },
+              }
+            );
+          }
+        }
+        if (formatReqs.length > 0) {
+          await sheets.spreadsheets.batchUpdate({
+            spreadsheetId: sheetId,
+            requestBody: { requests: formatReqs },
+          });
+        }
+      } catch (formatErr) {
+        // Non-critical column format healing error
       }
     }
   }

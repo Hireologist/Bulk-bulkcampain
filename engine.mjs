@@ -1221,8 +1221,7 @@ export async function runFollowups(sheetsObj = null, customConfig = null) {
     }
 
     if (nextDueDateStr) {
-      const [d, m, y] = nextDueDateStr.split('/').map(Number);
-      const dueDate = new Date(y, m - 1, d);
+      const dueDate = parseDueDate(nextDueDateStr);
       if (dueDate && today < dueDate) continue;
     }
 
@@ -1643,7 +1642,8 @@ export async function runInboxChecker() {
         const rIdx = rows.findIndex(r => (r[col['email']] || '').toLowerCase() === fromAddr);
         if (rIdx !== -1) {
           const existingStatus = (rows[rIdx][col['Sent Status']] || '').trim().toLowerCase();
-          const existingSentiment = (rows[rIdx][col['Next Follow Up Date']] || '').trim().toUpperCase();
+          const sentimentCol = col['Sentiment'] ?? col['Next Follow Up Date'];
+          const existingSentiment = (sentimentCol !== undefined ? (rows[rIdx][sentimentCol] || '') : '').trim().toUpperCase();
 
           // Check if lead was ALREADY positive/neutral or already marked as replied
           const isExistingLead = existingStatus === 'replied' || existingSentiment === 'POSITIVE' || existingSentiment === 'NEUTRAL';
@@ -1658,8 +1658,8 @@ export async function runInboxChecker() {
           rows[rIdx][col['Sent Status']] = 'replied';
           rows[rIdx][col['Follow up']] = 'Done';
           rows[rIdx][col['Date Sent']] = new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' });
-          if (col['Next Follow Up Date'] !== undefined) {
-            rows[rIdx][col['Next Follow Up Date']] = sentiment;
+          if (sentimentCol !== undefined) {
+            rows[rIdx][sentimentCol] = sentiment;
           }
           const phoneColIdx = col['Phone'] ?? col['phone'] ?? col['Phone Number'] ?? col['phone_number'];
           if (phoneColIdx !== undefined && phone) {
@@ -1678,8 +1678,8 @@ export async function runInboxChecker() {
 
           if (isOptOut) {
             rows[rIdx][col['Sent Status']] = 'suppressed';
-            if (col['Next Follow Up Date'] !== undefined) {
-              rows[rIdx][col['Next Follow Up Date']] = 'SUPPRESSED';
+            if (sentimentCol !== undefined) {
+              rows[rIdx][sentimentCol] = 'SUPPRESSED';
             }
             try {
               await addToSuppression(fromAddr, 'Unsubscribed via reply', async (emailToSuppress, reason, timestamp) => {
@@ -1783,8 +1783,24 @@ export async function runInboxChecker() {
 
 // Normalize dates to DD/MM/YYYY for strict matching
 export function normalizeDate(dateStr) {
-  if (!dateStr) return '';
+  if (!dateStr && dateStr !== 0) return '';
   const clean = String(dateStr).trim().split('T')[0];
+  if (!clean) return '';
+
+  // Match Google Sheets numeric serial date (e.g. 46335, 46276)
+  if (/^\d{5}(\.\d+)?$/.test(clean)) {
+    const serial = parseFloat(clean);
+    // 25569 = days between 1899-12-30 and 1970-01-01
+    const utcMs = Math.round((serial - 25569) * 86400 * 1000);
+    const d = new Date(utcMs);
+    if (!isNaN(d.getTime())) {
+      const day = String(d.getUTCDate()).padStart(2, '0');
+      const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+      const year = d.getUTCFullYear();
+      return `${day}/${month}/${year}`;
+    }
+  }
+
   // Match DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
   const dmyMatch = clean.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})$/);
   if (dmyMatch) {
@@ -1804,6 +1820,49 @@ export function normalizeDate(dateStr) {
   return clean;
 }
 
+// Safely parse follow-up due dates, ignoring sentiment labels ('POSITIVE', 'Done', etc.)
+export function parseDueDate(dateVal) {
+  if (!dateVal && dateVal !== 0) return null;
+  const str = String(dateVal).trim();
+  if (!str) return null;
+
+  // Ignore sentiment tags, opt-out marks, or status strings
+  if (/^(positive|neutral|negative|ooo|done|suppressed)$/i.test(str)) {
+    return null;
+  }
+
+  // Google Sheets numeric serial date
+  if (/^\d{5}(\.\d+)?$/.test(str)) {
+    const serial = parseFloat(str);
+    const utcMs = Math.round((serial - 25569) * 86400 * 1000);
+    const d = new Date(utcMs);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  // DD/MM/YYYY or DD-MM-YYYY
+  const dmyMatch = str.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})$/);
+  if (dmyMatch) {
+    const d = parseInt(dmyMatch[1], 10);
+    const m = parseInt(dmyMatch[2], 10) - 1;
+    const y = parseInt(dmyMatch[3], 10);
+    const date = new Date(y, m, d);
+    return isNaN(date.getTime()) ? null : date;
+  }
+
+  // YYYY-MM-DD
+  const ymdMatch = str.match(/^(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})$/);
+  if (ymdMatch) {
+    const y = parseInt(ymdMatch[1], 10);
+    const m = parseInt(ymdMatch[2], 10) - 1;
+    const d = parseInt(ymdMatch[3], 10);
+    const date = new Date(y, m, d);
+    return isNaN(date.getTime()) ? null : date;
+  }
+
+  const parsed = new Date(str);
+  return isNaN(parsed.getTime()) ? null : parsed;
+}
+
 // ============================================================================
 // 📊 4. DAILY DISCORD ANALYTICS DIGEST
 // ============================================================================
@@ -1818,8 +1877,15 @@ export async function generateDailyDigest() {
   const [headers, ...rows] = detailsRes.data.values || [];
   const col = Object.fromEntries(headers.map((h, i) => [h.trim(), i]));
 
-  const todayIST = normalizeDate(new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' }));
-  const formattedDateStr = new Date().toLocaleDateString('en-GB', {
+  const nowIST = new Date();
+  const todayIST = normalizeDate(nowIST.toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' }));
+  // Guard against US-locale Google Sheets storing inverted month/day (MM/DD/YYYY)
+  const dStr = String(nowIST.toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata', day: '2-digit' }));
+  const mStr = String(nowIST.toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata', month: '2-digit' }));
+  const yStr = String(nowIST.toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata', year: 'numeric' }));
+  const invertedTodayIST = `${mStr}/${dStr}/${yStr}`;
+
+  const formattedDateStr = nowIST.toLocaleDateString('en-GB', {
     timeZone: 'Asia/Kolkata',
     day: '2-digit',
     month: 'short',
@@ -1839,10 +1905,11 @@ export async function generateDailyDigest() {
     const sentDate = normalizeDate(rawSentDate);
     const sentStatus = (row[col['Sent Status']] || '').trim().toLowerCase();
     const followUpCount = parseInt(row[col['Follow Up Count']] || '0', 10);
-    const sentiment = (row[col['Next Follow Up Date']] || '').trim().toUpperCase();
+    const sentimentCol = col['Sentiment'] ?? col['Next Follow Up Date'];
+    const sentiment = (sentimentCol !== undefined ? (row[sentimentCol] || '') : '').trim().toUpperCase();
 
-    // STRICT FILTER: Only count leads that have TODAY's date in 'Date Sent' column
-    if (sentDate !== todayIST) {
+    // STRICT FILTER: Count leads matching TODAY in either DD/MM/YYYY or inverted MM/DD/YYYY format
+    if (sentDate !== todayIST && sentDate !== invertedTodayIST) {
       continue;
     }
 
