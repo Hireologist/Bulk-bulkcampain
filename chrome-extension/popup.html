@@ -14,7 +14,6 @@
     <header class="ext-header">
       <div class="brand-wrapper">
         <div class="brand-logo">
-          <!-- Paper Plane SVG -->
           <svg class="icon icon-lg" viewBox="0 0 24 24">
             <line x1="22" y1="2" x2="11" y2="13"></line>
             <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
@@ -22,33 +21,33 @@
         </div>
         <div>
           <div class="brand-title">Sheet-Bot Remote</div>
-          <div class="brand-sub">GitHub Email Dispatcher</div>
+          <div class="brand-sub">Universal Cold Outreach Dispatcher</div>
         </div>
       </div>
-      <span id="status-tag" class="status-tag unconfigured">
-        <svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle></svg>
+      <div id="status-badge" class="status-badge unconfigured">
+        <span class="pulse-dot"></span>
         <span id="status-text">Setup Token</span>
-      </span>
+      </div>
     </header>
 
-    <!-- Active Campaign Selector Bar -->
-    <div class="active-campaign-bar glass-card" style="padding:8px 12px; display:flex; justify-content:space-between; align-items:center; gap:8px;">
-      <span style="font-size:11px; color:var(--text-muted); font-weight:600; display:inline-flex; align-items:center; gap:5px;">
-        <svg class="icon" style="color:var(--accent-blue);" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
-        Campaign:
+    <!-- Linear-style Workspace / Campaign Switcher Bar -->
+    <div class="workspace-bar">
+      <span class="workspace-label">
+        <svg class="icon" style="color:var(--accent-cyan);" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+        Active:
       </span>
-      <select id="campaign-select-dropdown" class="form-select" style="padding:4px 8px; font-size:11px; flex:1;">
-        <option value="default">Campaign 1 (Default)</option>
+      <select id="campaign-select-dropdown" class="workspace-select">
+        <option value="default">Default Campaign (Loading...)</option>
       </select>
     </div>
 
-    <!-- Alert Banner (Fixed display & close button) -->
+    <!-- Alert Banner (Dismissible & Animated) -->
     <div id="alert-banner" class="alert hidden">
       <div class="alert-body">
         <span id="alert-icon-wrapper">
           <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
         </span>
-        <span id="alert-text">Alert message</span>
+        <span id="alert-text">Alert notification</span>
       </div>
       <button id="alert-close-btn" class="alert-close" type="button" title="Dismiss">&times;</button>
     </div>
@@ -69,63 +68,71 @@
       </button>
     </nav>
 
-    <!-- TAB 1: SINGLE LEAD DISPATCH -->
+    <!-- ======================================================================
+         TAB 1: SINGLE LEAD DISPATCH
+         ====================================================================== -->
     <section id="tab-single" class="tab-content active">
       <div class="glass-card">
         
         <div class="form-group">
           <label class="form-label" for="single-email">
             <span>Recipient Email</span>
-            <span class="auto-tag">⚡ Auto Parsing</span>
+            <span class="auto-badge">⚡ Auto Extraction</span>
           </label>
           <input type="email" id="single-email" class="form-input" placeholder="e.g. rohan.patel@hireologist.in" autocomplete="off">
         </div>
 
         <div class="form-group">
           <label class="form-label" for="single-name">Full Name</label>
-          <input type="text" id="single-name" class="form-input" placeholder="Auto-extracted name" autocomplete="off">
+          <input type="text" id="single-name" class="form-input" placeholder="Auto-extracted first name" autocomplete="off">
         </div>
 
         <div class="form-group">
           <label class="form-label" for="single-company">Company Name</label>
-          <input type="text" id="single-company" class="form-input" placeholder="Auto-extracted company" autocomplete="off">
+          <input type="text" id="single-company" class="form-input" placeholder="Auto-extracted company from domain" autocomplete="off">
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="single-location">Location</label>
-          <input type="text" id="single-location" class="form-input" placeholder="e.g. Mumbai (or leave blank)" autocomplete="off">
+          <label class="form-label" for="single-location">Location Override</label>
+          <input type="text" id="single-location" class="form-input" placeholder="e.g. Mumbai (or blank for campaign default)" autocomplete="off">
         </div>
 
         <!-- Live Extraction Preview -->
         <div class="preview-box">
           <div class="preview-row">
-            <span>Parsed Name:</span>
+            <span>Target Lead:</span>
             <span id="prev-name" class="preview-val">—</span>
           </div>
           <div class="preview-row">
-            <span>Parsed Company:</span>
+            <span>Target Company:</span>
             <span id="prev-company" class="preview-val">—</span>
+          </div>
+          <div class="preview-row">
+            <span>Routing Target:</span>
+            <span id="prev-target" class="preview-val" style="color:var(--text-secondary); font-size:10px;">Select campaign</span>
           </div>
         </div>
 
         <button id="btn-send-single" type="button" class="btn btn-primary">
           <svg class="icon" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-          Send Instant Email
+          Send Instant Outreach
         </button>
 
       </div>
     </section>
 
-    <!-- TAB 2: BULK BATCH DISPATCH -->
+    <!-- ======================================================================
+         TAB 2: BULK BATCH DISPATCH
+         ====================================================================== -->
     <section id="tab-bulk" class="tab-content">
       <div class="glass-card">
         
         <div class="form-group">
           <label class="form-label" for="bulk-input">
-            <span>Paste Emails / CSV List (One per line)</span>
-            <span class="auto-tag">⚡ Batch Extractor</span>
+            <span>Paste Emails or CSV (One per line)</span>
+            <span class="auto-badge">⚡ Batch Parser</span>
           </label>
-          <textarea id="bulk-input" class="form-textarea" placeholder="rohan.patel@hireologist.in&#10;hr@acme-technologies.com&#10;john.doe@techflow.io&#10;or CSV: email, name, company"></textarea>
+          <textarea id="bulk-input" class="form-textarea" placeholder="rohan.patel@hireologist.in&#10;hr@acme-technologies.com&#10;john.doe@techflow.io&#10;or CSV format: email, name, company"></textarea>
         </div>
 
         <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -171,103 +178,114 @@
 
         <button id="btn-send-bulk" type="button" class="btn btn-primary" disabled>
           <svg class="icon" viewBox="0 0 24 24"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"></path><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"></path><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"></path><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"></path></svg>
-          Dispatch Bulk Batch to GitHub
+          Dispatch Batch to Active Campaign
         </button>
 
       </div>
     </section>
 
-    <!-- TAB 3: SETTINGS -->
+    <!-- ======================================================================
+         TAB 3: SETTINGS & MASTER TOKEN POOL
+         ====================================================================== -->
     <section id="tab-settings" class="tab-content">
       
-      <!-- Global GitHub Connection -->
+      <!-- 1. Master GitHub Tokens Pool -->
       <div class="glass-card">
-        <h4 style="font-size:13px; color:#FFF; font-weight:700; display:flex; align-items:center; gap:6px;">
-          <svg class="icon" viewBox="0 0 24 24"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
-          GitHub API Connection
-        </h4>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <h4 style="font-size:13px; color:#FFF; font-weight:700; display:flex; align-items:center; gap:6px;">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
+            Master GitHub Tokens Pool
+          </h4>
+          <span class="auto-badge">Multi-Account Ready</span>
+        </div>
         
+        <p style="font-size:11px; color:var(--text-muted); line-height:1.4;">
+          Connect your Master PAT tokens. The extension automatically detects your GitHub username, verifies permissions, and aggregates all your accessible repos.
+        </p>
+
         <div class="form-group">
-          <label class="form-label" for="cfg-github-token">
-            <span>GitHub PAT Token</span>
-            <span style="color:var(--accent-blue); text-transform:none;">repo / contents:write</span>
+          <label class="form-label" for="cfg-master-token-input">
+            <span>New Master PAT Token</span>
+            <span style="color:var(--accent-cyan); text-transform:none;">Auto-Detects Identity</span>
           </label>
-          <input type="password" id="cfg-github-token" class="form-input" placeholder="ghp_xxx or github_pat_xxx" autocomplete="off">
+          <div style="display:flex; gap:6px;">
+            <input type="password" id="cfg-master-token-input" class="form-input" placeholder="ghp_xxx or github_pat_xxx" autocomplete="off">
+            <button id="btn-add-token" type="button" class="btn btn-primary" style="width:auto; white-space:nowrap; padding:8px 14px; font-size:11px;">
+              <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M12 2v6m0 8v6M4.93 4.93l4.24 4.24m5.66 5.66l4.24 4.24M2 12h6m8 0h6M4.93 19.07l4.24-4.24m5.66-5.66l4.24-4.24"></path></svg>
+              Connect & Verify
+            </button>
+          </div>
         </div>
 
-        <div class="form-group">
-          <label class="form-label" for="cfg-github-owner">GitHub Repo Owner</label>
-          <input type="text" id="cfg-github-owner" class="form-input" placeholder="e.g. rkhrmanagement or Rohanpatel16" autocomplete="off">
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="cfg-github-repo">GitHub Repository Name</label>
-          <input type="text" id="cfg-github-repo" class="form-input" placeholder="e.g. Bulk-campain or Sheet-bot" autocomplete="off">
-        </div>
-
-        <div style="display:flex; gap:8px;">
-          <button id="btn-save-settings" type="button" class="btn btn-secondary" style="padding:7px 12px; font-size:11px; flex:1;">
-            <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
-            Save Credentials
-          </button>
-          <button id="btn-test-connection" type="button" class="btn btn-primary" style="padding:7px 12px; font-size:11px; flex:1;">
-            <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M12 2v6m0 8v6M4.93 4.93l4.24 4.24m5.66 5.66l4.24 4.24M2 12h6m8 0h6M4.93 19.07l4.24-4.24m5.66-5.66l4.24-4.24"></path></svg>
-            Test Connection
-          </button>
-        </div>
-
-        <!-- PAT Token Setup Guide -->
-        <div style="margin-top:10px; padding:8px 10px; background:rgba(59,130,246,0.08); border:1px solid rgba(59,130,246,0.2); border-radius:6px; font-size:10px; color:var(--text-muted);">
-          <strong style="color:var(--accent-blue); display:inline-flex; align-items:center; gap:4px;">
-            <svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="7.5" cy="7.5" r="4.5"></circle><path d="m21 21-5.2-5.2"></path><path d="m15.5 15.5 2 2"></path></svg>
-            Required PAT Permissions:
-          </strong>
-          <ul style="margin:4px 0 0 14px; padding:0; line-height:1.4;">
-            <li><strong>Fine-Grained Token:</strong> Set <code>Contents</code> to <em>Read & write</em>.</li>
-            <li><strong>Classic Token:</strong> Check the <code>repo</code> checkbox.</li>
-          </ul>
+        <!-- Connected Tokens List -->
+        <div id="tokens-pool-container" style="display:flex; flex-direction:column; gap:6px; margin-top:4px;">
+          <!-- Rendered dynamically -->
         </div>
       </div>
 
-      <!-- Multi-Campaign & Webhook Profiles Manager -->
-      <div class="glass-card" style="margin-top:4px;">
+      <!-- 2. Campaigns & Workspaces Manager -->
+      <div class="glass-card">
         <h4 style="font-size:13px; color:#FFF; font-weight:700; display:flex; align-items:center; gap:6px;">
           <svg class="icon" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
-          Multi-Campaign Profiles
+          Campaigns & Workspaces
         </h4>
         
-        <div class="form-group">
-          <label class="form-label" for="cfg-camp-name">Campaign Profile Name</label>
-          <input type="text" id="cfg-camp-name" class="form-input" placeholder="e.g. Hireologist Main or Client A" autocomplete="off">
-        </div>
+        <p style="font-size:11px; color:var(--text-muted); line-height:1.4;">
+          Add a campaign in 5 seconds. Paste your GitHub repo link and Google Sheet link — everything is auto-parsed and auto-routed.
+        </p>
 
+        <!-- Smart Repo Selector / Input -->
         <div class="form-group">
-          <label class="form-label" for="cfg-camp-sheet">Google Sheet ID</label>
-          <input type="text" id="cfg-camp-sheet" class="form-input" placeholder="e.g. 1lKOCHIiDe2A27pHMqSqUavc0pt-TLXV5ZxoXuIRVncQ" autocomplete="off">
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="cfg-camp-webhook">
-            <span>Webhook URL Override</span>
-            <span style="color:var(--accent-blue); font-size:10px; text-transform:none;">Optional</span>
+          <label class="form-label" for="cfg-camp-repo-input">
+            <span>GitHub Repository</span>
+            <span class="auto-badge">⚡ Auto-Parses URLs</span>
           </label>
-          <input type="url" id="cfg-camp-webhook" class="form-input" placeholder="Leave blank to use Sheet default webhook" autocomplete="off">
+          <!-- Quick dropdown of fetched repos (if any) -->
+          <select id="cfg-camp-repo-select" class="form-select" style="margin-bottom:5px; display:none;">
+            <option value="">-- Or pick from detected repositories --</option>
+          </select>
+          <input type="text" id="cfg-camp-repo-input" class="form-input" placeholder="e.g. https://github.com/Hireologist/Bulk-bulkcampain" autocomplete="off">
         </div>
 
+        <!-- Smart Google Sheet Input -->
         <div class="form-group">
-          <label class="form-label" for="cfg-camp-location">Default Location Fallback</label>
-          <input type="text" id="cfg-camp-location" class="form-input" placeholder="e.g. India or Mumbai" autocomplete="off">
+          <label class="form-label" for="cfg-camp-sheet-input">
+            <span>Google Sheet URL or ID</span>
+            <span class="auto-badge">⚡ Auto-Extracts ID</span>
+          </label>
+          <input type="text" id="cfg-camp-sheet-input" class="form-input" placeholder="e.g. https://docs.google.com/spreadsheets/d/1phqi0ag.../edit" autocomplete="off">
+        </div>
+
+        <!-- Token Binding (Auto-match or custom) -->
+        <div class="form-group">
+          <label class="form-label" for="cfg-camp-token-select">
+            <span>Assigned Master Token</span>
+            <span style="color:var(--accent-cyan); text-transform:none;">Default: Auto-match by Owner</span>
+          </label>
+          <select id="cfg-camp-token-select" class="form-select">
+            <option value="auto">⚡ Auto-match token by repo owner</option>
+          </select>
+        </div>
+
+        <!-- Optional Campaign Name -->
+        <div class="form-group">
+          <label class="form-label" for="cfg-camp-name-input">
+            <span>Campaign Profile Name</span>
+            <span style="color:var(--text-muted); text-transform:none;">Optional (Auto-generated)</span>
+          </label>
+          <input type="text" id="cfg-camp-name-input" class="form-input" placeholder="e.g. Hireologist Outreach or Leave blank" autocomplete="off">
         </div>
 
         <button id="btn-save-campaign" type="button" class="btn btn-primary">
           <svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-          Save / Add Campaign Profile
+          Save & Activate Campaign
         </button>
 
-        <div style="margin-top:10px;">
-          <label class="form-label">Saved Campaign Profiles:</label>
+        <!-- Saved Campaigns List -->
+        <div style="margin-top:8px;">
+          <label class="form-label">Saved Campaigns:</label>
           <div id="campaigns-list-container" style="display:flex; flex-direction:column; gap:6px; margin-top:6px;">
-            <!-- Rendered list of saved campaigns -->
+            <!-- Rendered dynamically -->
           </div>
         </div>
 
@@ -277,6 +295,6 @@
 
   </div>
 
-  <script src="popup.js"></script>
+  <script type="module" src="popup.js"></script>
 </body>
 </html>
