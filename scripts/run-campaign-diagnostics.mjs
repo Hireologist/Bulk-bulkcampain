@@ -114,39 +114,33 @@ export async function auditAndRepairSheetSchema(sheets, sheetId, spreadsheetMeta
       }
     }
 
-    // Special migration for Positive_Leads: Column L (index 11) was renamed from 'Next Follow Up Date' to 'Sentiment'
+    // Special migration for Positive_Leads: ensure headers match expectedHeaders exactly (A1:N1) and clear ghost columns
     if (tabName === 'Positive_Leads') {
-      if (currentHeaders[11] && String(currentHeaders[11]).trim().toLowerCase() === 'next follow up date') {
-        currentHeaders[11] = 'Sentiment';
+      const headersMatch = currentHeaders.length === expectedHeaders.length &&
+        expectedHeaders.every((h, idx) => (currentHeaders[idx] || '').toLowerCase() === h.toLowerCase());
+      if (!headersMatch) {
         if (options.autoRepair && sheets) {
           try {
             await sheets.spreadsheets.values.update({
               spreadsheetId: sheetId,
-              range: "'Positive_Leads'!L1",
+              range: "'Positive_Leads'!A1:N1",
               valueInputOption: 'USER_ENTERED',
-              requestBody: { values: [['Sentiment']] }
+              requestBody: { values: [expectedHeaders] }
             });
-            results.repairedFormulas.push({ tab: 'Positive_Leads', cell: 'L1' });
-          } catch {}
-        }
-      }
-      // If an extra duplicate 'Sentiment' header was previously appended to Column O or beyond, clean it up
-      if (currentHeaders.length > 14) {
-        for (let c = 14; c < currentHeaders.length; c++) {
-          if (currentHeaders[c] && String(currentHeaders[c]).trim().toLowerCase() === 'sentiment') {
-            const colLetter = columnIndexToLetter(c + 1);
-            if (options.autoRepair && sheets) {
-              try {
+            if (currentHeaders.length > expectedHeaders.length) {
+              const startLetter = columnIndexToLetter(expectedHeaders.length + 1);
+              const endLetter = columnIndexToLetter(Math.max(currentHeaders.length, 26));
+              if (typeof sheets?.spreadsheets?.values?.clear === 'function') {
                 await sheets.spreadsheets.values.clear({
                   spreadsheetId: sheetId,
-                  range: `'Positive_Leads'!${colLetter}1`
+                  range: `'Positive_Leads'!${startLetter}1:${endLetter}1`
                 });
-              } catch {}
+              }
             }
-            currentHeaders.splice(c, 1);
-            c--;
-          }
+            results.repairedFormulas.push({ tab: 'Positive_Leads', cell: 'A1:N1' });
+          } catch {}
         }
+        currentHeaders = [...expectedHeaders];
       }
     }
 
@@ -241,13 +235,19 @@ export async function auditAndRepairSheetSchema(sheets, sheetId, spreadsheetMeta
   if (options.repairFormulas && sheets) {
     if (existingTabMap.has('📊 Email_Analytics')) {
       try {
+        if (typeof sheets?.spreadsheets?.values?.clear === 'function') {
+          await sheets.spreadsheets.values.clear({
+            spreadsheetId: sheetId,
+            range: "'📊 Email_Analytics'!B2:Z2"
+          });
+        }
         const analyticsRes = await sheets.spreadsheets.values.get({
           spreadsheetId: sheetId,
           range: "'📊 Email_Analytics'!A2:A2"
         });
         const currentFormula = analyticsRes?.data?.values?.[0]?.[0];
-        if (!currentFormula || !String(currentFormula).trim().startsWith('=')) {
-          const expectedFormula = COMPLETE_SCHEMA['📊 Email_Analytics']?.sampleData?.[0]?.[0];
+        const expectedFormula = COMPLETE_SCHEMA['📊 Email_Analytics']?.sampleData?.[0]?.[0];
+        if (!currentFormula || currentFormula !== expectedFormula) {
           if (expectedFormula) {
             await sheets.spreadsheets.values.update({
               spreadsheetId: sheetId,
@@ -297,13 +297,19 @@ export async function auditAndRepairSheetSchema(sheets, sheetId, spreadsheetMeta
 
     if (existingTabMap.has('Positive_Leads')) {
       try {
+        if (typeof sheets?.spreadsheets?.values?.clear === 'function') {
+          await sheets.spreadsheets.values.clear({
+            spreadsheetId: sheetId,
+            range: "'Positive_Leads'!B2:Z2"
+          });
+        }
         const posRes = await sheets.spreadsheets.values.get({
           spreadsheetId: sheetId,
           range: "'Positive_Leads'!A2:A2"
         });
         const curVal = posRes?.data?.values?.[0]?.[0];
-        if (!curVal || !String(curVal).trim().startsWith('=') || String(curVal).includes('Details!A2:M')) {
-          const expectedFormula = COMPLETE_SCHEMA['Positive_Leads']?.sampleData?.[0]?.[0];
+        const expectedFormula = COMPLETE_SCHEMA['Positive_Leads']?.sampleData?.[0]?.[0];
+        if (!curVal || curVal !== expectedFormula) {
           if (expectedFormula) {
             await sheets.spreadsheets.values.update({
               spreadsheetId: sheetId,
@@ -313,21 +319,6 @@ export async function auditAndRepairSheetSchema(sheets, sheetId, spreadsheetMeta
             });
             results.repairedFormulas.push({ tab: 'Positive_Leads', cell: 'A2' });
           }
-        }
-        // Ensure Column L header in Positive_Leads is labeled 'Sentiment'
-        const headRes = await sheets.spreadsheets.values.get({
-          spreadsheetId: sheetId,
-          range: "'Positive_Leads'!L1:L1"
-        });
-        const l1Val = headRes?.data?.values?.[0]?.[0];
-        if (l1Val && String(l1Val).trim().toLowerCase() === 'next follow up date') {
-          await sheets.spreadsheets.values.update({
-            spreadsheetId: sheetId,
-            range: "'Positive_Leads'!L1",
-            valueInputOption: 'USER_ENTERED',
-            requestBody: { values: [['Sentiment']] }
-          });
-          results.repairedFormulas.push({ tab: 'Positive_Leads', cell: 'L1' });
         }
       } catch (err) {
         console.warn(`Could not auto-repair Positive_Leads: ${err.message}`);

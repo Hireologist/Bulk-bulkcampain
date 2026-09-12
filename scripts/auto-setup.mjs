@@ -475,31 +475,30 @@ async function autoProvisionGoogleSheet(sheets, sheetId) {
       });
       const existingHeaders = (res.data.values?.[0] || []).map((h) => String(h).trim());
 
-      // Special migration for Positive_Leads: Column L (index 11) was renamed from 'Next Follow Up Date' to 'Sentiment'
+      // Special migration for Positive_Leads: ensure headers match expected headers exactly (A1:N1) and clear ghost columns
       if (title === 'Positive_Leads') {
-        if (existingHeaders[11] && String(existingHeaders[11]).trim().toLowerCase() === 'next follow up date') {
-          existingHeaders[11] = 'Sentiment';
+        const headersMatch = existingHeaders.length === config.headers.length &&
+          config.headers.every((h, idx) => (existingHeaders[idx] || '').toLowerCase() === h.toLowerCase());
+        if (!headersMatch) {
           await sheets.spreadsheets.values.update({
             spreadsheetId: sheetId,
-            range: "'Positive_Leads'!L1",
+            range: "'Positive_Leads'!A1:N1",
             valueInputOption: 'USER_ENTERED',
-            requestBody: { values: [['Sentiment']] },
+            requestBody: { values: [config.headers] },
           });
-          console.log('🔄 Updated Column L header in "Positive_Leads" to "Sentiment"');
-          updatedCount++;
-        }
-        if (existingHeaders.length > 14) {
-          for (let c = 14; c < existingHeaders.length; c++) {
-            if (existingHeaders[c] && String(existingHeaders[c]).trim().toLowerCase() === 'sentiment') {
-              const colLetter = columnIndexToLetter(c + 1);
+          if (existingHeaders.length > config.headers.length) {
+            const startLetter = columnIndexToLetter(config.headers.length + 1);
+            const endLetter = columnIndexToLetter(Math.max(existingHeaders.length, 26));
+            if (typeof sheets?.spreadsheets?.values?.clear === 'function') {
               await sheets.spreadsheets.values.clear({
                 spreadsheetId: sheetId,
-                range: `'Positive_Leads'!${colLetter}1`,
+                range: `'Positive_Leads'!${startLetter}1:${endLetter}1`,
               });
-              existingHeaders.splice(c, 1);
-              c--;
             }
           }
+          console.log('🔄 Re-aligned headers in "Positive_Leads" to 14 columns');
+          updatedCount++;
+          existingHeaders = [...config.headers];
         }
       }
 
@@ -540,13 +539,19 @@ async function autoProvisionGoogleSheet(sheets, sheetId) {
       // Safe check for Analytics formula
       if (title === '📊 Email_Analytics') {
         try {
+          if (typeof sheets?.spreadsheets?.values?.clear === 'function') {
+            await sheets.spreadsheets.values.clear({
+              spreadsheetId: sheetId,
+              range: "'📊 Email_Analytics'!B2:Z2",
+            });
+          }
           const analyticsRes = await sheets.spreadsheets.values.get({
             spreadsheetId: sheetId,
             range: "'📊 Email_Analytics'!A2:A2",
           });
           const curVal = analyticsRes?.data?.values?.[0]?.[0];
-          if (!curVal || !String(curVal).trim().startsWith('=')) {
-            const f = config.sampleData?.[0]?.[0];
+          const f = config.sampleData?.[0]?.[0];
+          if (!curVal || curVal !== f) {
             if (f) {
               await sheets.spreadsheets.values.update({
                 spreadsheetId: sheetId,
@@ -564,13 +569,19 @@ async function autoProvisionGoogleSheet(sheets, sheetId) {
       // Safe check for Positive_Leads formula
       if (title === 'Positive_Leads') {
         try {
+          if (typeof sheets?.spreadsheets?.values?.clear === 'function') {
+            await sheets.spreadsheets.values.clear({
+              spreadsheetId: sheetId,
+              range: "'Positive_Leads'!B2:Z2",
+            });
+          }
           const posRes = await sheets.spreadsheets.values.get({
             spreadsheetId: sheetId,
             range: "'Positive_Leads'!A2:A2",
           });
           const curVal = posRes?.data?.values?.[0]?.[0];
-          if (!curVal || !String(curVal).trim().startsWith('=') || String(curVal).includes('Details!A2:M')) {
-            const f = config.sampleData?.[0]?.[0];
+          const f = config.sampleData?.[0]?.[0];
+          if (!curVal || curVal !== f) {
             if (f) {
               await sheets.spreadsheets.values.update({
                 spreadsheetId: sheetId,
@@ -581,22 +592,6 @@ async function autoProvisionGoogleSheet(sheets, sheetId) {
               console.log('🔄 Restored dynamic filter formula in "Positive_Leads"');
               updatedCount++;
             }
-          }
-          // Ensure Column L header in Positive_Leads is labeled 'Sentiment'
-          const headRes = await sheets.spreadsheets.values.get({
-            spreadsheetId: sheetId,
-            range: "'Positive_Leads'!L1:L1"
-          });
-          const l1Val = headRes?.data?.values?.[0]?.[0];
-          if (l1Val && String(l1Val).trim().toLowerCase() === 'next follow up date') {
-            await sheets.spreadsheets.values.update({
-              spreadsheetId: sheetId,
-              range: "'Positive_Leads'!L1",
-              valueInputOption: 'USER_ENTERED',
-              requestBody: { values: [['Sentiment']] }
-            });
-            console.log('🔄 Updated Column L header in "Positive_Leads" to "Sentiment"');
-            updatedCount++;
           }
         } catch (_) {}
       }

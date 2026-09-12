@@ -282,18 +282,19 @@ function createOutreachSystem(forceReset = false) {
 
       // D. Safe check for Positive_Leads formula and header
       if (sheetName === 'Positive_Leads') {
+        sheet.getRange('B2:Z2').clearContent();
         const formulaCell = sheet.getRange(2, 1);
-        const curFormula = formulaCell.getFormula();
-        if (!curFormula || curFormula.indexOf('Details!A2:M') !== -1) {
-          formulaCell.setFormula('=IFERROR(FILTER(Details!A2:N, ISNUMBER(SEARCH("POSITIVE", Details!L2:L))), "No positive leads recorded yet")');
+        const expectedFormula = '=IFERROR(FILTER(Details!A2:N, ISNUMBER(SEARCH("POSITIVE", Details!L2:L))), "No positive leads recorded yet")';
+        if (formulaCell.getFormula() !== expectedFormula) {
+          formulaCell.setFormula(expectedFormula);
         }
         const l1Cell = sheet.getRange(1, 12);
-        if (String(l1Cell.getValue()).trim().toLowerCase() === 'next follow up date') {
+        if (String(l1Cell.getValue()).trim().toLowerCase() !== 'sentiment') {
           l1Cell.setValue('Sentiment');
         }
         const o1Cell = sheet.getRange(1, 15);
-        if (String(o1Cell.getValue()).trim().toLowerCase() === 'sentiment') {
-          o1Cell.clearContent();
+        if (o1Cell.getValue()) {
+          sheet.getRange('O1:Z1').clearContent();
         }
       }
 
