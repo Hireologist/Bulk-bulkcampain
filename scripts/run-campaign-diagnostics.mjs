@@ -298,60 +298,74 @@ export async function auditAndRepairSheetSchema(sheets, sheetId, spreadsheetMeta
       }
     }
 
-    // Auto-heal Time (Col H) and Date (Col I) formatting on Details & Positive_Leads
-    const formatSheets = ['Details', 'Positive_Leads'].filter(t => existingTabMap.has(t));
-    if (formatSheets.length > 0) {
-      try {
-        const formatReqs = [];
-        for (const t of formatSheets) {
-          const sheetNumericId = existingTabMap.get(t);
-          if (sheetNumericId !== undefined) {
-            formatReqs.push(
-              {
-                repeatCell: {
-                  range: {
-                    sheetId: sheetNumericId,
-                    startRowIndex: 1,
-                    startColumnIndex: 7,
-                    endColumnIndex: 8,
-                  },
-                  cell: {
-                    userEnteredFormat: {
-                      numberFormat: { type: 'TIME', pattern: 'hh:mm:ss am/pm' },
-                    },
-                  },
-                  fields: 'userEnteredFormat.numberFormat',
-                },
-              },
-              {
-                repeatCell: {
-                  range: {
-                    sheetId: sheetNumericId,
-                    startRowIndex: 1,
-                    startColumnIndex: 8,
-                    endColumnIndex: 9,
-                  },
-                  cell: {
-                    userEnteredFormat: {
-                      numberFormat: { type: 'DATE', pattern: 'dd/mm/yyyy' },
-                    },
-                  },
-                  fields: 'userEnteredFormat.numberFormat',
-                },
-              }
-            );
+    // Auto-heal Time, Date, and Rate formatting across Details, Positive_Leads, and Email_Analytics
+    try {
+      const formatReqs = [];
+      if (existingTabMap.has('Details')) {
+        const detailsId = existingTabMap.get('Details');
+        formatReqs.push(
+          {
+            repeatCell: {
+              range: { sheetId: detailsId, startRowIndex: 1, startColumnIndex: 7, endColumnIndex: 8 },
+              cell: { userEnteredFormat: { numberFormat: { type: 'TIME', pattern: 'hh:mm:ss am/pm' } } },
+              fields: 'userEnteredFormat.numberFormat',
+            },
+          },
+          {
+            repeatCell: {
+              range: { sheetId: detailsId, startRowIndex: 1, startColumnIndex: 8, endColumnIndex: 9 },
+              cell: { userEnteredFormat: { numberFormat: { type: 'DATE', pattern: 'dd/mm/yyyy' } } },
+              fields: 'userEnteredFormat.numberFormat',
+            },
+          },
+          {
+            repeatCell: {
+              range: { sheetId: detailsId, startRowIndex: 1, startColumnIndex: 11, endColumnIndex: 12 },
+              cell: { userEnteredFormat: { numberFormat: { type: 'DATE', pattern: 'dd/mm/yyyy' } } },
+              fields: 'userEnteredFormat.numberFormat',
+            },
           }
-        }
-        if (formatReqs.length > 0) {
-          await sheets.spreadsheets.batchUpdate({
-            spreadsheetId: sheetId,
-            requestBody: { requests: formatReqs },
-          });
-        }
-      } catch (formatErr) {
-        // Non-critical column format healing error
+        );
       }
+      if (existingTabMap.has('Positive_Leads')) {
+        const posId = existingTabMap.get('Positive_Leads');
+        formatReqs.push(
+          {
+            repeatCell: {
+              range: { sheetId: posId, startRowIndex: 1, startColumnIndex: 7, endColumnIndex: 8 },
+              cell: { userEnteredFormat: { numberFormat: { type: 'TIME', pattern: 'hh:mm:ss am/pm' } } },
+              fields: 'userEnteredFormat.numberFormat',
+            },
+          },
+          {
+            repeatCell: {
+              range: { sheetId: posId, startRowIndex: 1, startColumnIndex: 8, endColumnIndex: 9 },
+              cell: { userEnteredFormat: { numberFormat: { type: 'DATE', pattern: 'dd/mm/yyyy' } } },
+              fields: 'userEnteredFormat.numberFormat',
+            },
+          }
+        );
+      }
+      if (existingTabMap.has('📊 Email_Analytics')) {
+        const analyticsId = existingTabMap.get('📊 Email_Analytics');
+        formatReqs.push({
+          repeatCell: {
+            range: { sheetId: analyticsId, startRowIndex: 1, startColumnIndex: 7, endColumnIndex: 9 },
+            cell: { userEnteredFormat: { numberFormat: { type: 'PERCENT', pattern: '0.0%' } } },
+            fields: 'userEnteredFormat.numberFormat',
+          },
+        });
+      }
+      if (formatReqs.length > 0) {
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId: sheetId,
+          requestBody: { requests: formatReqs },
+        });
+      }
+    } catch (formatErr) {
+      // Non-critical column format healing error
     }
+
   }
 
   // Synchronize Setup Guide documentation steps non-destructively

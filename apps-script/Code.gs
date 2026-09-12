@@ -294,7 +294,11 @@ function createOutreachSystem(forceReset = false) {
       }
 
       // Ensure Time and Date formatting on Details & Positive_Leads
-      if (sheetName === 'Details' || sheetName === 'Positive_Leads') {
+      if (sheetName === 'Details') {
+        sheet.getRange('H2:H').setNumberFormat('hh:mm:ss am/pm');
+        sheet.getRange('I2:I').setNumberFormat('dd/mm/yyyy');
+        sheet.getRange('L2:L').setNumberFormat('dd/mm/yyyy');
+      } else if (sheetName === 'Positive_Leads') {
         sheet.getRange('H2:H').setNumberFormat('hh:mm:ss am/pm');
         sheet.getRange('I2:I').setNumberFormat('dd/mm/yyyy');
       }

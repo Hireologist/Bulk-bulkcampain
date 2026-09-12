@@ -1015,11 +1015,12 @@ export async function runSingleLeadOutreach(singleLeadPayload = {}) {
           'Follow up': '',
           'Follow Up Count': 0,
           'Next Follow Up Date': '',
-          'Summary': ''
+          'Summary': '',
+          'Phone': ''
         };
         const newRow = headers && headers.length > 0
           ? headers.map(h => rowData[(h || '').trim()] ?? '')
-          : [fullName, email, companyName, location, subject, senderEmail, 'SENT', timeStr, dateStr, '', 0, ''];
+          : [fullName, email, companyName, location, subject, senderEmail, 'SENT', timeStr, dateStr, '', 0, '', '', ''];
 
         await sendWithRetry(() => sheets.spreadsheets.values.append({
           spreadsheetId,
@@ -1312,9 +1313,10 @@ export async function runFollowups(sheetsObj = null, customConfig = null) {
         html: finalBody,
       }), { retries: 3, baseDelay: 2000 });
 
-      console.log(`[Follow-up #${nextCount}] Sent from "${senderName}" <${senderEmail}> to: ${email}`);
-
       row[col['Date Sent']] = new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' });
+      if (col['Time'] !== undefined) {
+        row[col['Time']] = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: true });
+      }
 
       const daysUntilNext = parseInt(template.Days_Until_Next || '3', 10);
       let nextDateStr = '';

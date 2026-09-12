@@ -305,8 +305,68 @@ export async function formatSheetTab(sheets, spreadsheetId, sheetNumericId, titl
     },
   ];
 
-  // Apply explicit Time and Date number formatting to Details and Positive_Leads
-  if (title === 'Details' || title === 'Positive_Leads') {
+  // Apply explicit Time and Date number formatting
+  if (title === 'Details') {
+    requests.push(
+      {
+        repeatCell: {
+          range: {
+            sheetId: sheetNumericId,
+            startRowIndex: 1, // Data rows below header
+            startColumnIndex: 7, // Column H (Time)
+            endColumnIndex: 8,
+          },
+          cell: {
+            userEnteredFormat: {
+              numberFormat: {
+                type: 'TIME',
+                pattern: 'hh:mm:ss am/pm',
+              },
+            },
+          },
+          fields: 'userEnteredFormat.numberFormat',
+        },
+      },
+      {
+        repeatCell: {
+          range: {
+            sheetId: sheetNumericId,
+            startRowIndex: 1, // Data rows below header
+            startColumnIndex: 8, // Column I (Date Sent)
+            endColumnIndex: 9,
+          },
+          cell: {
+            userEnteredFormat: {
+              numberFormat: {
+                type: 'DATE',
+                pattern: 'dd/mm/yyyy',
+              },
+            },
+          },
+          fields: 'userEnteredFormat.numberFormat',
+        },
+      },
+      {
+        repeatCell: {
+          range: {
+            sheetId: sheetNumericId,
+            startRowIndex: 1, // Data rows below header
+            startColumnIndex: 11, // Column L (Next Follow Up Date)
+            endColumnIndex: 12,
+          },
+          cell: {
+            userEnteredFormat: {
+              numberFormat: {
+                type: 'DATE',
+                pattern: 'dd/mm/yyyy',
+              },
+            },
+          },
+          fields: 'userEnteredFormat.numberFormat',
+        },
+      }
+    );
+  } else if (title === 'Positive_Leads') {
     requests.push(
       {
         repeatCell: {
@@ -347,6 +407,26 @@ export async function formatSheetTab(sheets, spreadsheetId, sheetNumericId, titl
         },
       }
     );
+  } else if (title === '📊 Email_Analytics') {
+    requests.push({
+      repeatCell: {
+        range: {
+          sheetId: sheetNumericId,
+          startRowIndex: 1, // Data rows below header
+          startColumnIndex: 7, // Column H (Reply Rate) & Column I (Pos Reply Rate)
+          endColumnIndex: 9,
+        },
+        cell: {
+          userEnteredFormat: {
+            numberFormat: {
+              type: 'PERCENT',
+              pattern: '0.0%',
+            },
+          },
+        },
+        fields: 'userEnteredFormat.numberFormat',
+      },
+    });
   }
 
   try {
@@ -473,6 +553,22 @@ async function autoProvisionGoogleSheet(sheets, sheetId) {
               console.log('🔄 Restored dynamic filter formula in "Positive_Leads"');
               updatedCount++;
             }
+          }
+          // Ensure Column L header in Positive_Leads is labeled 'Sentiment'
+          const headRes = await sheets.spreadsheets.values.get({
+            spreadsheetId: sheetId,
+            range: "'Positive_Leads'!L1:L1"
+          });
+          const l1Val = headRes?.data?.values?.[0]?.[0];
+          if (l1Val && String(l1Val).trim().toLowerCase() === 'next follow up date') {
+            await sheets.spreadsheets.values.update({
+              spreadsheetId: sheetId,
+              range: "'Positive_Leads'!L1",
+              valueInputOption: 'USER_ENTERED',
+              requestBody: { values: [['Sentiment']] }
+            });
+            console.log('🔄 Updated Column L header in "Positive_Leads" to "Sentiment"');
+            updatedCount++;
           }
         } catch (_) {}
       }
