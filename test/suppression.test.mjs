@@ -110,4 +110,39 @@ describe('Suppression & Compliance Module Unit Tests', () => {
     assert.ok(footer.includes('subject=Unsubscribe%20-%20user%40sample.com'));
     assert.ok(footer.includes('body=Please%20unsubscribe%20user%40sample.com%20from%20all%20future%20email%20communications.'));
   });
+
+  test('resolveUnsubscribeSecret and generateUnsubscribeToken resolve secret hierarchically', () => {
+    const originalEnv = { ...process.env };
+    try {
+      delete process.env.UNSUBSCRIBE_SECRET;
+      delete process.env.JWT_SECRET;
+
+      // 1. Explicit provided secret wins
+      const t1 = generateUnsubscribeToken('lead@a.com', 'c1', 'explicit-key');
+      assert.strictEqual(verifyUnsubscribeToken('lead@a.com', 'c1', t1, 'explicit-key'), true);
+
+      // 2. Environment UNSUBSCRIBE_SECRET is used when secret omitted
+      process.env.UNSUBSCRIBE_SECRET = 'env-unsub-secret-999';
+      const t2 = generateUnsubscribeToken('lead@a.com', 'c1');
+      assert.strictEqual(verifyUnsubscribeToken('lead@a.com', 'c1', t2, 'env-unsub-secret-999'), true);
+      assert.strictEqual(verifyUnsubscribeToken('lead@a.com', 'c1', t2, 'wrong-secret'), false);
+
+      // 3. Fallback to JWT_SECRET if UNSUBSCRIBE_SECRET not set
+      delete process.env.UNSUBSCRIBE_SECRET;
+      process.env.JWT_SECRET = 'jwt-secret-xyz';
+      const t3 = generateUnsubscribeToken('lead@a.com', 'c1');
+      assert.strictEqual(verifyUnsubscribeToken('lead@a.com', 'c1', t3, 'jwt-secret-xyz'), true);
+
+      // 4. Settings tab secret passed in buildSenderFooter
+      delete process.env.JWT_SECRET;
+      const footer = buildSenderFooter({
+        unsubscribe_url: 'https://test.com/unsub',
+        unsubscribe_secret: 'sheet-settings-secret'
+      }, { email: 'prospect@corp.com', campaign: 'c1' });
+      const expectedToken = generateUnsubscribeToken('prospect@corp.com', 'c1', 'sheet-settings-secret');
+      assert.ok(footer.includes(`token=${expectedToken}`));
+    } finally {
+      process.env = originalEnv;
+    }
+  });
 });

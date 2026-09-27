@@ -139,5 +139,27 @@ describe('🚀 New User Onboarding & Auto-Provisioning Simulation Test', () => {
     assert.strictEqual(parseDueDate(''), null);
     assert.strictEqual(parseDueDate(null), null);
   });
+
+  test('parseServiceAccountCredentials parses valid JSON and throws structured Error on malformed input', async () => {
+    const { parseServiceAccountCredentials } = await import('../scripts/auto-setup.mjs');
+    assert.ok(typeof parseServiceAccountCredentials === 'function', 'parseServiceAccountCredentials must be exported');
+
+    // Valid JSON string
+    const validObj = { client_email: 'bot@project.iam.gserviceaccount.com' };
+    assert.deepStrictEqual(parseServiceAccountCredentials(JSON.stringify(validObj)), validObj);
+
+    // Already parsed object
+    assert.deepStrictEqual(parseServiceAccountCredentials(validObj), validObj);
+
+    // Empty / null
+    assert.strictEqual(parseServiceAccountCredentials(''), null);
+    assert.strictEqual(parseServiceAccountCredentials(null), null);
+
+    // Malformed JSON throws informative error
+    assert.throws(
+      () => parseServiceAccountCredentials('{ invalid_json '),
+      /Invalid GOOGLE_SERVICE_ACCOUNT_JSON syntax/
+    );
+  });
 });
 

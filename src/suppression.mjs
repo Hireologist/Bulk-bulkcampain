@@ -5,19 +5,37 @@ let lastCacheTime = 0;
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 /**
+ * Hierarchically resolve HMAC secret for unsubscribe token generation and validation.
+ * Hierarchy: explicit secret -> process.env.UNSUBSCRIBE_SECRET -> settings.unsubscribe_secret -> process.env.JWT_SECRET -> 'default-secret'
+ */
+export function resolveUnsubscribeSecret(providedSecret, settings = {}) {
+  if (providedSecret && providedSecret !== 'default-secret') {
+    return providedSecret;
+  }
+  return (
+    process.env.UNSUBSCRIBE_SECRET ||
+    settings.unsubscribe_secret ||
+    process.env.JWT_SECRET ||
+    'default-secret'
+  );
+}
+
+/**
  * Generate a signed HMAC token for 1-click unsubscribe
  */
-export function generateUnsubscribeToken(email, campaignId = 'global', secret = 'default-secret') {
+export function generateUnsubscribeToken(email, campaignId = 'global', secret = null) {
+  const activeSecret = resolveUnsubscribeSecret(secret);
   const payload = `${email.toLowerCase()}:${campaignId}`;
-  return crypto.createHmac('sha256', secret).update(payload).digest('hex');
+  return crypto.createHmac('sha256', activeSecret).update(payload).digest('hex');
 }
 
 /**
  * Verify a signed HMAC unsubscribe token
  */
-export function verifyUnsubscribeToken(email, campaignId = 'global', token, secret = 'default-secret') {
+export function verifyUnsubscribeToken(email, campaignId = 'global', token, secret = null) {
   if (!email || !token) return false;
-  const expected = generateUnsubscribeToken(email, campaignId, secret);
+  const activeSecret = resolveUnsubscribeSecret(secret);
+  const expected = generateUnsubscribeToken(email, campaignId, activeSecret);
   try {
     return crypto.timingSafeEqual(Buffer.from(token, 'hex'), Buffer.from(expected, 'hex'));
   } catch {
@@ -140,12 +158,13 @@ export function isOptOutReply(subject = '', body = '') {
 /**
  * Build CAN-SPAM compliant footer with business details & unsubscribe link
  */
-export function buildSenderFooter(settings = {}, lead = {}, secret = 'default-secret') {
+export function buildSenderFooter(settings = {}, lead = {}, secret = null) {
   const businessName = settings.business_name || settings.company_name || 'Outreach Team';
   const businessAddress = settings.business_address || '';
   const email = lead.email || '';
   const campaignId = lead.campaign || 'default';
-  const token = generateUnsubscribeToken(email, campaignId, secret);
+  const activeSecret = resolveUnsubscribeSecret(secret, settings);
+  const token = generateUnsubscribeToken(email, campaignId, activeSecret);
 
   // Auto-generate target recipient from the exact sender email or sender domain
   const senderEmail = lead.senderEmail || lead.sender || settings.support_email || settings.senderEmail || (email.includes('@') ? `unsubscribe@${email.split('@')[1]}` : 'unsubscribe@domain.com');

@@ -68,21 +68,23 @@ for (let i = 0; i < totalCommits; i++) {
   fs.mkdirSync(folderPath, { recursive: true });
 
   try {
-    // Export commit archive
-    execSync(`git archive --format=zip ${commit.fullHash} -o "${tempZipPath}"`, {
-      cwd: ROOT_DIR,
-      stdio: 'pipe'
-    });
+    try {
+      // Export commit archive
+      execSync(`git archive --format=zip ${commit.fullHash} -o "${tempZipPath}"`, {
+        cwd: ROOT_DIR,
+        stdio: 'pipe'
+      });
 
-    // Unpack archive into version folder
-    execSync(`tar -xf "${tempZipPath}" -C "${folderPath}"`, {
-      cwd: ROOT_DIR,
-      stdio: 'pipe'
-    });
-
-    // Clean up zip
-    if (fs.existsSync(tempZipPath)) {
-      fs.unlinkSync(tempZipPath);
+      // Unpack archive into version folder
+      execSync(`tar -xf "${tempZipPath}" -C "${folderPath}"`, {
+        cwd: ROOT_DIR,
+        stdio: 'pipe'
+      });
+    } finally {
+      // Clean up zip immediately
+      if (fs.existsSync(tempZipPath)) {
+        try { fs.unlinkSync(tempZipPath); } catch (_) {}
+      }
     }
 
     // Get commit details and file diff stats

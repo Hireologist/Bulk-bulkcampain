@@ -1048,7 +1048,12 @@ function setupSettingsEvents() {
 }
 
 function escapeHtml(str) {
-  return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return (str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 // Export functions for testability in Node & ESM
@@ -1059,6 +1064,7 @@ export {
   extractNameFromEmail,
   extractCompanyFromEmail,
   parseBulkLines,
-  resolveTokenForCampaign
+  resolveTokenForCampaign,
+  escapeHtml
 };
 

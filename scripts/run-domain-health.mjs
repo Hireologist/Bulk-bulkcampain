@@ -3,6 +3,7 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 import { checkDomainAuth } from '../src/dns-check.mjs';
 import { postToDiscord } from '../src/alerts.mjs';
+import { parseServiceAccountCredentials } from './auto-setup.mjs';
 
 function getGoogleAuth() {
   const sheetId = process.env.SHEET_ID || process.env.SPREADSHEET_ID || process.env.SINGLE_SHEET_ID;
@@ -12,7 +13,7 @@ function getGoogleAuth() {
 
   let auth;
   if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
-    const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+    const credentials = parseServiceAccountCredentials(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
     auth = new google.auth.GoogleAuth({
       credentials,
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],

@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.1] - 2026-09-27
+
+### Security & Hardening
+- **Cryptographic Unsubscribe Secret Hierarchy (`src/suppression.mjs`)**:
+  - Implemented `resolveUnsubscribeSecret` resolving secrets from `UNSUBSCRIBE_SECRET`, `settings.unsubscribe_secret`, and `JWT_SECRET` with fallback warning.
+  - Added unit test coverage verifying dynamic secret resolution and mismatch protection.
+- **Complete HTML Attribute Escaping (`chrome-extension/popup.js`)**:
+  - Enhanced `escapeHtml` to escape quotes (`"`, `'`) preventing attribute breakouts when injecting dynamic user or repository inputs.
+  - Exported `escapeHtml` and added frontend security unit test.
+
+### Reliability & Resilience
+- **Robust Service Account JSON Parsing (`scripts/auto-setup.mjs`, `scripts/run-domain-health.mjs`)**:
+  - Exported `parseServiceAccountCredentials` to safely handle JSON parsing with descriptive, user-friendly error guidance on malformed credentials.
+- **Git Snapshot Exporter Cleanup (`scripts/export-all-versions.mjs`)**:
+  - Wrapped temporary archive zip extraction in `try ... finally` block to guarantee intermediate disk space cleanup even upon extraction failure.
+- **Test Runner Glob Optimization (`package.json`)**:
+  - Updated test runner script to support nested test suites across both Windows PowerShell and Unix environments.
+  - Test suite expanded to 166 passing tests across 51 test suites with 0 failures.
+
 ## [2.3.0] - 2026-09-27
 
 ### Added & Enhanced

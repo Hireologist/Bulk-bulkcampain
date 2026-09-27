@@ -299,3 +299,10 @@ test('Multi-Master Token Routing: resolveTokenForCampaign matches accurately', (
   assert.equal(resolveTokenForCampaign(autoMatchCamp, []), null);
   assert.equal(resolveTokenForCampaign(null, pool), null);
 });
+
+test('Frontend Security: escapeHtml escapes quotes and prevents attribute breakout', () => {
+  assert.ok(typeof popup.escapeHtml === 'function', 'escapeHtml must be exported for testability');
+  const dirtyInput = 'test "company" & <name>\'s repo';
+  const clean = popup.escapeHtml(dirtyInput);
+  assert.strictEqual(clean, 'test &quot;company&quot; &amp; &lt;name&gt;&#039;s repo');
+});

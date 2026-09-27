@@ -10,6 +10,18 @@ import { postToDiscord } from '../src/alerts.mjs';
  * default settings, and cron jobs on cron-job.org with zero manual effort.
  */
 
+/**
+ * Parse Google Service Account credentials safely from string or object
+ */
+export function parseServiceAccountCredentials(rawJson) {
+  if (!rawJson) return null;
+  try {
+    return typeof rawJson === 'string' ? JSON.parse(rawJson) : rawJson;
+  } catch (err) {
+    throw new Error(`Invalid GOOGLE_SERVICE_ACCOUNT_JSON syntax: ${err.message}. Check your secret formatting.`);
+  }
+}
+
 function getGoogleAuth() {
   const sheetId = process.env.SPREADSHEET_ID || process.env.SHEET_ID || process.env.SINGLE_SHEET_ID;
   if (!sheetId) {
@@ -18,7 +30,7 @@ function getGoogleAuth() {
 
   let auth;
   if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
-    const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+    const credentials = parseServiceAccountCredentials(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
     auth = new google.auth.GoogleAuth({
       credentials,
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],
