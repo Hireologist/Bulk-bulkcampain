@@ -5,7 +5,7 @@
   "license": "PolyForm-Noncommercial-1.0.0",
   "scripts": {
     "start": "node engine.mjs outreach",
-    "test": "node --test",
+    "test": "node --test test/*.test.mjs",
     "setup": "node scripts/auto-setup.mjs",
     "cron:sync": "node scripts/setup-cron.mjs",
     "diagnostics": "node scripts/run-campaign-diagnostics.mjs",

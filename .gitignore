@@ -25,6 +25,7 @@ yarn-error.log*
 scratch/
 offline_runs/
 .claude/
+history_versions/
 
 # Python & Databases
 __pycache__/
