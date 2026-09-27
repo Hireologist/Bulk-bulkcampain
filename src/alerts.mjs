@@ -2,16 +2,60 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
 
-function getRepoSlug() {
+/**
+ * Resolve the GitHub owner/repo slug from environment or git remote.
+ * Exported so engine.mjs and scripts can share the same identifier.
+ */
+let _cachedRemoteSlug = null;
+
+export function getRepoSlug() {
   if (process.env.GITHUB_REPOSITORY) return process.env.GITHUB_REPOSITORY;
+  if (_cachedRemoteSlug) return _cachedRemoteSlug;
   try {
     const remoteUrl = execSync('git config --get remote.origin.url', { encoding: 'utf8' }).trim();
     const match = remoteUrl.match(/github\.com[:/]([^/]+)\/([^/.]+)(?:\.git)?$/);
     if (match) {
-      return `${match[1]}/${match[2]}`;
+      _cachedRemoteSlug = `${match[1]}/${match[2]}`;
+      return _cachedRemoteSlug;
     }
   } catch {}
   return process.env.GITHUB_REPO || 'Sheet-bot';
+}
+
+/**
+ * Build a clickable GitHub Actions run URL when running in CI.
+ * Returns empty string if not in GitHub Actions.
+ */
+export function getRunUrl() {
+  const repo = process.env.GITHUB_REPOSITORY;
+  const runId = process.env.GITHUB_RUN_ID;
+  if (repo && runId) {
+    return `https://github.com/${repo}/actions/runs/${runId}`;
+  }
+  return '';
+}
+
+/**
+ * Prepend a [owner/repo] tag to Discord content and append a share-ready
+ * GitHub Actions run link when available.
+ */
+export function formatDiscordContent(content) {
+  const str = content != null ? String(content).trim() : '';
+  const slug = getRepoSlug();
+  const runUrl = getRunUrl();
+  const tagPrefix = `**[${slug}]**`;
+
+  let tagged = str.startsWith(tagPrefix) ? str : (str ? `${tagPrefix} ${str}` : tagPrefix);
+  if (runUrl && !tagged.includes(runUrl)) {
+    tagged += `\n🔗 [View Run](${runUrl})`;
+  }
+
+  // Discord content field has a strict 2000-character maximum limit
+  if (tagged.length > 2000) {
+    tagged = tagged.slice(0, 1996) + '...';
+  }
+
+  return tagged;
 }
 
 /**
@@ -24,9 +68,20 @@ export async function postToDiscord(webhookUrl, content, embeds = []) {
   }
 
   try {
-    const payload = { content };
+    const taggedContent = formatDiscordContent(content);
+    const payload = { content: taggedContent };
     if (Array.isArray(embeds) && embeds.length > 0) {
-      payload.embeds = embeds;
+      const slug = getRepoSlug();
+      payload.embeds = embeds.map(e => {
+        const currentFooter = e.footer?.text;
+        const footerText = currentFooter
+          ? (currentFooter.includes(slug) ? currentFooter : `${slug} • ${currentFooter}`)
+          : slug;
+        return {
+          ...e,
+          footer: { text: footerText }
+        };
+      });
     }
 
     const res = await fetch(webhookUrl, {
@@ -158,7 +213,7 @@ export async function sendAuthFailureAlert({
             '4. Re-run workflow or diagnostics'
         }
       ],
-      footer: { text: 'Sheet-bot Deliverability & Security Monitor' },
+      footer: { text: 'Deliverability & Security Monitor' },
       timestamp: new Date().toISOString()
     };
 
@@ -204,7 +259,7 @@ export async function sendRunSummaryAlert(summary = {}, webhookUrl) {
   if (!webhookUrl) return;
 
   const embed = {
-    title: '📊 Sheet-bot Execution Digest',
+    title: `📊 ${getRepoSlug()} Execution Digest`,
     color: summary.errors > 0 ? 0xff4d4d : 0x00cc88,
     fields: [
       { name: 'Processed Leads', value: String(summary.processed || 0), inline: true },
@@ -214,6 +269,7 @@ export async function sendRunSummaryAlert(summary = {}, webhookUrl) {
       { name: 'Failed Sends', value: String(summary.failed || 0), inline: true },
       { name: 'Duration', value: `${summary.durationSeconds || 0}s`, inline: true },
     ],
+    footer: { text: 'Execution Digest' },
     timestamp: new Date().toISOString(),
   };
 
@@ -248,7 +304,7 @@ export async function sendCronSyncAlert({
       { name: '⏰ New Trigger Time', value: `\`${hourStr}:${minStr}\``, inline: true },
       { name: '⚙️ Source', value: context, inline: false },
     ],
-    footer: { text: 'Sheet-bot Cron Auto-Synchronizer' },
+    footer: { text: 'Cron Auto-Synchronizer' },
     timestamp: new Date().toISOString()
   };
 

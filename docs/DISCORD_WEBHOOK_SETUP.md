@@ -71,3 +71,49 @@ In your Google Sheet **`Settings`** tab:
 - Set `discord_alerts_enabled = FALSE` to mute all general outreach and digest alerts.
 - Set `discord_domain_alerts_enabled = FALSE` to mute DNS health alerts.
 - Set `gcc_radar_enabled = TRUE` to activate daily GCC leadership tracking alerts.
+
+---
+
+## 📡 Multi-Repository Telemetry & Enhanced Observability
+
+The outreach engine includes built-in observability features designed for multi-campaign and multi-client setups:
+
+### 1. 🏷️ Automatic Repository Tagging (`**[owner/repo]**`)
+Every alert sent to Discord is automatically prefixed with `**[owner/repo]**` (e.g. `**[itsrohanpatel/Sheet-bot]**`) and labeled in embed footers. If you manage 5 different campaign repositories streaming into a single `#outreach-updates` channel, you can immediately identify which client or campaign triggered the alert.
+
+### 2. 🔗 One-Click Deep Run Links
+When executing inside GitHub Actions, notifications automatically append a direct link to the running workflow:
+```
+🔗 [View Run](https://github.com/owner/repo/actions/runs/123456789)
+```
+Clicking this link opens the live execution logs in your browser instantly.
+
+### 3. 🚀 Pre-Flight Queue Telemetry
+When a cold outreach run begins, you'll see how many active mailboxes are online and the exact number of unsent leads queued for delivery:
+```text
+**[client-corp/campaign-saas]** 🚀 **Auto cold outreach started**
+📬 **Inboxes:** 5 active | 📨 **Leads queued:** 142
+🔗 [View Run](https://github.com/client-corp/campaign-saas/actions/runs/987654321)
+```
+
+### 4. 🏁 Granular Completion Summaries
+Upon finishing, the engine calculates the exact duration and reports a breakdown of emails sent (or drafts created in `review` mode) per mailbox:
+```text
+**[client-corp/campaign-saas]** 🏁 **Cold outreach run completed**
+📦 **Repo:** `client-corp/campaign-saas`
+📨 **Sent:** 85 | ⏱️ **Duration:** 4m 18s | 📬 **Inboxes used:** 5/5
+📬 **Inbox breakdown:**
+• `inbox1@clientdomain.com`: 17 sent
+• `inbox2@clientdomain.com`: 17 sent
+• `inbox3@clientdomain.com`: 17 sent
+• `inbox4@clientdomain.com`: 17 sent
+• `inbox5@clientdomain.com`: 17 sent
+🔗 [View Run](https://github.com/client-corp/campaign-saas/actions/runs/987654321)
+```
+
+### 5. 💡 Contextual & Actionable Error Alerts
+If a task encounters an issue, the bot delivers actionable troubleshooting hints instead of cryptic errors:
+* **Google App Password Expiration:** Displays direct link to `https://myaccount.google.com/apppasswords` and step-by-step resolution.
+* **Google Sheets Issues:** Flags missing tabs or service account permission requirements.
+* **Payload Safety:** Inbox breakdowns are safely truncated at 15 inboxes and message lengths are capped at 2,000 characters to prevent Discord webhook rejections.
+

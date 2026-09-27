@@ -67,3 +67,14 @@ Every campaign repository has its own independent Google Sheet. You can configur
 
 ## 🔍 Pre-Flight Diagnostics
 Before sending cold emails, you can test mailbox authentication and DNS deliverability by running the **`Campaign Pre-Flight Diagnostics`** action on GitHub or selecting `diagnostic` in the **Universal Outreach Engine** workflow.
+
+---
+
+## 📢 Centralized Multi-Repo Discord Monitoring
+
+Because every Discord notification is automatically tagged with `**[owner/repo]**` and embed footers include the repository slug, you can paste the **same Discord webhook URL** across all your campaign repositories.
+
+* **Single Channel Monitoring**: Stream alerts from 10+ clients or campaign repos into one `#outreach-updates` channel without ambiguity.
+* **Instant Triage**: Every alert includes a direct `🔗 [View Run]` link to the exact GitHub Actions execution logs in the originating repository.
+* **Per-Client Mailbox Isolation**: Each alert breaks down exactly which mailboxes were used and how many emails or drafts were processed for that specific campaign.
+

@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { getSendDelay, trackOutcome, checkAndResetDailyStats } from './src/throttle.mjs';
 import { sendWithRetry } from './src/retry.mjs';
 import { isSuppressed, addToSuppression, buildSenderFooter, isOptOutReply, stripQuotedReply } from './src/suppression.mjs';
-import { alertIfUnhealthy, sendRunSummaryAlert, postToDiscord, isAuthError, sendAuthFailureAlert } from './src/alerts.mjs';
+import { alertIfUnhealthy, sendRunSummaryAlert, postToDiscord, isAuthError, sendAuthFailureAlert, getRepoSlug, formatDiscordContent } from './src/alerts.mjs';
 import { runWarmupCycle } from './src/warmup.mjs';
 import { parseSpintax } from './src/spintax.mjs';
 import { verifyReputationCompliance } from './src/dns-check.mjs';
@@ -335,7 +335,8 @@ async function notifyDiscord(url, content, settings = {}) {
   const targetUrl = url || process.env.DISCORD_WEBHOOK_URL;
   if (targetUrl && targetUrl.startsWith('http')) {
     try {
-      await axios.post(targetUrl, { content });
+      const taggedContent = formatDiscordContent(content);
+      await axios.post(targetUrl, { content: taggedContent });
     } catch (e) {
       console.error('Discord error:', e.message);
     }
@@ -462,19 +463,29 @@ export async function runColdOutreach() {
 
   if (!config.inboxes.length) throw new Error('No active Inboxes configured in "Inboxes" tab.');
   if (!config.coldTemplates.length) throw new Error('No Templates found in "Templates" tab.');
-
-  await notifyDiscord(config.settings.discord_updates_webhook, '🚀 Auto bulk cold outreach started');
-
   const detailsRes = await sendWithRetry(() => sheets.spreadsheets.values.get({
     spreadsheetId: sheets.spreadsheetId || SPREADSHEET_ID,
     range: "'Details'!A:Z",
   }), { retries: 2 });
 
-  const [headers, ...rows] = detailsRes.data.values || [];
-  const col = Object.fromEntries(headers.map((h, i) => [h.trim(), i]));
+  const values = detailsRes?.data?.values || [];
+  const headers = values[0] || [];
+  const rows = values.slice(1);
+  const col = Object.fromEntries(headers.map((h, i) => [String(h || '').trim(), i]));
+
+  const queuedLeadsCount = rows.filter(r => {
+    const e = (r[col['email']] || '').trim();
+    const s = (r[col['Sent Status']] || '').trim().toLowerCase();
+    return e && !['sent', 'replied', 'bounced', 'suppressed', 'draft — pending review'].includes(s);
+  }).length;
+
+  const startMsg = `🚀 **Auto cold outreach started**\n📬 **Inboxes:** ${config.inboxes.length} active | 📨 **Leads queued:** ${queuedLeadsCount}`;
+  await notifyDiscord(config.settings.discord_updates_webhook, startMsg);
 
   const inboxStatsMap = await loadInboxStatsMap(sheets);
   const inboxUsage = Object.fromEntries(config.inboxes.map(i => [i.email, 0]));
+  const sentPerInbox = Object.fromEntries(config.inboxes.map(i => [i.email, 0]));
+  const draftsPerInbox = Object.fromEntries(config.inboxes.map(i => [i.email, 0]));
   const limitExceededInboxes = new Set();
   let inboxIdx = 0;
   let emailsSentThisRun = 0;
@@ -656,6 +667,7 @@ export async function runColdOutreach() {
       try {
         await saveDraftViaImap(inbox, email, subject, body);
         draftsSavedThisRun++;
+        draftsPerInbox[inbox.email] = (draftsPerInbox[inbox.email] || 0) + 1;
         const rowNum = i + 2;
         row[col['Subject Line']] = subject;
         row[col['Sent From']] = senderEmail;
@@ -693,6 +705,7 @@ export async function runColdOutreach() {
       }), { retries: 3, baseDelay: 2000 });
 
       inboxUsage[inbox.email]++;
+      sentPerInbox[inbox.email] = (sentPerInbox[inbox.email] || 0) + 1;
       emailsSentThisRun++;
       currentInboxStats = trackOutcome(currentInboxStats, 'sent');
       inboxStatsMap.set(inbox.email.toLowerCase(), currentInboxStats);
@@ -784,9 +797,50 @@ export async function runColdOutreach() {
   // Persist updated stats
   await saveInboxStatsMap(sheets, inboxStatsMap);
 
-  const completionMsg = isReviewMode
-    ? `🏁 Cold outreach review run completed (${draftsSavedThisRun} draft(s) saved).`
-    : `🏁 Cold outreach run completed (${emailsSentThisRun} email(s) sent).`;
+  const repoSlug = getRepoSlug();
+  const durationSec = Math.max(1, Math.round((Date.now() - runStartTime) / 1000));
+  const durationStr = durationSec >= 60
+    ? `${Math.floor(durationSec / 60)}m ${durationSec % 60}s`
+    : `${durationSec}s`;
+
+  let completionMsg = '';
+  if (isReviewMode) {
+    const usedInboxes = config.inboxes.filter(i => (draftsPerInbox[i.email] || 0) > 0);
+    const inboxesRatio = `${usedInboxes.length}/${config.inboxes.length}`;
+    let inboxDetails = '';
+    if (usedInboxes.length > 0) {
+      const displayList = usedInboxes.slice(0, 15);
+      inboxDetails = displayList.map(i => `• \`${i.email}\`: ${draftsPerInbox[i.email]} draft(s)`).join('\n');
+      if (usedInboxes.length > 15) {
+        inboxDetails += `\n• ...and ${usedInboxes.length - 15} more inbox(es)`;
+      }
+    } else {
+      inboxDetails = `• ${config.inboxes.slice(0, 5).map(i => `\`${i.email}\``).join(', ')}${config.inboxes.length > 5 ? ` (+${config.inboxes.length - 5} more)` : ''} (0 drafts)`;
+    }
+
+    completionMsg = `🏁 **Cold outreach review run completed**\n`
+      + `📦 **Repo:** \`${repoSlug}\`\n`
+      + `📝 **Drafts saved:** ${draftsSavedThisRun} | ⏱️ **Duration:** ${durationStr} | 📬 **Inboxes used:** ${inboxesRatio}\n`
+      + `📬 **Inbox breakdown:**\n${inboxDetails}`;
+  } else {
+    const usedInboxes = config.inboxes.filter(i => (sentPerInbox[i.email] || 0) > 0);
+    const inboxesRatio = `${usedInboxes.length}/${config.inboxes.length}`;
+    let inboxDetails = '';
+    if (usedInboxes.length > 0) {
+      const displayList = usedInboxes.slice(0, 15);
+      inboxDetails = displayList.map(i => `• \`${i.email}\`: ${sentPerInbox[i.email]} sent`).join('\n');
+      if (usedInboxes.length > 15) {
+        inboxDetails += `\n• ...and ${usedInboxes.length - 15} more inbox(es)`;
+      }
+    } else {
+      inboxDetails = `• ${config.inboxes.slice(0, 5).map(i => `\`${i.email}\``).join(', ')}${config.inboxes.length > 5 ? ` (+${config.inboxes.length - 5} more)` : ''} (0 sent)`;
+    }
+
+    completionMsg = `🏁 **Cold outreach run completed**\n`
+      + `📦 **Repo:** \`${repoSlug}\`\n`
+      + `📨 **Sent:** ${emailsSentThisRun} | ⏱️ **Duration:** ${durationStr} | 📬 **Inboxes used:** ${inboxesRatio}\n`
+      + `📬 **Inbox breakdown:**\n${inboxDetails}`;
+  }
   await notifyDiscord(config.settings.discord_updates_webhook, completionMsg);
 }
 
@@ -2011,17 +2065,27 @@ async function main() {
     }
   } catch (err) {
     console.error(`Fatal error during task [${task}]:`, err);
+    let hint = 'Check inbox credentials in the `Inboxes` tab or re-run pre-flight diagnostics.';
+    if (isAuthError(err)) {
+      hint = 'Google App Password authentication failed. Check credentials in the `Inboxes` tab or re-run pre-flight diagnostics.';
+    } else {
+      const errMsg = (err?.message || String(err || '')).toLowerCase();
+      if (errMsg.includes('sheet') || errMsg.includes('tab') || errMsg.includes('spreadsheet')) {
+        hint = 'Verify Google Sheet permissions and ensure required tabs exist.';
+      }
+    }
+    const failAlertMsg = `❌ **Engine Task Failed Alert**\n**Task:** \`${task}\`\n**Error:** \`${err?.message || err || 'Unknown error'}\`\n💡 **Hint:** ${hint}`;
     try {
       const sheets = await getSheets();
       const config = await loadConfig(sheets);
       await notifyDiscord(
         config.settings.discord_updates_webhook,
-        `❌ **Engine Task Failed Alert**\n**Task:** \`${task}\`\n**Error:** \`${err.message || err}\``
+        failAlertMsg
       );
     } catch (notifyErr) {
       await notifyDiscord(
         null,
-        `❌ **Engine Task Failed Alert**\n**Task:** \`${task}\`\n**Error:** \`${err.message || err}\``
+        failAlertMsg
       );
     }
     process.exit(1);

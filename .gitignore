@@ -23,6 +23,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 scratch/
+offline_runs/
+.claude/
 
 # Python & Databases
 __pycache__/

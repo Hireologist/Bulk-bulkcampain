@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-09-27
+
+### Added & Enhanced
+- **Multi-Repository Discord Telemetry & Contextual Observability (`src/alerts.mjs`, `engine.mjs`)**:
+  - Automatically prepends repository slug `**[owner/repo]**` to all Discord webhook messages and embed footers (`owner/repo • Deliverability & Security Monitor`, `owner/repo • Execution Digest`).
+  - Added clickable `🔗 [View Run]` links directly to the originating GitHub Actions workflow run logs.
+  - Outreach start notifications now include active mailbox count and queued leads count.
+  - Outreach completion notifications now report duration, inboxes used ratio, and a per-inbox breakdown of sent emails or drafts saved.
+  - Task failure alerts now provide contextual diagnostic hints (e.g. Google App Password revocation with 1-click links to resolve).
+  - Added memoization to `getRepoSlug()` and 2,000-character payload truncation protection to prevent Discord webhook rejections.
+  - Added 14 unit tests in `test/alerts.test.mjs` verifying repository context helpers, link construction, and embed formatting.
+- **Documentation**:
+  - Updated `README.md`, `docs/DISCORD_WEBHOOK_SETUP.md`, and `docs/MULTI_CAMPAIGN_GUIDE.md` with multi-repo monitoring documentation and updated test pass badges (163/163 passing).
+
 ## [2.2.2] - 2026-09-12
 
 ### Fixed & Enhanced

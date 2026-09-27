@@ -3,7 +3,7 @@
 [![Node.js CI](https://img.shields.io/badge/Node.js-v22+-green.svg?logo=node.js)](https://nodejs.org/)
 [![Serverless Engine](https://img.shields.io/badge/Architecture-100%25%20Serverless-blue.svg?logo=github-actions)](https://github.com/features/actions)
 [![100% Free](https://img.shields.io/badge/Cost-100%25%20Free-brightgreen.svg)](#)
-[![Tests Passing](https://img.shields.io/badge/Tests-156%2F156%20Passing-success.svg)](#)
+[![Tests Passing](https://img.shields.io/badge/Tests-163%2F163%20Passing-success.svg)](#)
 [![License: PolyForm Noncommercial](https://img.shields.io/badge/License-PolyForm%20Noncommercial-blue.svg)](./LICENSE)
 
 An automated, 100% free, production-ready serverless cold outreach platform built with **Node.js**, **Google Sheets API**, **IMAP/SMTP**, **GitHub Actions**, **Groq AI**, **Discord Webhooks**, and an **Online GitHub Pages Dashboard**.
@@ -54,6 +54,7 @@ All in-depth technical guides, schemas, and walkthroughs are organized into dedi
 ## ✨ Key Capabilities
 
 - **🔄 Non-Destructive Morning Auto-Update & Self-Healing**: Daily morning diagnostics automatically syncs newly added tabs, columns, settings keys, and formulas from code updates without ever touching, altering, or overwriting existing leads, credentials, or custom settings.
+- **📢 Multi-Repo Discord Telemetry & Deep Run Links**: Automatic repo-tagged alerts (`**[owner/repo]**`), direct clickable GitHub Actions run links (`🔗 [View Run]`), active inbox & queued lead counts on start, per-inbox completion breakdowns with duration, and actionable self-healing error hints.
 - **🎲 Spintax Randomization**: Dynamic variations like `{{Hi|Hey|Hello}}` across subject lines and bodies to maximize deliverability.
 - **🛡️ Adaptive Deliverability Shield**: Auto-adjusts sending delays (60s on spam complaints, 15s on bounces, 8s ramp-up, 3s steady state).
 - **⚡ High-Speed Bulk Mode**: Toggle `throttle_mode = bulk` in Google Sheet `Settings` for high-speed sending blasts (1500+ emails).
@@ -84,7 +85,7 @@ You only need **2 repository secrets** to run the complete platform:
 # Install dependencies
 npm ci
 
-# Run all 156 unit tests across 28 test suites
+# Run all 163 unit tests across 29 test suites
 npm test
 
 # Start local web dashboard

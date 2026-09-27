@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { isAuthError, sendAuthFailureAlert, writeGitHubStepSummary } from '../src/alerts.mjs';
+import { isAuthError, sendAuthFailureAlert, writeGitHubStepSummary, getRepoSlug, formatDiscordContent, getRunUrl } from '../src/alerts.mjs';
 
 describe('Google App Password & Auth Alerting Unit Tests', () => {
   describe('isAuthError Pattern Matching', () => {
@@ -111,9 +111,12 @@ describe('Google App Password & Auth Alerting Unit Tests', () => {
         // Check Discord Embed Payload
         assert.ok(capturedPayload);
         assert.ok(capturedPayload.content.includes('outreach@companydomain.com'));
+        assert.ok(capturedPayload.content.startsWith('**['), 'Content should start with repo tag');
+        assert.ok(capturedPayload.content.includes(getRepoSlug()), 'Content should include repo slug');
         assert.strictEqual(capturedPayload.embeds[0].title, '🚨 Action Required: Google App Password Authentication Failed');
         assert.strictEqual(capturedPayload.embeds[0].fields[0].value, '`outreach@companydomain.com`');
         assert.strictEqual(capturedPayload.embeds[0].fields[1].value, 'Pre-Flight Diagnostic SMTP Test');
+        assert.strictEqual(capturedPayload.embeds[0].footer.text, `${getRepoSlug()} • Deliverability & Security Monitor`);
 
         // Check Step Summary written
         assert.ok(fs.existsSync(tempSummaryFile), 'Alert step summary file should exist');
@@ -145,3 +148,104 @@ describe('Google App Password & Auth Alerting Unit Tests', () => {
   });
 });
 
+describe('Repo Context Helpers', () => {
+  describe('getRepoSlug', () => {
+    test('reads GITHUB_REPOSITORY env var when available', () => {
+      const original = process.env.GITHUB_REPOSITORY;
+      process.env.GITHUB_REPOSITORY = 'testowner/testrepo';
+      try {
+        assert.strictEqual(getRepoSlug(), 'testowner/testrepo');
+      } finally {
+        if (original !== undefined) {
+          process.env.GITHUB_REPOSITORY = original;
+        } else {
+          delete process.env.GITHUB_REPOSITORY;
+        }
+      }
+    });
+
+    test('returns a non-empty string even when GITHUB_REPOSITORY is unset', () => {
+      const original = process.env.GITHUB_REPOSITORY;
+      delete process.env.GITHUB_REPOSITORY;
+      try {
+        const slug = getRepoSlug();
+        assert.ok(typeof slug === 'string' && slug.length > 0, 'Should return a non-empty fallback slug');
+      } finally {
+        if (original !== undefined) {
+          process.env.GITHUB_REPOSITORY = original;
+        }
+      }
+    });
+  });
+
+  describe('getRunUrl', () => {
+    test('builds GitHub Actions run URL when both env vars are set', () => {
+      const origRepo = process.env.GITHUB_REPOSITORY;
+      const origRun = process.env.GITHUB_RUN_ID;
+      process.env.GITHUB_REPOSITORY = 'testowner/testrepo';
+      process.env.GITHUB_RUN_ID = '12345';
+      try {
+        assert.strictEqual(getRunUrl(), 'https://github.com/testowner/testrepo/actions/runs/12345');
+      } finally {
+        if (origRepo !== undefined) process.env.GITHUB_REPOSITORY = origRepo; else delete process.env.GITHUB_REPOSITORY;
+        if (origRun !== undefined) process.env.GITHUB_RUN_ID = origRun; else delete process.env.GITHUB_RUN_ID;
+      }
+    });
+
+    test('returns empty string when GITHUB_RUN_ID is unset', () => {
+      const origRun = process.env.GITHUB_RUN_ID;
+      delete process.env.GITHUB_RUN_ID;
+      try {
+        assert.strictEqual(getRunUrl(), '');
+      } finally {
+        if (origRun !== undefined) process.env.GITHUB_RUN_ID = origRun;
+      }
+    });
+  });
+
+  describe('formatDiscordContent', () => {
+    test('prepends [owner/repo] tag to content', () => {
+      const original = process.env.GITHUB_REPOSITORY;
+      const origRun = process.env.GITHUB_RUN_ID;
+      process.env.GITHUB_REPOSITORY = 'myorg/myrepo';
+      delete process.env.GITHUB_RUN_ID;
+      try {
+        const result = formatDiscordContent('Hello World');
+        assert.ok(result.startsWith('**[myorg/myrepo]**'), 'Should start with repo tag');
+        assert.ok(result.includes('Hello World'), 'Should contain original content');
+      } finally {
+        if (original !== undefined) process.env.GITHUB_REPOSITORY = original; else delete process.env.GITHUB_REPOSITORY;
+        if (origRun !== undefined) process.env.GITHUB_RUN_ID = origRun;
+      }
+    });
+
+    test('appends View Run link when in GitHub Actions', () => {
+      const origRepo = process.env.GITHUB_REPOSITORY;
+      const origRun = process.env.GITHUB_RUN_ID;
+      process.env.GITHUB_REPOSITORY = 'myorg/myrepo';
+      process.env.GITHUB_RUN_ID = '99999';
+      try {
+        const result = formatDiscordContent('Test message');
+        assert.ok(result.includes('[View Run]'), 'Should contain View Run link');
+        assert.ok(result.includes('actions/runs/99999'), 'Should contain the run ID');
+      } finally {
+        if (origRepo !== undefined) process.env.GITHUB_REPOSITORY = origRepo; else delete process.env.GITHUB_REPOSITORY;
+        if (origRun !== undefined) process.env.GITHUB_RUN_ID = origRun; else delete process.env.GITHUB_RUN_ID;
+      }
+    });
+
+    test('does not append View Run link when not in GitHub Actions', () => {
+      const origRepo = process.env.GITHUB_REPOSITORY;
+      const origRun = process.env.GITHUB_RUN_ID;
+      process.env.GITHUB_REPOSITORY = 'myorg/myrepo';
+      delete process.env.GITHUB_RUN_ID;
+      try {
+        const result = formatDiscordContent('Local test');
+        assert.ok(!result.includes('[View Run]'), 'Should NOT contain View Run link outside CI');
+      } finally {
+        if (origRepo !== undefined) process.env.GITHUB_REPOSITORY = origRepo; else delete process.env.GITHUB_REPOSITORY;
+        if (origRun !== undefined) process.env.GITHUB_RUN_ID = origRun;
+      }
+    });
+  });
+});
