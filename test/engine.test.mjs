@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import dns from 'node:dns/promises';
-import { isDailyLimitError, getRandomFormattedDate, runSingleLeadOutreach, classifyEmailWithAi, extractPhoneNumberFallback, normalizeDate, shouldRestartWorkflow, triggerWorkflowRestart, runFollowups } from '../engine.mjs';
+import { isDailyLimitError, getRandomFormattedDate, runSingleLeadOutreach, classifyEmailWithAi, extractPhoneNumberFallback, normalizeDate, shouldRestartWorkflow, triggerWorkflowRestart, runFollowups, resolveCutoffConfig } from '../engine.mjs';
 import { isOptOutReply, stripQuotedReply } from '../src/suppression.mjs';
 
 describe('Universal Outreach Engine Unit Tests', () => {
@@ -228,6 +228,41 @@ describe('Universal Outreach Engine Unit Tests', () => {
       const istMinutes = ist.getUTCMinutes();
       assert.strictEqual(istHours, 15);
       assert.strictEqual(istMinutes, 30);
+    });
+
+    it('should resolve cutoff from unified 24h cutoff_time (e.g. "20:00")', () => {
+      const config = resolveCutoffConfig({ cutoff_time: '20:00' });
+      assert.strictEqual(config.hour, 20);
+      assert.strictEqual(config.minute, 0);
+      assert.strictEqual(config.formattedTime, '8:00 PM IST');
+    });
+
+    it('should resolve cutoff from unified 12h cutoff_time (e.g. "8:30 PM")', () => {
+      const config = resolveCutoffConfig({ cutoff_time: '8:30 PM' });
+      assert.strictEqual(config.hour, 20);
+      assert.strictEqual(config.minute, 30);
+      assert.strictEqual(config.formattedTime, '8:30 PM IST');
+    });
+
+    it('should resolve cutoff from separate cutoff_hour_ist and cutoff_minute_ist', () => {
+      const config = resolveCutoffConfig({ cutoff_hour_ist: '20', cutoff_minute_ist: '15' });
+      assert.strictEqual(config.hour, 20);
+      assert.strictEqual(config.minute, 15);
+      assert.strictEqual(config.formattedTime, '8:15 PM IST');
+    });
+
+    it('should handle whitespace and case-insensitive settings keys', () => {
+      const config = resolveCutoffConfig({ ' Cutoff_Time ': ' 19:45 ' });
+      assert.strictEqual(config.hour, 19);
+      assert.strictEqual(config.minute, 45);
+      assert.strictEqual(config.formattedTime, '7:45 PM IST');
+    });
+
+    it('should fallback to 18:30 IST / 6:30 PM IST when no setting is provided', () => {
+      const config = resolveCutoffConfig({});
+      assert.strictEqual(config.hour, 18);
+      assert.strictEqual(config.minute, 30);
+      assert.strictEqual(config.formattedTime, '6:30 PM IST');
     });
   });
 
@@ -567,6 +602,20 @@ On Thu, Sep 3, 2026 at 11:02 AM Alex wrote:
       assert.strictEqual(decision.shouldStop, true);
       assert.strictEqual(decision.shouldRestart, false);
       assert.match(decision.reason, /cutoff/i);
+    });
+
+    it('should report dynamic cutoff time in reason when cutoffLabel is passed', () => {
+      const decision = shouldRestartWorkflow({
+        elapsedMs: 1 * 60 * 60 * 1000,
+        maxRuntimeMs: 5.25 * 60 * 60 * 1000,
+        isCutoff: true,
+        remainingLeads: 50,
+        allInboxesExhausted: false,
+        cutoffLabel: '8:00 PM IST'
+      });
+      assert.strictEqual(decision.shouldStop, true);
+      assert.strictEqual(decision.shouldRestart, false);
+      assert.strictEqual(decision.reason, 'Cutoff time reached (8:00 PM IST)');
     });
 
     it('should NOT restart if all inboxes have exhausted daily limits', () => {

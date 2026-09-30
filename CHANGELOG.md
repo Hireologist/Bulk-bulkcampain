@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.2] - 2026-09-30
+
+### Fixed & Enhanced
+- **Dynamic Campaign Cutoff Time Resolution (`engine.mjs`)**:
+  - Implemented `resolveCutoffConfig(settings)` to dynamically resolve custom cutoff times from Google Sheets settings.
+  - Supports unified time strings (`cutoff_time`, `cutoff_time_ist` e.g. `"20:00"`, `"8:00 PM"`, `"8:30pm"`), split keys (`cutoff_hour_ist` and `cutoff_minute_ist`), case-insensitivity, and whitespace trimming.
+  - Replaced the hardcoded `'Cutoff time reached (6:30 PM IST)'` stopping reason in `shouldRestartWorkflow` with the actual formatted cutoff time (e.g. `'Cutoff time reached (8:00 PM IST)'`).
+  - Updated cold outreach and follow-up Discord runner threshold alert embeds to display the dynamic cutoff label.
+  - Added unit test coverage in `test/engine.test.mjs` verifying unified time parsing, 12h/24h formats, split keys, whitespace handling, and dynamic reason reporting.
+  - Test suite expanded to 172 passing tests across 51 test suites with 0 failures.
+
 ## [2.3.1] - 2026-09-27
 
 ### Security & Hardening

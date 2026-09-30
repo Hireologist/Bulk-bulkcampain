@@ -252,12 +252,85 @@ async function isValidEmailDomain(email) {
   }
 }
 
-// Check IST cutoff
-export function isPastCutoff(hour = 18, minute = 30) {
-  const now = new Date();
-  const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
-  const totalMins = ist.getUTCHours() * 60 + ist.getUTCMinutes();
-  return totalMins >= (parseInt(hour, 10) * 60 + parseInt(minute, 10));
+// Resolves the campaign cutoff time from Google Sheet settings.
+export function resolveCutoffConfig(settings = {}) {
+  const normalized = {};
+  for (const [k, v] of Object.entries(settings || {})) {
+    if (k && v !== undefined && v !== null) {
+      normalized[k.trim().toLowerCase()] = String(v).trim();
+    }
+  }
+
+  const rawTime = normalized['cutoff_time'] || normalized['cutoff_time_ist'] || '';
+  const rawHour = normalized['cutoff_hour_ist'] || normalized['cutoff_hour'] || '';
+  const rawMinute = normalized['cutoff_minute_ist'] || normalized['cutoff_minute'] || '';
+  const timezone = normalized['cron_timezone'] || 'Asia/Kolkata';
+
+  let hour = 18;
+  let minute = 30;
+
+  if (rawTime) {
+    const match12 = rawTime.match(/^(\d{1,2})(?::(\d{1,2}))?\s*(am|pm)$/i);
+    const match24 = rawTime.match(/^(\d{1,2})[:.](\d{1,2})$/);
+    if (match12) {
+      let h = parseInt(match12[1], 10);
+      const m = match12[2] ? parseInt(match12[2], 10) : 0;
+      const isPm = match12[3].toLowerCase() === 'pm';
+      if (isPm && h < 12) h += 12;
+      if (!isPm && h === 12) h = 0;
+      hour = h;
+      minute = m;
+    } else if (match24) {
+      hour = parseInt(match24[1], 10);
+      minute = parseInt(match24[2], 10);
+    }
+  } else if (rawHour !== '') {
+    const match12Hour = rawHour.match(/^(\d{1,2})\s*(am|pm)$/i);
+    if (match12Hour) {
+      let h = parseInt(match12Hour[1], 10);
+      const isPm = match12Hour[2].toLowerCase() === 'pm';
+      if (isPm && h < 12) h += 12;
+      if (!isPm && h === 12) h = 0;
+      hour = h;
+    } else {
+      hour = parseInt(rawHour, 10);
+    }
+    minute = rawMinute !== '' ? parseInt(rawMinute, 10) || 0 : 0;
+  }
+
+  if (isNaN(hour) || hour < 0 || hour > 23) hour = 18;
+  if (isNaN(minute) || minute < 0 || minute > 59) minute = 30;
+
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const displayHour = hour % 12 === 0 ? 12 : hour % 12;
+  const displayMinute = String(minute).padStart(2, '0');
+  const tzSuffix = timezone.includes('Kolkata') ? 'IST' : timezone;
+  const formattedTime = `${displayHour}:${displayMinute} ${period} ${tzSuffix}`;
+
+  return { hour, minute, formattedTime, timezone };
+}
+
+// Check IST / configured timezone cutoff
+export function isPastCutoff(hour = 18, minute = 30, timezone = 'Asia/Kolkata') {
+  const h = isNaN(parseInt(hour, 10)) ? 18 : parseInt(hour, 10);
+  const m = isNaN(parseInt(minute, 10)) ? 30 : parseInt(minute, 10);
+  try {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      hour: 'numeric',
+      minute: 'numeric',
+      hourCycle: 'h23'
+    });
+    const parts = formatter.formatToParts(new Date());
+    const curHour = parseInt(parts.find(p => p.type === 'hour')?.value || '0', 10);
+    const curMin = parseInt(parts.find(p => p.type === 'minute')?.value || '0', 10);
+    return (curHour * 60 + curMin) >= (h * 60 + m);
+  } catch (_) {
+    const now = new Date();
+    const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
+    const totalMins = ist.getUTCHours() * 60 + ist.getUTCMinutes();
+    return totalMins >= (h * 60 + m);
+  }
 }
 
 /**
@@ -270,9 +343,10 @@ export function shouldRestartWorkflow({
   isCutoff = false,
   remainingLeads = 0,
   allInboxesExhausted = false,
+  cutoffLabel = '6:30 PM IST',
 } = {}) {
   if (isCutoff) {
-    return { shouldStop: true, shouldRestart: false, reason: 'Cutoff time reached (6:30 PM IST)' };
+    return { shouldStop: true, shouldRestart: false, reason: `Cutoff time reached (${cutoffLabel || '6:30 PM IST'})` };
   }
   if (allInboxesExhausted) {
     return { shouldStop: true, shouldRestart: false, reason: 'All inboxes hit daily limits / quotas' };
@@ -555,8 +629,9 @@ export async function runColdOutreach() {
       break;
     }
 
-    // Cutoff time check (6:30 PM IST) & 6-Hour Runner Chaining Guard
-    const isCutoff = isPastCutoff(config.settings.cutoff_hour_ist, config.settings.cutoff_minute_ist);
+    // Dynamic cutoff time check & 6-Hour Runner Chaining Guard
+    const cutoffConfig = resolveCutoffConfig(config.settings);
+    const isCutoff = isPastCutoff(cutoffConfig.hour, cutoffConfig.minute, cutoffConfig.timezone);
     const elapsedMs = Date.now() - runStartTime;
     const remainingLeads = rows.slice(i).filter(r => {
       const e = (r[col['email']] || '').trim();
@@ -570,7 +645,8 @@ export async function runColdOutreach() {
       maxRuntimeMs,
       isCutoff,
       remainingLeads,
-      allInboxesExhausted
+      allInboxesExhausted,
+      cutoffLabel: cutoffConfig.formattedTime
     });
 
     if (runtimeDecision.shouldStop) {
@@ -578,7 +654,7 @@ export async function runColdOutreach() {
       if (runtimeDecision.shouldRestart) {
         const pat = config.settings.github_pat;
         const alertMsg = `⏳ **Runner Limit Threshold (5h 15m) Reached**\n`
-          + `📊 **Status:** Still before ${config.settings.cutoff_hour_ist || 18}:${config.settings.cutoff_minute_ist || 30} IST cutoff.\n`
+          + `📊 **Status:** Still before ${cutoffConfig.formattedTime} cutoff.\n`
           + `📨 **Remaining Leads:** \`${remainingLeads}\`\n`
           + `🔄 **Action:** Spawning a fresh runner to continue sending without interruption...`;
         console.log(alertMsg);
@@ -1240,8 +1316,9 @@ export async function runFollowups(sheetsObj = null, customConfig = null) {
       continue;
     }
 
-    // Cutoff time check (6:30 PM IST) & 6-Hour Runner Chaining Guard
-    const isCutoff = isPastCutoff(config.settings.cutoff_hour_ist, config.settings.cutoff_minute_ist);
+    // Dynamic cutoff time check & 6-Hour Runner Chaining Guard
+    const cutoffConfig = resolveCutoffConfig(config.settings);
+    const isCutoff = isPastCutoff(cutoffConfig.hour, cutoffConfig.minute, cutoffConfig.timezone);
     const elapsedMs = Date.now() - runStartTime;
     const remainingLeads = rows.slice(i).filter(r => {
       const e = (r[col['email']] || '').trim();
@@ -1257,7 +1334,8 @@ export async function runFollowups(sheetsObj = null, customConfig = null) {
       maxRuntimeMs,
       isCutoff,
       remainingLeads,
-      allInboxesExhausted
+      allInboxesExhausted,
+      cutoffLabel: cutoffConfig.formattedTime
     });
 
     if (runtimeDecision.shouldStop) {
@@ -1265,7 +1343,7 @@ export async function runFollowups(sheetsObj = null, customConfig = null) {
       if (runtimeDecision.shouldRestart) {
         const pat = config.settings.github_pat;
         const alertMsg = `⏳ **Follow-up Runner Threshold (5h 15m) Reached**\n`
-          + `📊 **Status:** Still before ${config.settings.cutoff_hour_ist || 18}:${config.settings.cutoff_minute_ist || 30} IST cutoff.\n`
+          + `📊 **Status:** Still before ${cutoffConfig.formattedTime} cutoff.\n`
           + `📨 **Remaining Leads:** \`${remainingLeads}\`\n`
           + `🔄 **Action:** Spawning a fresh runner to continue follow-ups without interruption...`;
         console.log(alertMsg);
