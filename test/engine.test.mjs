@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import dns from 'node:dns/promises';
-import { isDailyLimitError, getRandomFormattedDate, runSingleLeadOutreach, classifyEmailWithAi, extractPhoneNumberFallback, normalizeDate, shouldRestartWorkflow, triggerWorkflowRestart, runFollowups, resolveCutoffConfig } from '../engine.mjs';
+import { isDailyLimitError, getRandomFormattedDate, runSingleLeadOutreach, classifyEmailWithAi, extractPhoneNumberFallback, normalizeDate, shouldRestartWorkflow, triggerWorkflowRestart, runFollowups, resolveCutoffConfig, calculateNextDueDate, parseDueDate } from '../engine.mjs';
 import { isOptOutReply, stripQuotedReply } from '../src/suppression.mjs';
 
 describe('Universal Outreach Engine Unit Tests', () => {
@@ -743,6 +743,95 @@ On Thu, Sep 3, 2026 at 11:02 AM Alex wrote:
       const res = await runFollowups(mockSheets, mockConfig);
       assert.strictEqual(res.success, true);
       assert.match(res.message, /no leads found/i);
+    });
+  });
+
+  describe('Multi-Touch Follow-Up Interval & Due Date Protection', () => {
+    it('calculateNextDueDate correctly adds days to base date in DD/MM/YYYY format', () => {
+      const base = new Date(2026, 9, 4); // 04/10/2026
+      assert.strictEqual(calculateNextDueDate(base, 2), '06/10/2026');
+      assert.strictEqual(calculateNextDueDate(base, 0), '');
+      assert.strictEqual(calculateNextDueDate(base, -1), '');
+      // Month rollover
+      const endOfOct = new Date(2026, 9, 31); // 31/10/2026
+      assert.strictEqual(calculateNextDueDate(endOfOct, 2), '02/11/2026');
+    });
+
+    it('should skip follow-up if today is before Next Follow Up Date (2-day gap preserved on same day run)', async () => {
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 2);
+      const futureDateStr = `${String(futureDate.getDate()).padStart(2, '0')}/${String(futureDate.getMonth() + 1).padStart(2, '0')}/${futureDate.getFullYear()}`;
+
+      const mockConfig = {
+        settings: { campaign_active: 'TRUE', followup_active: 'TRUE' },
+        inboxes: [{ email: 'sender@domain.com', smtp_port: '587', smtp_user: 'sender', smtp_pass: 'pass' }],
+        aliases: [],
+        locations: [],
+        clients: [],
+        followupTemplates: [{ Follow_Up_Number: '1', Days_Until_Next: '2', Subject: 'Re:', Body: 'Hi' }]
+      };
+
+      let updateCalled = false;
+      const mockSheets = {
+        spreadsheets: {
+          values: {
+            get: async ({ range = '' } = {}) => {
+              if (range.includes('Suppressed')) return { data: { values: [] } };
+              return {
+                data: {
+                  values: [
+                    ['email', 'Subject Line', 'Sent Status', 'Follow up', 'Follow Up Count', 'Next Follow Up Date', 'Sent From', 'Date Sent', 'Time', 'full_name', 'company_name', 'location'],
+                    ['lead@example.com', 'Proposal', 'sent', '', '0', futureDateStr, 'sender@domain.com', '04/10/2026', '09:00 AM', 'Lead', 'Acme', 'NYC']
+                  ]
+                }
+              };
+            },
+            update: async () => { updateCalled = true; return {}; }
+          }
+        }
+      };
+
+      const res = await runFollowups(mockSheets, mockConfig);
+      assert.strictEqual(res.success, true);
+      assert.strictEqual(updateCalled, false, 'Lead before due date must be skipped, no update made');
+    });
+
+    it('should fallback to Date Sent + Days_Until_Next when Next Follow Up Date is blank', async () => {
+      const today = new Date();
+      const todayStr = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
+
+      const mockConfig = {
+        settings: { campaign_active: 'TRUE', followup_active: 'TRUE' },
+        inboxes: [{ email: 'sender@domain.com', smtp_port: '587', smtp_user: 'sender', smtp_pass: 'pass' }],
+        aliases: [],
+        locations: [],
+        clients: [],
+        followupTemplates: [{ Follow_Up_Number: '1', Days_Until_Next: '2', Subject: 'Re:', Body: 'Hi' }]
+      };
+
+      let updateCalled = false;
+      const mockSheets = {
+        spreadsheets: {
+          values: {
+            get: async ({ range = '' } = {}) => {
+              if (range.includes('Suppressed')) return { data: { values: [] } };
+              return {
+                data: {
+                  values: [
+                    ['email', 'Subject Line', 'Sent Status', 'Follow up', 'Follow Up Count', 'Next Follow Up Date', 'Sent From', 'Date Sent', 'Time', 'full_name', 'company_name', 'location'],
+                    ['lead@example.com', 'Proposal', 'sent', '', '0', '', 'sender@domain.com', todayStr, '09:00 AM', 'Lead', 'Acme', 'NYC']
+                  ]
+                }
+              };
+            },
+            update: async () => { updateCalled = true; return {}; }
+          }
+        }
+      };
+
+      const res = await runFollowups(mockSheets, mockConfig);
+      assert.strictEqual(res.success, true);
+      assert.strictEqual(updateCalled, false, 'Fallback guard must skip lead when Date Sent + 2 days is in the future');
     });
   });
 

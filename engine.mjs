@@ -1111,6 +1111,11 @@ export async function runSingleLeadOutreach(singleLeadPayload = {}) {
       const timeStr = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: true });
       const dateStr = new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' });
 
+      // Calculate initial Next Follow Up Date based on Followup_Templates[0]
+      const firstFollowupTemplate = config.followupTemplates?.[0];
+      const initialDelayDays = parseInt(firstFollowupTemplate?.Days_Until_Next || '3', 10);
+      const initialNextDueDateStr = calculateNextDueDate(new Date(), initialDelayDays);
+
       if (existingIndex >= 0) {
         const rowNum = existingIndex + 2;
         const targetRow = rows[existingIndex];
@@ -1124,6 +1129,9 @@ export async function runSingleLeadOutreach(singleLeadPayload = {}) {
         targetRow[col['Date Sent']] = dateStr;
         targetRow[col['Follow Up Count']] = 0;
         targetRow[col['Follow up']] = '';
+        if (col['Next Follow Up Date'] !== undefined) {
+          targetRow[col['Next Follow Up Date']] = initialNextDueDateStr;
+        }
 
         await sendWithRetry(() => sheets.spreadsheets.values.update({
           spreadsheetId,
@@ -1144,7 +1152,7 @@ export async function runSingleLeadOutreach(singleLeadPayload = {}) {
           'Date Sent': dateStr,
           'Follow up': '',
           'Follow Up Count': 0,
-          'Next Follow Up Date': '',
+          'Next Follow Up Date': initialNextDueDateStr,
           'Summary': '',
           'Phone': ''
         };
@@ -1353,10 +1361,21 @@ export async function runFollowups(sheetsObj = null, customConfig = null) {
       break;
     }
 
+    let dueDate = null;
     if (nextDueDateStr) {
-      const dueDate = parseDueDate(nextDueDateStr);
-      if (dueDate && today < dueDate) continue;
+      dueDate = parseDueDate(nextDueDateStr);
+    } else if (col['Date Sent'] !== undefined && row[col['Date Sent']]) {
+      // Defensive fallback for legacy/unpopulated leads: calculate due date from Date Sent + Days_Until_Next
+      const sentDate = parseDueDate(row[col['Date Sent']]);
+      if (sentDate) {
+        const templateForDelay = config.followupTemplates.find(t => parseInt(t['Follow_Up_Number'], 10) === currentCount + 1) || config.followupTemplates[0];
+        const delayDays = parseInt(templateForDelay?.Days_Until_Next || '3', 10);
+        const calcDateStr = calculateNextDueDate(sentDate, delayDays);
+        dueDate = parseDueDate(calcDateStr);
+      }
     }
+
+    if (dueDate && today < dueDate) continue;
 
     const nextCount = currentCount + 1;
     if (config.followupTemplates.length > 0 && nextCount > config.followupTemplates.length) {
@@ -1451,12 +1470,7 @@ export async function runFollowups(sheetsObj = null, customConfig = null) {
       }
 
       const daysUntilNext = parseInt(template.Days_Until_Next || '3', 10);
-      let nextDateStr = '';
-      if (daysUntilNext > 0) {
-        const nextDate = new Date();
-        nextDate.setDate(nextDate.getDate() + daysUntilNext);
-        nextDateStr = `${String(nextDate.getDate()).padStart(2, '0')}/${String(nextDate.getMonth() + 1).padStart(2, '0')}/${nextDate.getFullYear()}`;
-      }
+      const nextDateStr = calculateNextDueDate(new Date(), daysUntilNext);
 
       const rowNum = i + 2;
       row[col['Follow Up Count']] = nextCount;
@@ -1520,6 +1534,7 @@ export async function runFollowups(sheetsObj = null, customConfig = null) {
     const delay = isBulkMode ? Math.floor(Math.random() * (maxD - minD + 1)) + minD : 20000;
     await new Promise(r => setTimeout(r, delay));
   }
+  return { success: true, message: 'Follow-ups completed successfully.' };
 }
 
 /**
@@ -1995,6 +2010,19 @@ export function parseDueDate(dateVal) {
 
   const parsed = new Date(str);
   return isNaN(parsed.getTime()) ? null : parsed;
+}
+
+// Calculate next due date in DD/MM/YYYY format given a base date and days offset
+export function calculateNextDueDate(baseDate = new Date(), daysUntilNext = 3) {
+  const days = parseInt(daysUntilNext, 10);
+  if (isNaN(days) || days <= 0) return '';
+  const d = new Date(baseDate);
+  if (isNaN(d.getTime())) return '';
+  d.setDate(d.getDate() + days);
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
 }
 
 // ============================================================================
