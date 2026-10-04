@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-10-04
+
+### Refactored & Modularized
+- **Domain-Driven Modular Architecture**:
+  - Modularized the monolithic 2,217-line `engine.mjs` into focused, single-responsibility modules under `src/` with zero code deletion and 100% backward compatibility.
+  - Reduced `engine.mjs` from 2,217 lines down to 175 lines (**92.1% reduction**), functioning as a clean public façade and CLI task dispatcher.
+  - Extracted `src/sheets-io.mjs`: Google Sheets authentication, tab loading with A:ZZ horizontal scaling, dead-letter `Failed_Sends` logging, `Inbox_Stats` loading/persistence, and IMAP draft saving.
+  - Extracted `src/scheduler.mjs`: Timezone cutoff resolution, 6-hour GitHub Actions runner chaining, Discord webhook alerts, template variable/spintax interpolation, and multi-touch due date calculations.
+  - Extracted `src/ai-classifier.mjs`: Groq AI email sentiment classification, sender phone number safeguard, and fallback regex contact phone number extraction.
+  - Extracted `src/workflows/`: Dedicated execution runner modules for `cold-outreach.mjs`, `single-lead.mjs`, `followup.mjs`, `inbox-checker.mjs`, and `daily-digest.mjs`.
+  - Maintained 100% pass rate across the full 178-test suite with zero regressions.
+
 ## [2.3.3] - 2026-10-04
 
 ### Hardened & Optimized
