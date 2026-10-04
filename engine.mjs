@@ -83,13 +83,13 @@ async function ensureTabExists(sheetsObj, tabName, defaultHeaders = []) {
 }
 
 // Load a specific tab
-async function loadTab(sheetsObj, tabName) {
+export async function loadTab(sheetsObj, tabName) {
   const sheets = sheetsObj?.sheets || sheetsObj;
   const spreadsheetId = sheetsObj?.spreadsheetId || process.env.SINGLE_SHEET_ID || SPREADSHEET_ID;
   try {
     const res = await sendWithRetry(() => sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: `'${tabName}'!A:Z`,
+      range: `'${tabName}'!A:ZZ`,
     }), { retries: 2, baseDelay: 1000 });
     const [headers, ...rows] = res.data.values || [];
     if (!headers) return [];
@@ -1244,7 +1244,7 @@ export async function runSingleLeadOutreach(singleLeadPayload = {}) {
 // ============================================================================
 // 🔁 2. FOLLOW-UP ENGINE (Guaranteed to match initial sender & alias)
 // ============================================================================
-export async function runFollowups(sheetsObj = null, customConfig = null) {
+export async function runFollowups(sheetsObj = null, customConfig = null, customTransporter = null) {
   const sheets = sheetsObj || (await getSheets());
   const config = customConfig || (await loadConfig(sheets));
 
@@ -1276,6 +1276,8 @@ export async function runFollowups(sheetsObj = null, customConfig = null) {
   }
   const col = Object.fromEntries(headers.map((h, i) => [(h || '').trim(), i]));
   const limitExceededInboxes = new Set();
+  const inboxStatsMap = await loadInboxStatsMap(sheets);
+  let emailsSentThisRun = 0;
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -1422,6 +1424,8 @@ export async function runFollowups(sheetsObj = null, customConfig = null) {
       break;
     }
 
+    let currentInboxStats = inboxStatsMap.get(inboxToUse.email.toLowerCase()) || { sent: 0, bounced: 0, complaints: 0, sentToday: 0 };
+
     const fullName = (row[col['full_name']] || 'there').trim();
     const companyName = (row[col['company_name']] || 'your company').trim();
     const location = (row[col['location']] || 'your city').trim();
@@ -1449,7 +1453,7 @@ export async function runFollowups(sheetsObj = null, customConfig = null) {
     const footer = buildSenderFooter(config.settings, { email, campaign: 'followup', senderEmail }, process.env.UNSUBSCRIBE_SECRET);
     finalBody = `${finalBody}${footer}`;
 
-    const transporter = nodemailer.createTransport({
+    const transporter = customConfig?.transporter || customTransporter || nodemailer.createTransport({
       host: inboxToUse.smtp_host,
       port: parseInt(inboxToUse.smtp_port, 10),
       secure: parseInt(inboxToUse.smtp_port, 10) === 465,
@@ -1463,6 +1467,10 @@ export async function runFollowups(sheetsObj = null, customConfig = null) {
         subject: finalSubj,
         html: finalBody,
       }), { retries: 3, baseDelay: 2000 });
+
+      emailsSentThisRun++;
+      currentInboxStats = trackOutcome(currentInboxStats, 'sent');
+      inboxStatsMap.set(inboxToUse.email.toLowerCase(), currentInboxStats);
 
       row[col['Date Sent']] = new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' });
       if (col['Time'] !== undefined) {
@@ -1531,10 +1539,15 @@ export async function runFollowups(sheetsObj = null, customConfig = null) {
     const isBulkMode = throttleMode === 'bulk' || throttleMode === 'fixed' || throttleMode === 'turbo';
     const minD = Math.max(0, parseInt(config.settings.min_delay_seconds || (isBulkMode ? '1' : '15'), 10) * 1000);
     const maxD = Math.max(minD, parseInt(config.settings.max_delay_seconds || (isBulkMode ? '3' : '30'), 10) * 1000);
-    const delay = isBulkMode ? Math.floor(Math.random() * (maxD - minD + 1)) + minD : 20000;
+    const configDelay = Math.floor(Math.random() * (maxD - minD + 1)) + minD;
+    const adaptiveDelay = isBulkMode ? 0 : getSendDelay(currentInboxStats);
+    const delay = isBulkMode ? configDelay : Math.max(configDelay, adaptiveDelay);
     await new Promise(r => setTimeout(r, delay));
   }
-  return { success: true, message: 'Follow-ups completed successfully.' };
+  if (emailsSentThisRun > 0) {
+    await saveInboxStatsMap(sheets, inboxStatsMap);
+  }
+  return { success: true, message: 'Follow-ups completed successfully.', count: emailsSentThisRun };
 }
 
 /**

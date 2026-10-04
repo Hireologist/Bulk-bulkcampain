@@ -1,4 +1,5 @@
 import { sendWithRetry } from './retry.mjs';
+import { parseSpintax } from './spintax.mjs';
 
 /**
  * Pick a random peer inbox excluding the sender
@@ -19,19 +20,19 @@ export function getWarmupQuota(day = 1, target = 40) {
 }
 
 const WARMUP_SUBJECTS = [
-  'Quick follow-up on our conversation',
-  'Notes from today’s sync',
-  'Sharing the requested document',
+  '{Quick|Brief} follow-up on our conversation',
+  'Notes from {today’s|our earlier} sync',
+  'Sharing the {requested document|project update}',
   'Project update and next milestones',
-  'Checking in regarding next week',
-  'Quick question about your timeline',
+  '{Checking in|Touching base} regarding next week',
+  'Quick question about your {timeline|schedule}',
 ];
 
 const WARMUP_BODIES = [
-  'Hey, just following up on our previous note. Let me know if you have any questions!',
-  'Thanks for sharing the updates earlier. Looks great, looking forward to discussing soon.',
-  'Hope you are having a productive week. Sending over the notes as promised.',
-  'Wanted to confirm our schedule for the upcoming milestone review.',
+  '{Hey|Hi|Hello}, just following up on our previous note. Let me know if you have any questions!',
+  '{Thanks|Thank you} for sharing the updates earlier. Looks great, looking forward to {discussing|catching up} soon.',
+  'Hope you are having a {productive|great|wonderful} week. Sending over the notes as promised.',
+  'Wanted to confirm our schedule for the upcoming {milestone review|team check-in}.',
 ];
 
 /**
@@ -57,8 +58,10 @@ export async function runWarmupCycle(inboxes, sendEmailFn) {
     if (!recipient) continue;
 
     const recipientEmail = recipient.email || recipient.smtp_user;
-    const subject = WARMUP_SUBJECTS[Math.floor(Math.random() * WARMUP_SUBJECTS.length)];
-    const body = WARMUP_BODIES[Math.floor(Math.random() * WARMUP_BODIES.length)];
+    const rawSubject = WARMUP_SUBJECTS[Math.floor(Math.random() * WARMUP_SUBJECTS.length)];
+    const rawBody = WARMUP_BODIES[Math.floor(Math.random() * WARMUP_BODIES.length)];
+    const subject = parseSpintax(rawSubject);
+    const body = parseSpintax(rawBody);
 
     try {
       if (typeof sendEmailFn === 'function') {

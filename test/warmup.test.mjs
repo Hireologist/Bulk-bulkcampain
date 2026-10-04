@@ -51,4 +51,26 @@ describe('Warmup Module Unit Tests', () => {
     assert.strictEqual(res.count, 2);
     assert.strictEqual(sentRecords.length, 2);
   });
+
+  test('runWarmupCycle resolves spintax variations in warmup subject and body without leaving braces or pipes', async () => {
+    const inboxes = [
+      { email: 'box1@domain.com', warmup_enabled: true },
+      { email: 'box2@domain.com', warmup_enabled: true },
+    ];
+
+    const sentRecords = [];
+    const mockSend = async (sender, recipient, subject, body) => {
+      sentRecords.push({ sender: sender.email, recipient, subject, body });
+    };
+
+    const res = await runWarmupCycle(inboxes, mockSend);
+    assert.strictEqual(res.status, 'completed');
+    for (const record of sentRecords) {
+      assert.ok(record.subject && record.subject.length > 0);
+      assert.ok(record.body && record.body.length > 0);
+      // No raw spintax delimiters remaining
+      assert.ok(!record.subject.includes('{{') && !record.subject.includes('}}') && !record.subject.includes('|'));
+      assert.ok(!record.body.includes('{{') && !record.body.includes('}}') && !record.body.includes('|'));
+    }
+  });
 });

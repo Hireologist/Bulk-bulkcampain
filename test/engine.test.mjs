@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import dns from 'node:dns/promises';
-import { isDailyLimitError, getRandomFormattedDate, runSingleLeadOutreach, classifyEmailWithAi, extractPhoneNumberFallback, normalizeDate, shouldRestartWorkflow, triggerWorkflowRestart, runFollowups, resolveCutoffConfig, calculateNextDueDate, parseDueDate } from '../engine.mjs';
+import { isDailyLimitError, getRandomFormattedDate, runSingleLeadOutreach, classifyEmailWithAi, extractPhoneNumberFallback, normalizeDate, shouldRestartWorkflow, triggerWorkflowRestart, runFollowups, resolveCutoffConfig, calculateNextDueDate, parseDueDate, loadTab } from '../engine.mjs';
 import { isOptOutReply, stripQuotedReply } from '../src/suppression.mjs';
 
 describe('Universal Outreach Engine Unit Tests', () => {
@@ -832,6 +832,88 @@ On Thu, Sep 3, 2026 at 11:02 AM Alex wrote:
       const res = await runFollowups(mockSheets, mockConfig);
       assert.strictEqual(res.success, true);
       assert.strictEqual(updateCalled, false, 'Fallback guard must skip lead when Date Sent + 2 days is in the future');
+    });
+
+    it('should track sent stats and persist to Inbox_Stats on successful follow-up sends', async () => {
+      const pastDate = new Date();
+      pastDate.setDate(pastDate.getDate() - 5);
+      const pastDateStr = `${String(pastDate.getDate()).padStart(2, '0')}/${String(pastDate.getMonth() + 1).padStart(2, '0')}/${pastDate.getFullYear()}`;
+
+      const mockConfig = {
+        settings: { campaign_active: 'TRUE', followup_active: 'TRUE', throttle_mode: 'bulk' },
+        inboxes: [{ email: 'sender@domain.com', smtp_port: '587', smtp_user: 'sender', smtp_pass: 'pass' }],
+        aliases: [],
+        locations: [],
+        clients: [],
+        followupTemplates: [{ Follow_Up_Number: '1', Days_Until_Next: '2', Subject: 'Re:', Body: 'Hi' }],
+        transporter: {
+          sendMail: async () => ({ messageId: 'mock-123' })
+        }
+      };
+
+      let inboxStatsUpdated = false;
+      let updatedStatsValues = null;
+      const mockSheets = {
+        spreadsheets: {
+          values: {
+            get: async ({ range = '' } = {}) => {
+              if (range.includes('Suppressed')) return { data: { values: [] } };
+              if (range.includes('Inbox_Stats')) {
+                return {
+                  data: {
+                    values: [
+                      ['inbox_email', 'sent', 'bounced', 'complaints', 'sentToday', 'lastReset'],
+                      ['sender@domain.com', '10', '0', '0', '5', new Date().toISOString().split('T')[0]]
+                    ]
+                  }
+                };
+              }
+              return {
+                data: {
+                  values: [
+                    ['email', 'Subject Line', 'Sent Status', 'Follow up', 'Follow Up Count', 'Next Follow Up Date', 'Sent From', 'Date Sent', 'Time', 'full_name', 'company_name', 'location'],
+                    ['lead@example.com', 'Proposal', 'sent', '', '0', pastDateStr, 'sender@domain.com', pastDateStr, '09:00 AM', 'Lead', 'Acme', 'NYC']
+                  ]
+                }
+              };
+            },
+            update: async ({ range = '', requestBody = {} } = {}) => {
+              if (range.includes('Inbox_Stats')) {
+                inboxStatsUpdated = true;
+                updatedStatsValues = requestBody.values;
+              }
+              return {};
+            }
+          }
+        }
+      };
+
+      const res = await runFollowups(mockSheets, mockConfig);
+      assert.strictEqual(res.success, true);
+      assert.strictEqual(inboxStatsUpdated, true, 'Inbox_Stats must be persisted after follow-up dispatches');
+      assert.ok(updatedStatsValues && updatedStatsValues.length >= 2);
+      // Check that sender@domain.com sentCount incremented from 10 to 11
+      const senderStats = updatedStatsValues.find(r => r[0] === 'sender@domain.com');
+      assert.strictEqual(senderStats[1], 11, 'Total sent must increment to 11');
+      assert.strictEqual(senderStats[4], 6, 'Sent today must increment to 6');
+    });
+  });
+
+  describe('Tab Loading Horizontal Scalability (A:ZZ Range)', () => {
+    it('should query A:ZZ range allowing columns beyond Z', async () => {
+      let requestedRange = '';
+      const mockSheets = {
+        spreadsheets: {
+          values: {
+            get: async ({ range }) => {
+              requestedRange = range;
+              return { data: { values: [['col1', 'col2']] } };
+            }
+          }
+        }
+      };
+      await loadTab(mockSheets, 'Details');
+      assert.strictEqual(requestedRange, "'Details'!A:ZZ");
     });
   });
 

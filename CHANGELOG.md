@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.3] - 2026-10-04
+
+### Hardened & Optimized
+- **Horizontal Sheet Column Scalability (`engine.mjs`)**:
+  - Expanded `loadTab` range query from `'${tabName}'!A:Z` to `'${tabName}'!A:ZZ`, safely supporting sheets with up to 702 columns without truncating custom enrichment data or CRM attributes.
+- **Follow-Up Adaptive Throttling & `Inbox_Stats` Tracking (`engine.mjs`)**:
+  - Connected `loadInboxStatsMap` and `saveInboxStatsMap` to `runFollowups`.
+  - Dynamically calculates dispatch delay using `getSendDelay(currentInboxStats)` in adaptive mode, preventing reputation damage if an inbox suffers bounces or complaints during follow-up dispatches.
+  - Automatically updates `sent` and `sentToday` stats in `Inbox_Stats` upon successful follow-up sends.
+  - Added dependency injection support for `customTransporter` and `customConfig.transporter` for test isolation.
+- **Peer Warmup Spintax Lexical Entropy (`src/warmup.mjs`)**:
+  - Enriched warmup subject lines and email bodies with nested spintax patterns (e.g. `{Quick|Brief}`, `{today’s|our earlier}`, `{Hey|Hi|Hello}`, `{productive|great|wonderful}`).
+  - Integrated `parseSpintax` into `runWarmupCycle` to ensure peer-to-peer warmup emails vary across cycles and avoid hash-fingerprinting by ESP spam filters.
+- **Test Suite Expansion (`test/`)**:
+  - Added comprehensive unit tests for `loadTab` A:ZZ horizontal range query and follow-up `Inbox_Stats` tracking in `test/engine.test.mjs`.
+  - Added spintax resolution unit test in `test/warmup.test.mjs`.
+  - Expanded test coverage to 178 passing tests across 53 test suites with 0 failures (100% pass rate).
+
 ## [2.3.2] - 2026-09-30
 
 ### Fixed & Enhanced
