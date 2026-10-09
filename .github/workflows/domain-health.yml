@@ -1,0 +1,29 @@
+name: Weekly Domain Health Check
+
+on:
+  # Note: Internal GitHub schedule is disabled to avoid queue delays and duplicate execution.
+  # External automation is handled reliably via cron-job.org (see CRON_SETUP.md).
+  # schedule:
+  #   - cron: '0 6 * * 1' # Every Monday at 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  domain-health:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.14.0'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run Domain Health Audit
+        run: node scripts/run-domain-health.mjs
+        env:
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID || secrets.SHEET_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}

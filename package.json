@@ -1,0 +1,28 @@
+{
+  "name": "email-outreach",
+  "version": "2.4.0",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": "22.14.0"
+  },
+  "scripts": {
+    "start": "node engine.mjs outreach",
+    "outreach": "node engine.mjs outreach",
+    "inbox": "node engine.mjs inbox",
+    "followup": "node engine.mjs followup",
+    "digest": "node engine.mjs digest",
+    "warmup": "node engine.mjs warmup",
+    "diagnostics": "node scripts/run-campaign-diagnostics.mjs",
+    "radar": "node scripts/run-gcc-radar.mjs"
+  },
+  "dependencies": {
+    "axios": "^1.7.0",
+    "bytenode": "^1.7.0",
+    "googleapis": "^144.0.0",
+    "groq-sdk": "^0.7.0",
+    "imapflow": "^1.0.160",
+    "mailparser": "^3.7.1",
+    "nodemailer": "^6.9.15"
+  }
+}
