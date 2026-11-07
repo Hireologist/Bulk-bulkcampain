@@ -1,0 +1,168 @@
+name: Universal Outreach Engine
+run-name: >-
+  ${{
+    inputs.action == 'inbox' && '📥 Inbox Checker' ||
+    inputs.action == 'followup' && '🔄 Follow-up Engine' ||
+    inputs.action == 'outreach' && '🚀 Cold Outreach' ||
+    inputs.action == 'digest' && '📊 Daily Digest' ||
+    inputs.action == 'warmup' && '🔥 Warmup Cycle' ||
+    inputs.action == 'single_lead' && (inputs.email != '' && format('🎯 Single Lead: {0}', inputs.email) || '🎯 Single Lead') ||
+    inputs.action == 'diagnostic' && '🩺 Diagnostics' ||
+    inputs.action != '' && format('⚙️ {0}', inputs.action) ||
+    github.event_name == 'repository_dispatch' && (github.event.client_payload.email != '' && format('🎯 Remote Lead: {0}', github.event.client_payload.email) || '🎯 Remote Lead Dispatch') ||
+    'Outreach Engine'
+  }}
+
+concurrency:
+  group: outreach-${{ inputs.action || github.event.client_payload.action || github.event_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+on:
+# Note: Internal GitHub schedule is disabled to avoid queue delays and duplicate execution.
+  # External automation is handled reliably via cron-job.org or API dispatch (see CRON_SETUP.md).
+  # schedule:
+  #   - cron: '0 4 * * 1-6'     # 1. Follow-up Engine (09:30 AM IST)
+  #   - cron: '30 4 * * 1-6'    # 2. Cold Outreach (10:00 AM IST)
+  #   - cron: '0 13 * * 1-6'    # 3. Daily Digest (06:30 PM IST)
+  #   - cron: '7,22,37,52 * * * *'    # 4. Inbox Checker (Every 15 mins off-peak)
+
+  repository_dispatch:
+    types: [send_single_email]
+
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Choose task to run manually'
+        required: true
+        default: 'inbox'
+        type: choice
+        options: [outreach, followup, inbox, digest, warmup, single_lead, diagnostic]
+      email:
+        description: 'Recipient Email (for single_lead)'
+        required: false
+      full_name:
+        description: 'Recipient Full Name (for single_lead)'
+        required: false
+      company_name:
+        description: 'Recipient Company Name (for single_lead)'
+        required: false
+      location:
+        description: 'Recipient Location (for single_lead)'
+        required: false
+
+jobs:
+  run-engine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+      GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+      SCHEDULED_CRON: ${{ github.event.client_payload.cron || '' }}
+      SELECTED_ACTION: ${{ inputs.action || github.event.inputs.action }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js (with cache)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.14.0'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Validate required secrets
+        run: |
+          set -eu
+          if [ -z "${SPREADSHEET_ID:-}" ]; then
+            echo "ERROR: SPREADSHEET_ID is not set" >&2
+            exit 1
+          fi
+          if [ -z "${GOOGLE_SERVICE_ACCOUNT_JSON:-}" ]; then
+            echo "ERROR: GOOGLE_SERVICE_ACCOUNT_JSON is not set" >&2
+            exit 1
+          fi
+
+      - name: Write service account key
+        run: |
+          printf '%s' "$GOOGLE_SERVICE_ACCOUNT_JSON" > /tmp/gsa.json
+          chmod 600 /tmp/gsa.json
+
+      - name: Install Dependencies
+        run: |
+          set -euo pipefail
+          if [ -f package-lock.json ]; then
+            npm ci --no-audit --no-fund
+          else
+            npm install --no-audit --no-fund
+          fi
+
+      - name: Run Engine Task
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/gsa.json
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          EVENT_NAME: ${{ github.event_name }}
+          SCHEDULED_CRON: ${{ github.event.client_payload.cron || '' }}
+          SELECTED_ACTION: ${{ inputs.action || github.event.inputs.action }}
+          PAYLOAD_EMAIL: ${{ github.event.client_payload.email || github.event.inputs.email }}
+          PAYLOAD_NAME: ${{ github.event.client_payload.full_name || github.event.client_payload.personName || github.event.inputs.full_name }}
+          PAYLOAD_COMPANY: ${{ github.event.client_payload.company_name || github.event.client_payload.companyName || github.event.inputs.company_name }}
+          PAYLOAD_LOCATION: ${{ github.event.client_payload.location || github.event.inputs.location }}
+          PAYLOAD_SHEET_ID: ${{ github.event.client_payload.spreadsheet_id || github.event.client_payload.sheet_id }}
+          PAYLOAD_WEBHOOK_URL: ${{ github.event.client_payload.webhook_url || github.event.client_payload.discord_webhook }}
+          PAYLOAD_LEADS_JSON: ${{ toJson(github.event.client_payload.leads) }}
+        run: |
+          set -euo pipefail
+
+          echo "Trigger: $EVENT_NAME | Cron: $SCHEDULED_CRON | Action: $SELECTED_ACTION"
+
+          # 1. Webhook Repository Dispatch (Single / Bulk Remote Trigger)
+          if [ "$EVENT_NAME" = "repository_dispatch" ]; then
+            echo "Running Remote Dispatch from Repository Webhook..."
+            export SINGLE_EMAIL="$PAYLOAD_EMAIL"
+            export SINGLE_NAME="$PAYLOAD_NAME"
+            export SINGLE_COMPANY="$PAYLOAD_COMPANY"
+            export SINGLE_LOCATION="$PAYLOAD_LOCATION"
+            export SINGLE_SHEET_ID="$PAYLOAD_SHEET_ID"
+            export SINGLE_WEBHOOK_URL="$PAYLOAD_WEBHOOK_URL"
+            export SINGLE_LEADS_JSON="$PAYLOAD_LEADS_JSON"
+            node engine.mjs single_lead
+
+          # 2. Manual Workflow Dispatch Trigger
+          elif [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "Running Manual Action: $SELECTED_ACTION"
+            if [ "$SELECTED_ACTION" = "single_lead" ]; then
+              export SINGLE_EMAIL="$PAYLOAD_EMAIL"
+              export SINGLE_NAME="$PAYLOAD_NAME"
+              export SINGLE_COMPANY="$PAYLOAD_COMPANY"
+              export SINGLE_LOCATION="$PAYLOAD_LOCATION"
+            fi
+            node engine.mjs "$SELECTED_ACTION"
+
+          # 3. Follow-Up Engine (09:30 AM IST)
+          elif [ "$SCHEDULED_CRON" = "0 4 * * 1-6" ]; then
+            echo "Starting Follow-up Engine..."
+            node engine.mjs followup
+
+          # 4. Cold Outreach (10:00 AM IST)
+          elif [ "$SCHEDULED_CRON" = "30 4 * * 1-6" ]; then
+            echo "Starting Cold Outreach..."
+            node engine.mjs outreach
+
+          # 5. Daily Digest (06:30 PM IST)
+          elif [ "$SCHEDULED_CRON" = "0 13 * * 1-6" ]; then
+            echo "Generating Daily Digest..."
+            node engine.mjs digest
+
+          # 6. Inbox Checker (Every 15 Mins Off-Peak)
+          elif [ "$SCHEDULED_CRON" = "7,22,37,52 * * * *" ]; then
+            echo "Running Inbox Checker..."
+            node engine.mjs inbox
+            
+          else
+            echo "Unknown trigger. Defaulting to inbox check."
+            node engine.mjs inbox
+          fi

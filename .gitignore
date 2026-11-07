@@ -1,0 +1,5 @@
+node_modules/
+.env
+.reputation.lock
+*.log
+.DS_Store
